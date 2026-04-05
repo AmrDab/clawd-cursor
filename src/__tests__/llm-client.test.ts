@@ -51,4 +51,24 @@ describe('llm-client provider capability handling', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.response_format).toEqual({ type: 'json_object' });
   });
+
+  it('uses active vision layer baseUrl to infer API format in mixed-provider pipelines', async () => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ content: [{ text: 'ok' }] }),
+    });
+
+    const config = makeConfig({
+      openaiCompat: true, // main provider openai-compat
+    });
+    config.providerKey = 'openai';
+    config.layer3.baseUrl = 'https://api.anthropic.com/v1'; // vision layer is Anthropic
+
+    await callVisionLLM(config, {
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'describe' }] }],
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.anthropic.com/v1/messages');
+  });
 });

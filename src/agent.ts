@@ -303,7 +303,7 @@ export class Agent {
 
     // Minimize the terminal/console window running this agent so it never
     // appears in screenshots and the vision LLM can't accidentally close it.
-    if (!IS_MAC) {
+    if (process.platform === 'win32') {
       try {
         await execFileAsync('powershell.exe', ['-Command',
           `Add-Type -TypeDefinition @"
@@ -1673,4 +1673,3 @@ function tierEmoji(tier: SafetyTier): string {
     case SafetyTier.Confirm: return '🔴';
   }
 }
-

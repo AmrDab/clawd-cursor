@@ -392,11 +392,14 @@ export async function callVisionLLM(
   const model = layer.model;
   // Use layer-specific API key if available (mixed pipelines use different keys per layer)
   const apiKey = (config.layer3.enabled ? config.layer3.apiKey : undefined) || config.apiKey || '';
-  const isAnthropic = !config.provider.openaiCompat
+  // Determine protocol from active layer endpoint (mixed-provider pipelines are supported).
+  const layerProviderKey = inferProviderFromBaseUrl(baseUrl) || config.providerKey;
+  const layerProvider = PROVIDERS[layerProviderKey] || config.provider;
+  const isAnthropic = !layerProvider.openaiCompat
     && !baseUrl.includes('localhost')
     && !baseUrl.includes('11434');
 
-  return callVisionLLMDirect({ ...options, baseUrl, model, apiKey, isAnthropic, providerProfile: config.provider });
+  return callVisionLLMDirect({ ...options, baseUrl, model, apiKey, isAnthropic, providerProfile: layerProvider });
 }
 
 /**

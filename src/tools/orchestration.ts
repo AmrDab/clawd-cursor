@@ -49,6 +49,15 @@ function formatAgentHttpError(status: number, body: string, statusText: string):
   }
 }
 
+async function commandExists(cmd: string): Promise<boolean> {
+  try {
+    await execFileAsync('which', [cmd], { timeout: 2000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getOrchestrationTools(): ToolDefinition[] {
   return [
     {
@@ -114,7 +123,14 @@ export function getOrchestrationTools(): ToolDefinition[] {
           } else if (process.platform === 'darwin') {
             await execFileAsync('open', ['-a', name], { timeout: 10000 });
           } else {
-            await execFileAsync(name, [], { timeout: 10000 });
+            // Linux: prefer desktop-aware launchers, then direct executable.
+            if (await commandExists('gtk-launch')) {
+              await execFileAsync('gtk-launch', [name], { timeout: 10000 });
+            } else if (await commandExists('xdg-open')) {
+              await execFileAsync('xdg-open', [name], { timeout: 10000 });
+            } else {
+              await execFileAsync(name, [], { timeout: 10000 });
+            }
           }
           await new Promise(r => setTimeout(r, 2000));
           ctx.a11y.invalidateCache();
@@ -155,9 +171,20 @@ export function getOrchestrationTools(): ToolDefinition[] {
               `--remote-debugging-port=${DEFAULT_CDP_PORT}`, `--user-data-dir=${userDataDir}`, '--no-first-run', url
             ], { timeout: 10000 });
           } else {
-            await execFileAsync('google-chrome', [
-              `--remote-debugging-port=${DEFAULT_CDP_PORT}`, `--user-data-dir=${userDataDir}`, '--no-first-run', url
-            ], { timeout: 10000 });
+            // Linux: try common browser binaries in order.
+            const browserCandidates = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge'];
+            let launched = false;
+            for (const browserCmd of browserCandidates) {
+              if (!(await commandExists(browserCmd))) continue;
+              await execFileAsync(browserCmd, [
+                `--remote-debugging-port=${DEFAULT_CDP_PORT}`, `--user-data-dir=${userDataDir}`, '--no-first-run', url,
+              ], { timeout: 10000 });
+              launched = true;
+              break;
+            }
+            if (!launched) {
+              throw new Error('No supported browser binary found (tried: google-chrome, chromium, microsoft-edge)');
+            }
           }
           await new Promise(r => setTimeout(r, 3000));
           ctx.a11y.invalidateCache();

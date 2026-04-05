@@ -6,10 +6,12 @@
  * The server auto-scales to Windows LOGICAL coordinates via mouseScaleFactor.
  */
 
+import * as os from 'os';
 import type { ToolDefinition } from './types';
 
 /** Dangerous key combos that are blocked */
 const BLOCKED_KEYS = ['alt+f4', 'ctrl+alt+delete', 'ctrl+alt+del'];
+const IS_MAC = os.platform() === 'darwin';
 
 export function getDesktopTools(): ToolDefinition[] {
   return [
@@ -214,7 +216,8 @@ export function getDesktopTools(): ToolDefinition[] {
         const activeInfo = active ? `[${active.processName}] "${active.title}"` : '(unknown)';
         await ctx.a11y.writeClipboard(text);
         await new Promise(r => setTimeout(r, 50));
-        await ctx.desktop.keyPress('ctrl+v');
+        // Paste combo is platform-specific
+        await ctx.desktop.keyPress(IS_MAC ? 'super+v' : 'ctrl+v');
         await new Promise(r => setTimeout(r, 100));
         ctx.a11y.invalidateCache();
         return { text: `Typed ${text.length} chars into ${activeInfo}` };
