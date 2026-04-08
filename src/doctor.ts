@@ -256,13 +256,13 @@ export async function runDoctor(opts: {
         ok: axOk,
         detail: axOk
           ? 'Granted — clawdcursor can read UI elements'
-          : 'DENIED — open System Settings → Privacy & Security → Accessibility → enable Terminal/Node',
+          : 'DENIED — open System Settings → Privacy & Security → Accessibility → enable ClawdCursor',
       });
       if (axOk) {
         console.log('   ✅ Accessibility permission granted');
       } else {
         console.log('   ❌ Accessibility permission DENIED');
-        console.log('   → System Settings → Privacy & Security → Accessibility → enable your terminal');
+        console.log('   → System Settings → Privacy & Security → Accessibility → enable ClawdCursor');
       }
     } catch {
       results.push({ name: 'macOS Accessibility permission', ok: false, detail: 'Could not query — run manually in a terminal' });
@@ -282,12 +282,12 @@ export async function runDoctor(opts: {
         name: 'macOS Screen Recording permission',
         ok: !denied,
         detail: denied
-          ? 'DENIED — open System Settings → Privacy & Security → Screen Recording → enable Terminal/Node'
+          ? 'DENIED — open System Settings → Privacy & Security → Screen & System Audio Recording → enable ClawdCursor'
           : 'Granted — clawdcursor can capture the screen',
       });
       if (denied) {
         console.log('   ❌ Screen Recording permission DENIED');
-        console.log('   → System Settings → Privacy & Security → Screen Recording → enable your terminal');
+        console.log('   → System Settings → Privacy & Security → Screen & System Audio Recording → enable ClawdCursor');
       } else {
         console.log('   ✅ Screen Recording permission granted');
       }

@@ -14,6 +14,8 @@ import Foundation
 import ApplicationServices
 import CoreGraphics
 import AppKit
+import ImageIO
+import UniformTypeIdentifiers
 
 // MARK: - JSON-RPC Types
 
@@ -144,10 +146,16 @@ class ClawdCursorHelper {
             response = traverseAccessibilityTree(id: request.id, params: request.params)
         case "click":
             response = click(id: request.id, params: request.params)
+        case "moveMouse":
+            response = moveMouse(id: request.id, params: request.params)
+        case "dragMouse":
+            response = dragMouse(id: request.id, params: request.params)
         case "type":
             response = typeText(id: request.id, params: request.params)
         case "pressKey":
             response = pressKey(id: request.id, params: request.params)
+        case "captureScreen":
+            response = captureScreen(id: request.id)
         case "openApp":
             response = openApp(id: request.id, params: request.params)
         case "getWindowList":
@@ -298,6 +306,54 @@ class ClawdCursorHelper {
         
         return JsonRpcResponse(id: id, result: AnyCodable(["success": true, "x": x, "y": y]), error: nil)
     }
+
+    func moveMouse(id: Int, params: [String: AnyCodable]?) -> JsonRpcResponse {
+        guard let x = params?["x"]?.value as? Double,
+              let y = params?["y"]?.value as? Double else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32602, message: "Missing 'x' or 'y' parameter"))
+        }
+        let point = CGPoint(x: x, y: y)
+        if let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+            event.post(tap: .cghidEventTap)
+        }
+        return JsonRpcResponse(id: id, result: AnyCodable(["success": true, "x": x, "y": y]), error: nil)
+    }
+
+    func dragMouse(id: Int, params: [String: AnyCodable]?) -> JsonRpcResponse {
+        guard let startX = params?["startX"]?.value as? Double,
+              let startY = params?["startY"]?.value as? Double,
+              let endX = params?["endX"]?.value as? Double,
+              let endY = params?["endY"]?.value as? Double else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32602, message: "Missing drag coordinates"))
+        }
+
+        let startPoint = CGPoint(x: startX, y: startY)
+        let endPoint = CGPoint(x: endX, y: endY)
+        let button: CGMouseButton = .left
+
+        if let mouseDown = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: startPoint, mouseButton: button) {
+            mouseDown.post(tap: .cghidEventTap)
+        }
+        usleep(30000)
+
+        let steps = max(5, Int(hypot(endX - startX, endY - startY) / 20.0))
+        for i in 1...steps {
+            let t = Double(i) / Double(steps)
+            let ix = startX + (endX - startX) * t
+            let iy = startY + (endY - startY) * t
+            let point = CGPoint(x: ix, y: iy)
+            if let drag = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: point, mouseButton: button) {
+                drag.post(tap: .cghidEventTap)
+            }
+            usleep(12000)
+        }
+
+        if let mouseUp = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: endPoint, mouseButton: button) {
+            mouseUp.post(tap: .cghidEventTap)
+        }
+
+        return JsonRpcResponse(id: id, result: AnyCodable(["success": true]), error: nil)
+    }
     
     func typeText(id: Int, params: [String: AnyCodable]?) -> JsonRpcResponse {
         guard let text = params?["text"]?.value as? String else {
@@ -384,6 +440,39 @@ class ClawdCursorHelper {
         }
         
         return JsonRpcResponse(id: id, result: AnyCodable(["success": true, "key": key, "modifiers": modifiers]), error: nil)
+    }
+
+    func captureScreen(id: Int) -> JsonRpcResponse {
+        guard CGPreflightScreenCaptureAccess() else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32001, message: "screen_recording_denied"))
+        }
+
+        guard let image = CGWindowListCreateImage(
+            CGRect.infinite,
+            .optionOnScreenOnly,
+            kCGNullWindowID,
+            [.nominalResolution]
+        ) else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to capture screen"))
+        }
+
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to create image destination"))
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to encode screenshot"))
+        }
+
+        let base64 = (data as Data).base64EncodedString()
+        return JsonRpcResponse(id: id, result: AnyCodable([
+            "success": true,
+            "width": image.width,
+            "height": image.height,
+            "format": "png",
+            "imageBase64": base64
+        ]), error: nil)
     }
     
     func openApp(id: Int, params: [String: AnyCodable]?) -> JsonRpcResponse {

@@ -110,11 +110,11 @@ export async function getReadinessStatus(): Promise<ReadinessStatus> {
   if (isMacOS() && macPermissions) {
     if (!macPermissions.accessibility) {
       issues.push('macOS Accessibility permission not granted');
-      nextSteps.push('System Settings → Privacy & Security → Accessibility → Enable ClawdCursor/Terminal');
+      nextSteps.push('System Settings → Privacy & Security → Accessibility → Enable ClawdCursor');
     }
     if (!macPermissions.screenRecording) {
       issues.push('macOS Screen Recording permission not granted');
-      nextSteps.push('System Settings → Privacy & Security → Screen Recording → Enable ClawdCursor/Terminal');
+      nextSteps.push('System Settings → Privacy & Security → Screen & System Audio Recording → Enable ClawdCursor');
     }
   }
   

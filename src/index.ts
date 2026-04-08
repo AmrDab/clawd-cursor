@@ -17,6 +17,7 @@ import { resolveApiConfig } from './credentials';
 import * as fs from 'fs';
 import * as path from 'path';
 import { migrateFromLegacyDir } from './paths';
+import { ensureHostAppRunning, stopHostApp, checkPermissionsQuick } from './native-helper';
 
 dotenv.config();
 
@@ -175,6 +176,21 @@ program
     } else if (!hasConsent()) {
       const accepted = await runOnboarding('start', parseInt(opts.port, 10) || 3847);
       if (!accepted) process.exit(1);
+    }
+
+    if (process.platform === 'darwin') {
+      await ensureHostAppRunning();
+      const perms = await checkPermissionsQuick();
+      if (!perms.accessibility) {
+        console.error(`\n${e('❌', '[ERR]')} macOS Accessibility permission is not granted to ClawdCursor.`);
+        console.error(`Grant it in: System Settings → Privacy & Security → Accessibility`);
+        console.error(`Then restart with: clawdcursor start\n`);
+        process.exit(1);
+      }
+      if (!perms.screenRecording) {
+        console.warn(`${e('⚠️', '[WARN]')} Screen Recording is not granted to ClawdCursor.`);
+        console.warn(`   Screenshots may fail until enabled in System Settings → Privacy & Security → Screen & System Audio Recording.`);
+      }
     }
 
     // Pre-check: is the port already in use? Do this BEFORE expensive init.
@@ -446,6 +462,9 @@ program
     const isClawd = await isClawdInstance(port);
     if (!isClawd) {
       console.log(`${e('🐾', '>')} No running instance found on port ` + port);
+      if (process.platform === 'darwin') {
+        await stopHostApp();
+      }
       return;
     }
 
@@ -470,6 +489,7 @@ program
     }
 
     // Verify it actually stopped (wait up to 3s)
+    let serverStopped = false;
     for (let i = 0; i < 6; i++) {
       await new Promise(r => setTimeout(r, 500));
       try {
@@ -478,15 +498,22 @@ program
       } catch {
         // Connection refused = dead = success
         console.log(`${e('✅', '[OK]')} Server confirmed stopped`);
-        return;
+        serverStopped = true;
+        break;
       }
     }
-    console.log(`${e('⚠️', '[WARN]')}  Graceful stop did not complete — force killing...`);
-    const killed = await forceKillPort(port);
-    if (killed) {
-      console.log(`${e('🐾', '>')} Clawd Cursor force stopped`);
-    } else {
-      console.error(`${e('❌', '[ERR]')} Could not force stop process on port ` + port);
+    if (!serverStopped) {
+      console.log(`${e('⚠️', '[WARN]')}  Graceful stop did not complete — force killing...`);
+      const killed = await forceKillPort(port);
+      if (killed) {
+        console.log(`${e('🐾', '>')} Clawd Cursor force stopped`);
+      } else {
+        console.error(`${e('❌', '[ERR]')} Could not force stop process on port ` + port);
+      }
+    }
+
+    if (process.platform === 'darwin') {
+      await stopHostApp();
     }
   });
 

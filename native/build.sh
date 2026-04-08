@@ -18,6 +18,7 @@ APP_DIR="ClawdCursor.app/Contents/MacOS"
 mkdir -p "$APP_DIR"
 
 # Copy binaries into the bundle
+cp "$BUILD_DIR/ClawdCursorHost" "$APP_DIR/"
 cp "$BUILD_DIR/clawdcursor-helper" "$APP_DIR/"
 cp "$BUILD_DIR/screenshot-helper" "$APP_DIR/"
 cp "$BUILD_DIR/permission-check" "$APP_DIR/"
@@ -52,4 +53,4 @@ echo "To test permissions:"
 echo "  ./ClawdCursor.app/Contents/MacOS/permission-check"
 echo ""
 echo "To run the helper:"
-echo "  ./ClawdCursor.app/Contents/MacOS/clawdcursor-helper"
+echo "  open ClawdCursor.app"
