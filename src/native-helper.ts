@@ -14,6 +14,7 @@ import * as readline from 'readline';
 const IS_MACOS = process.platform === 'darwin';
 const HOST_PORT = parseInt(process.env.CLAWDCURSOR_HOST_PORT || '3848', 10);
 const HOST_BASE_URL = `http://127.0.0.1:${HOST_PORT}`;
+const ALLOW_MAC_FALLBACK = process.env.CLAWDCURSOR_ALLOW_MAC_HELPER_FALLBACK === '1';
 
 interface JsonRpcRequest {
   id: number;
@@ -52,6 +53,14 @@ interface WindowInfo {
   ownerName: string;
   windowName: string;
   bounds: { X: number; Y: number; Width: number; Height: number };
+}
+
+interface CapturedScreen {
+  success: boolean;
+  width: number;
+  height: number;
+  format: 'png';
+  imageBase64: string;
 }
 
 export class NativeHelper {
@@ -177,7 +186,10 @@ export class NativeHelper {
       await ensureHostAppRunning();
       const res = await fetch(`${HOST_BASE_URL}/rpc`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-clawdcursor-token': getOrCreateHostToken(),
+        },
         body: JSON.stringify(request),
         signal: AbortSignal.timeout(30000),
       });
@@ -243,6 +255,14 @@ export class NativeHelper {
     return this.call('click', { x, y, ...options });
   }
 
+  async moveMouse(x: number, y: number): Promise<{ success: boolean; x: number; y: number }> {
+    return this.call('moveMouse', { x, y });
+  }
+
+  async dragMouse(startX: number, startY: number, endX: number, endY: number): Promise<{ success: boolean }> {
+    return this.call('dragMouse', { startX, startY, endX, endY });
+  }
+
   async type(text: string, options?: { delayMs?: number }): Promise<{ success: boolean; length: number }> {
     return this.call('type', { text, ...options });
   }
@@ -257,6 +277,10 @@ export class NativeHelper {
 
   async getWindowList(): Promise<{ windows: WindowInfo[] }> {
     return this.call('getWindowList');
+  }
+
+  async captureScreen(): Promise<CapturedScreen> {
+    return this.call('captureScreen');
   }
 }
 
@@ -300,6 +324,10 @@ export async function checkPermissionsQuick(): Promise<PermissionStatus> {
     if (res.ok) {
       return res.json() as Promise<PermissionStatus>;
     }
+  }
+
+  if (!ALLOW_MAC_FALLBACK) {
+    throw new Error('ClawdCursor host is required on macOS. Build/launch ClawdCursor.app or set CLAWDCURSOR_ALLOW_MAC_HELPER_FALLBACK=1 for temporary dev fallback.');
   }
 
   const permissionCheckPath = getNativeHelperPath('permission-check');
@@ -378,6 +406,39 @@ export async function ensureHostAppRunning(): Promise<void> {
     await new Promise(r => setTimeout(r, 250));
   }
   throw new Error('ClawdCursor host app did not start in time');
+}
+
+export async function stopHostApp(): Promise<void> {
+  if (!IS_MACOS) return;
+  await new Promise<void>((resolve) => {
+    const proc = spawn('osascript', ['-e', 'tell application id "com.clawdcursor.app" to quit'], { stdio: 'ignore' });
+    proc.on('close', () => resolve());
+    proc.on('error', () => resolve());
+  });
+
+  const started = Date.now();
+  while (Date.now() - started < 3000) {
+    if (!(await isHostRunning())) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  // stale process recovery
+  await new Promise<void>((resolve) => {
+    const proc = spawn('pkill', ['-f', 'ClawdCursorHost'], { stdio: 'ignore' });
+    proc.on('close', () => resolve());
+    proc.on('error', () => resolve());
+  });
+}
+
+function getOrCreateHostToken(): string {
+  const dir = path.join(os.homedir(), '.clawdcursor');
+  const tokenPath = path.join(dir, 'host-token');
+  if (fs.existsSync(tokenPath)) {
+    return fs.readFileSync(tokenPath, 'utf-8').trim();
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 18)}`;
+  fs.writeFileSync(tokenPath, token, { mode: 0o600 });
+  return token;
 }
 
 /**

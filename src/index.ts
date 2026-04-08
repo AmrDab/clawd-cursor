@@ -17,7 +17,7 @@ import { resolveApiConfig } from './credentials';
 import * as fs from 'fs';
 import * as path from 'path';
 import { migrateFromLegacyDir } from './paths';
-import { ensureHostAppRunning } from './native-helper';
+import { ensureHostAppRunning, stopHostApp } from './native-helper';
 
 dotenv.config();
 
@@ -168,10 +168,6 @@ program
       process.exit(1);
     }
 
-    if (process.platform === 'darwin') {
-      await ensureHostAppRunning();
-    }
-
     // Handle consent before anything else
     const { hasConsent, writeConsentFile, runOnboarding } = await import('./onboarding');
     if (opts.accept) {
@@ -180,6 +176,10 @@ program
     } else if (!hasConsent()) {
       const accepted = await runOnboarding('start', parseInt(opts.port, 10) || 3847);
       if (!accepted) process.exit(1);
+    }
+
+    if (process.platform === 'darwin') {
+      await ensureHostAppRunning();
     }
 
     // Pre-check: is the port already in use? Do this BEFORE expensive init.
@@ -451,6 +451,9 @@ program
     const isClawd = await isClawdInstance(port);
     if (!isClawd) {
       console.log(`${e('🐾', '>')} No running instance found on port ` + port);
+      if (process.platform === 'darwin') {
+        await stopHostApp();
+      }
       return;
     }
 
@@ -492,6 +495,10 @@ program
       console.log(`${e('🐾', '>')} Clawd Cursor force stopped`);
     } else {
       console.error(`${e('❌', '[ERR]')} Could not force stop process on port ` + port);
+    }
+
+    if (process.platform === 'darwin') {
+      await stopHostApp();
     }
   });
 

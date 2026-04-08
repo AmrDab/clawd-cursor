@@ -14,10 +14,12 @@ import { EventEmitter } from 'events';
 import sharp from 'sharp';
 import { mouse, keyboard, screen, Button, Key, Point } from '@nut-tree-fork/nut-js';
 import { normalizeKey } from './keys';
+import { getNativeHelper } from './native-helper';
 import type { ClawdConfig, ScreenFrame, MouseAction, KeyboardAction } from './types';
 
 // On macOS, Command key = Key.LeftCmd. On other platforms, Super = Key.LeftSuper.
 const SUPER_KEY = os.platform() === 'darwin' ? Key.LeftCmd : Key.LeftSuper;
+const IS_MAC = os.platform() === 'darwin';
 
 /** Safely resolve a nut-js Key enum value from multiple candidate names */
 function resolveNutKey(...candidates: string[]): Key {
@@ -80,6 +82,7 @@ export class NativeDesktop extends EventEmitter {
   private screenHeight = 0;
   private connected = false;
   private monitors: MonitorInfo[] = [];
+  private helper = IS_MAC ? getNativeHelper() : null;
 
   /** Scale factor: LLM coordinates × scaleFactor = real screen coordinates */
   private scaleFactor = 1;
@@ -187,6 +190,18 @@ export class NativeDesktop extends EventEmitter {
    */
   async connect(): Promise<void> {
     try {
+      if (IS_MAC && this.helper) {
+        const frame = await this.helper.captureScreen();
+        this.screenWidth = frame.width;
+        this.screenHeight = frame.height;
+        this.scaleFactor = this.screenWidth > LLM_TARGET_WIDTH ? this.screenWidth / LLM_TARGET_WIDTH : 1;
+        this.connected = true;
+        console.log(`🐾 Native desktop connected (macOS host path)`);
+        console.log(`   Screen: ${this.screenWidth}x${this.screenHeight}`);
+        console.log(`   LLM scale factor: ${this.scaleFactor.toFixed(2)}x`);
+        return;
+      }
+
       // Configure nut-js for speed
       mouse.config.mouseSpeed = 2000;    // Fast mouse movement
       mouse.config.autoDelayMs = 0;      // No auto-delay between actions
@@ -278,6 +293,19 @@ export class NativeDesktop extends EventEmitter {
       throw new Error('Not connected to native desktop');
     }
 
+    if (IS_MAC && this.helper) {
+      const frame = await this.helper.captureScreen();
+      this.screenWidth = frame.width;
+      this.screenHeight = frame.height;
+      return {
+        width: frame.width,
+        height: frame.height,
+        buffer: Buffer.from(frame.imageBase64, 'base64'),
+        timestamp: Date.now(),
+        format: 'png',
+      };
+    }
+
     const img = await screen.grab();
 
     // Update screen dimensions in case of resolution change
@@ -312,6 +340,29 @@ export class NativeDesktop extends EventEmitter {
   async captureForLLM(): Promise<ScreenFrame & { scaleFactor: number; llmWidth: number; llmHeight: number }> {
     if (!this.connected) {
       throw new Error('Not connected to native desktop');
+    }
+
+    if (IS_MAC && this.helper) {
+      const frame = await this.captureScreen();
+      this.screenWidth = frame.width;
+      this.screenHeight = frame.height;
+      this.scaleFactor = this.screenWidth > LLM_TARGET_WIDTH ? this.screenWidth / LLM_TARGET_WIDTH : 1;
+      const llmWidth = Math.min(this.screenWidth, LLM_TARGET_WIDTH);
+      const llmHeight = Math.round(this.screenHeight / this.scaleFactor);
+      const pipeline = sharp(frame.buffer).resize(llmWidth, llmHeight);
+      const processed = this.config.capture.format === 'jpeg'
+        ? await pipeline.jpeg({ quality: this.config.capture.quality }).toBuffer()
+        : await pipeline.png().toBuffer();
+      return {
+        width: this.screenWidth,
+        height: this.screenHeight,
+        buffer: processed,
+        timestamp: Date.now(),
+        format: this.config.capture.format,
+        scaleFactor: this.scaleFactor,
+        llmWidth,
+        llmHeight,
+      };
     }
 
     const img = await screen.grab();
@@ -362,6 +413,24 @@ export class NativeDesktop extends EventEmitter {
     x: number, y: number, w: number, h: number
   ): Promise<ScreenFrame & { scaleFactor: number; llmWidth: number; llmHeight: number; regionX: number; regionY: number }> {
     if (!this.connected) throw new Error('Not connected');
+
+    if (IS_MAC && this.helper) {
+      const full = await this.captureScreen();
+      const rx = Math.max(0, Math.min(x, full.width - 1));
+      const ry = Math.max(0, Math.min(y, full.height - 1));
+      const rw = Math.min(w, full.width - rx);
+      const rh = Math.min(h, full.height - ry);
+      const cropScale = rw > LLM_TARGET_WIDTH ? rw / LLM_TARGET_WIDTH : 1;
+      const llmWidth = Math.min(rw, LLM_TARGET_WIDTH);
+      const llmHeight = Math.round(rh / cropScale);
+      const { format, quality } = this.config.capture;
+      let pipeline = sharp(full.buffer).extract({ left: rx, top: ry, width: rw, height: rh });
+      if (llmWidth < rw) {
+        pipeline = pipeline.resize(llmWidth, llmHeight, { fit: 'fill', kernel: 'lanczos3' });
+      }
+      const buffer = format === 'jpeg' ? await pipeline.jpeg({ quality }).toBuffer() : await pipeline.png().toBuffer();
+      return { width: rw, height: rh, buffer, timestamp: Date.now(), format, scaleFactor: cropScale, llmWidth, llmHeight, regionX: rx, regionY: ry };
+    }
 
     const img = await screen.grab();
 
@@ -473,6 +542,10 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseClick(x: number, y: number, button: number = 1): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      await this.helper.click(x, y, { button: button === 4 ? 'right' : 'left' });
+      return;
+    }
     await mouse.setPosition(new Point(x, y));
     await this.delay(50);
     const btn = this.mapButton(button);
@@ -482,6 +555,10 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseDoubleClick(x: number, y: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      await this.helper.click(x, y, { button: 'left', clickCount: 2 });
+      return;
+    }
     await mouse.setPosition(new Point(x, y));
     await this.delay(50);
     await mouse.doubleClick(Button.LEFT);
@@ -490,6 +567,10 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseRightClick(x: number, y: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      await this.helper.click(x, y, { button: 'right' });
+      return;
+    }
     await mouse.setPosition(new Point(x, y));
     await this.delay(50);
     await mouse.rightClick();
@@ -498,6 +579,10 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseMove(x: number, y: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      await this.helper.moveMouse(x, y);
+      return;
+    }
     await mouse.setPosition(new Point(x, y));
   }
 
@@ -519,12 +604,32 @@ export class NativeDesktop extends EventEmitter {
 
   async typeText(text: string): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      await this.helper.type(text);
+      return;
+    }
     await keyboard.type(text);
     console.log(`   ⌨️  Typed: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}"`);
   }
 
   async keyPress(keyCombo: string): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      if (keyCombo === '+') {
+        await this.helper.type('+');
+        return;
+      }
+      const parts = keyCombo.split('+').map(k => k.trim()).filter(Boolean);
+      const key = parts[parts.length - 1] || keyCombo;
+      const modifiers = parts.slice(0, -1).map(k => {
+        const lower = k.toLowerCase();
+        if (lower === 'super') return 'cmd';
+        if (lower === 'control') return 'ctrl';
+        return lower;
+      });
+      await this.helper.pressKey(key, modifiers);
+      return;
+    }
 
     // Special case: literal "+" character (can't split on "+" since it IS the separator)
     if (keyCombo === '+') {
@@ -656,6 +761,10 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseDrag(sx: number, sy: number, ex: number, ey: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
+    if (IS_MAC && this.helper) {
+      await this.helper.dragMouse(sx, sy, ex, ey);
+      return;
+    }
     console.log(`   🖱️  Drag (${sx},${sy}) → (${ex},${ey})`);
 
     await mouse.setPosition(new Point(sx, sy));

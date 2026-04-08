@@ -11,6 +11,12 @@ private let hostPort: UInt16 = {
     return 3848
 }()
 
+private func expectedToken() -> String? {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let tokenPath = home.appendingPathComponent(".clawdcursor/host-token").path
+    return try? String(contentsOfFile: tokenPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 private func jsonResponse(status: Int, payload: Data) -> Data {
     var response = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "ERROR")\r\n"
     response += "Content-Type: application/json\r\n"
@@ -81,6 +87,14 @@ private func handleRequest(raw: Data) -> Data {
     let method = String(reqParts[0])
     let path = String(reqParts[1])
     let body = parts.dropFirst().joined(separator: "\r\n\r\n")
+    var headers: [String: String] = [:]
+    for line in lines.dropFirst() {
+        if let idx = line.firstIndex(of: ":") {
+            let name = String(line[..<idx]).trimmingCharacters(in: .whitespaces).lowercased()
+            let value = String(line[line.index(after: idx)...]).trimmingCharacters(in: .whitespaces)
+            headers[name] = value
+        }
+    }
 
     if method == "GET" && path == "/health" {
         let payload = "{\"status\":\"ok\",\"service\":\"clawdcursor-host\",\"port\":\(hostPort)}"
@@ -97,6 +111,12 @@ private func handleRequest(raw: Data) -> Data {
     }
 
     if method == "POST" && path == "/rpc" {
+        guard let token = expectedToken(), !token.isEmpty else {
+            return textResponse(status: 503, text: "{\"error\":\"host_token_missing\"}")
+        }
+        guard headers["x-clawdcursor-token"] == token else {
+            return textResponse(status: 401, text: "{\"error\":\"unauthorized\"}")
+        }
         let result = runBinary("clawdcursor-helper", stdin: Data((body + "\n").utf8))
         if result.exitCode == 0, !result.stdout.isEmpty {
             let lines = String(data: result.stdout, encoding: .utf8)?.split(separator: "\n") ?? []
