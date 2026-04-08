@@ -478,6 +478,7 @@ program
     }
 
     // Verify it actually stopped (wait up to 3s)
+    let serverStopped = false;
     for (let i = 0; i < 6; i++) {
       await new Promise(r => setTimeout(r, 500));
       try {
@@ -486,15 +487,18 @@ program
       } catch {
         // Connection refused = dead = success
         console.log(`${e('✅', '[OK]')} Server confirmed stopped`);
-        return;
+        serverStopped = true;
+        break;
       }
     }
-    console.log(`${e('⚠️', '[WARN]')}  Graceful stop did not complete — force killing...`);
-    const killed = await forceKillPort(port);
-    if (killed) {
-      console.log(`${e('🐾', '>')} Clawd Cursor force stopped`);
-    } else {
-      console.error(`${e('❌', '[ERR]')} Could not force stop process on port ` + port);
+    if (!serverStopped) {
+      console.log(`${e('⚠️', '[WARN]')}  Graceful stop did not complete — force killing...`);
+      const killed = await forceKillPort(port);
+      if (killed) {
+        console.log(`${e('🐾', '>')} Clawd Cursor force stopped`);
+      } else {
+        console.error(`${e('❌', '[ERR]')} Could not force stop process on port ` + port);
+      }
     }
 
     if (process.platform === 'darwin') {
