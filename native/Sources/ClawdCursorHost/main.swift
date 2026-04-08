@@ -134,7 +134,10 @@ private func handleRequest(raw: Data) -> Data {
 private var listenerRef: NWListener?
 
 private func startServer() throws {
-    let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: hostPort)!)
+    // SECURITY: Bind to localhost only — reject connections from other machines
+    let params = NWParameters.tcp
+    params.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: hostPort)!)
+    let listener = try NWListener(using: params)
     listener.newConnectionHandler = { conn in
         conn.start(queue: .global())
         conn.receive(minimumIncompleteLength: 1, maximumLength: 1024 * 1024) { data, _, _, _ in
