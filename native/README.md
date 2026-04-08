@@ -1,6 +1,6 @@
 # ClawdCursor Native Helper (macOS)
 
-Native Swift helper for macOS that consolidates all TCC (Transparency, Consent, and Control) permissions under a single app identity.
+Native Swift host app for macOS that consolidates all TCC (Transparency, Consent, and Control) permissions under a single app identity.
 
 ## Why?
 
@@ -46,8 +46,17 @@ Use `--prompt` to trigger the system permission dialog:
 ./ClawdCursor.app/Contents/MacOS/permission-check --prompt
 ```
 
+### `ClawdCursorHost` (app executable)
+The app process now owns IPC over localhost (`127.0.0.1:3848` by default):
+
+- `GET /health` host liveness
+- `GET /status` permission status
+- `POST /rpc` JSON-RPC proxy for desktop methods
+
+The CLI checks/launches this app on `clawdcursor start`.
+
 ### `clawdcursor-helper`
-Main helper daemon. Communicates via JSON-RPC over stdin/stdout:
+Worker binary used by the host app for JSON-RPC methods:
 
 ```json
 {"id":1,"method":"checkPermissions"}
@@ -79,9 +88,10 @@ Isolated subprocess for screen capture. Prevents ReplayKit CPU spin after captur
 ┌─────────────────────────────────────────────────────────────┐
 │ Node.js (clawdcursor CLI)                                   │
 │   └── NativeHelper class (native-helper.ts)                 │
-│         └── spawn + JSON-RPC over stdio                     │
+│         └── localhost IPC (127.0.0.1:3848)                  │
 ├─────────────────────────────────────────────────────────────┤
 │ ClawdCursor.app/Contents/MacOS/                             │
+│   ├── ClawdCursorHost    (bundle identity + IPC endpoint)   │
 │   ├── clawdcursor-helper  (AX traversal, input, app ctrl)   │
 │   ├── screenshot-helper   (isolated screen capture)         │
 │   └── permission-check    (quick permission status)         │

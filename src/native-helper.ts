@@ -12,6 +12,8 @@ import * as os from 'os';
 import * as readline from 'readline';
 
 const IS_MACOS = process.platform === 'darwin';
+const HOST_PORT = parseInt(process.env.CLAWDCURSOR_HOST_PORT || '3848', 10);
+const HOST_BASE_URL = `http://127.0.0.1:${HOST_PORT}`;
 
 interface JsonRpcRequest {
   id: number;
@@ -60,6 +62,7 @@ export class NativeHelper {
     reject: (error: Error) => void;
   }>();
   private readline: readline.Interface | null = null;
+  private useHostIpc = IS_MACOS;
 
   /**
    * Check if native helper is available (macOS only)
@@ -74,18 +77,18 @@ export class NativeHelper {
     }
   }
 
-  private getHelperPath(): string {
+  private getHelperPath(binary = 'clawdcursor-helper'): string {
     if (!IS_MACOS) {
       throw new Error('Native helper is only available on macOS');
     }
     // Look for the helper in various locations
     const locations = [
       // Development: native/ClawdCursor.app
-      path.join(__dirname, '..', 'native', 'ClawdCursor.app', 'Contents', 'MacOS', 'clawdcursor-helper'),
+      path.join(__dirname, '..', 'native', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
       // Installed via npm: node_modules/.clawdcursor/ClawdCursor.app
-      path.join(__dirname, '..', 'node_modules', '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', 'clawdcursor-helper'),
+      path.join(__dirname, '..', 'node_modules', '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
       // Global install
-      path.join(os.homedir(), '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', 'clawdcursor-helper'),
+      path.join(os.homedir(), '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
     ];
 
     for (const loc of locations) {
@@ -103,6 +106,10 @@ export class NativeHelper {
   async start(): Promise<void> {
     if (!IS_MACOS) {
       throw new Error('Native helper is only available on macOS');
+    }
+    if (this.useHostIpc) {
+      await ensureHostAppRunning();
+      return;
     }
     if (this.process) return;
 
@@ -154,6 +161,7 @@ export class NativeHelper {
   }
 
   async stop(): Promise<void> {
+    if (this.useHostIpc) return;
     if (this.process) {
       this.process.kill();
       this.process = null;
@@ -162,12 +170,30 @@ export class NativeHelper {
   }
 
   private async call<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+    const id = ++this.requestId;
+    const request: JsonRpcRequest = { id, method, params };
+
+    if (this.useHostIpc) {
+      await ensureHostAppRunning();
+      const res = await fetch(`${HOST_BASE_URL}/rpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) {
+        throw new Error(`Host IPC call failed (${res.status})`);
+      }
+      const rpc = await res.json() as JsonRpcResponse;
+      if (rpc.error) {
+        throw new Error(`${rpc.error.message} (code ${rpc.error.code})`);
+      }
+      return rpc.result as T;
+    }
+
     if (!this.process) {
       await this.start();
     }
-
-    const id = ++this.requestId;
-    const request: JsonRpcRequest = { id, method, params };
 
     return new Promise((resolve, reject) => {
       // Guard against process dying between start() and write()
@@ -269,9 +295,14 @@ export async function checkPermissionsQuick(): Promise<PermissionStatus> {
     };
   }
 
-  const permissionCheckPath = path.join(
-    __dirname, '..', 'native', 'ClawdCursor.app', 'Contents', 'MacOS', 'permission-check'
-  );
+  if (await isHostRunning()) {
+    const res = await fetch(`${HOST_BASE_URL}/status`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      return res.json() as Promise<PermissionStatus>;
+    }
+  }
+
+  const permissionCheckPath = getNativeHelperPath('permission-check');
 
   if (!fs.existsSync(permissionCheckPath)) {
     // Fall back to full helper
@@ -305,6 +336,48 @@ export async function checkPermissionsQuick(): Promise<PermissionStatus> {
       }
     });
   });
+}
+
+function getNativeHelperPath(binary: string): string {
+  const locations = [
+    path.join(__dirname, '..', 'native', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
+    path.join(__dirname, '..', 'node_modules', '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
+    path.join(os.homedir(), '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
+  ];
+  for (const loc of locations) {
+    if (fs.existsSync(loc)) return loc;
+  }
+  throw new Error(`ClawdCursor app binary not found: ${binary}`);
+}
+
+export async function isHostRunning(): Promise<boolean> {
+  if (!IS_MACOS) return false;
+  try {
+    const res = await fetch(`${HOST_BASE_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureHostAppRunning(): Promise<void> {
+  if (!IS_MACOS) return;
+  if (await isHostRunning()) return;
+
+  const appExecutable = getNativeHelperPath('ClawdCursorHost');
+  const appPath = path.resolve(appExecutable, '..', '..', '..');
+  await new Promise<void>((resolve, reject) => {
+    const opener = spawn('open', ['-a', appPath], { stdio: 'ignore' });
+    opener.on('error', reject);
+    opener.on('close', () => resolve());
+  });
+
+  const started = Date.now();
+  while (Date.now() - started < 10000) {
+    if (await isHostRunning()) return;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  throw new Error('ClawdCursor host app did not start in time');
 }
 
 /**

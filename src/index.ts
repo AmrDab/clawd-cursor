@@ -17,6 +17,7 @@ import { resolveApiConfig } from './credentials';
 import * as fs from 'fs';
 import * as path from 'path';
 import { migrateFromLegacyDir } from './paths';
+import { ensureHostAppRunning } from './native-helper';
 
 dotenv.config();
 
@@ -165,6 +166,10 @@ program
     if (existingPid !== null) {
       console.error(`${e('❌', '[ERR]')} clawdcursor start is already running (pid ${existingPid}). Run \`clawdcursor stop\` first.`);
       process.exit(1);
+    }
+
+    if (process.platform === 'darwin') {
+      await ensureHostAppRunning();
     }
 
     // Handle consent before anything else

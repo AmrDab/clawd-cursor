@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.clawdcursor.helper</string>
+    <string>com.clawdcursor.app</string>
     <key>CFBundleExecutable</key>
-    <string>clawdcursor-helper</string>
+    <string>ClawdCursorHost</string>
     <key>CFBundleName</key>
-    <string>ClawdCursor Helper</string>
+    <string>ClawdCursor</string>
     <key>CFBundleDisplayName</key>
-    <string>ClawdCursor Helper</string>
+    <string>ClawdCursor</string>
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>
