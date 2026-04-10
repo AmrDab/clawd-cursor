@@ -73,8 +73,10 @@ export const PROVIDERS: Record<string, ProviderProfile> = {
     name: 'Ollama (Local)',
     baseUrl: 'http://localhost:11434/v1',
     authHeader: () => ({}),
-    textModel: '',
-    visionModel: '',
+    // Defaults to widely-available models; overridden at runtime by
+    // selectOllamaModels() once we know which models are actually installed.
+    textModel: 'llama3.2',
+    visionModel: 'llava',
     textContextWindow: 32000, // varies by model, conservative default
     openaiCompat: true,
     computerUse: false,
@@ -326,9 +328,85 @@ export function supportsOpenAiToolCalls(provider: ProviderProfile | undefined): 
 
 /** Well-known vision-capable Ollama model name prefixes */
 const OLLAMA_VISION_PREFIXES = [
-  'llava', 'bakllava', 'llava-llama3', 'llava-phi3', 'moondream',
-  'minicpm-v', 'cogvlm', 'yi-vl', 'obsidian',
+  // LLaVA family
+  'llava', 'bakllava', 'llava-llama3', 'llava-phi3', 'llava-v1.6',
+  // Moondream
+  'moondream',
+  // MiniCPM-V
+  'minicpm-v', 'minicpm-v2', 'minicpm-v2.5', 'minicpm-v2.6',
+  // Qwen2-VL
+  'qwen2-vl', 'qwen2.5-vl',
+  // Gemma3 (multimodal)
+  'gemma3',
+  // Other vision models
+  'cogvlm', 'yi-vl', 'obsidian', 'internvl',
+  // Phi-3 vision
+  'phi3.5-vision', 'phi-3-vision',
 ];
+
+/**
+ * Preferred text-only models ranked by speed/quality tradeoff.
+ * Used by selectOllamaModels() to pick the best available text model.
+ */
+const OLLAMA_TEXT_MODEL_PREFERENCE = [
+  'qwen2.5:14b', 'qwen2.5:7b', 'qwen2.5:3b',
+  'llama3.2:3b', 'llama3.2',
+  'llama3.1:8b', 'llama3.1',
+  'llama3:8b', 'llama3',
+  'mistral',
+  'phi3.5', 'phi3',
+  'gemma2:9b', 'gemma2:2b', 'gemma2',
+  'deepseek-r1:7b', 'deepseek-r1',
+  'codellama',
+];
+
+/**
+ * Preferred vision models ranked by capability.
+ * Used by selectOllamaModels() to pick the best available vision model.
+ */
+const OLLAMA_VISION_MODEL_PREFERENCE = [
+  'qwen2.5-vl', 'qwen2-vl',
+  'minicpm-v2.6', 'minicpm-v2.5', 'minicpm-v2', 'minicpm-v',
+  'llava-llama3', 'llava-v1.6', 'llava-phi3',
+  'llava',
+  'gemma3',
+  'phi3.5-vision', 'phi-3-vision',
+  'moondream',
+  'bakllava',
+];
+
+/**
+ * Given a list of installed Ollama models, select the best text and vision models.
+ * Returns { textModel, visionModel } — either may be empty string if no suitable
+ * model is found in the respective category.
+ */
+export function selectOllamaModels(installedModels: string[]): { textModel: string; visionModel: string } {
+  const normalize = (id: string) => id.toLowerCase().split(':')[0];
+  const installed = new Set(installedModels.map(m => m.toLowerCase()));
+  const installedNorm = new Set(installedModels.map(normalize));
+
+  // Exact match first, then prefix match
+  const pick = (preference: string[]): string => {
+    for (const pref of preference) {
+      const prefLower = pref.toLowerCase();
+      // Exact match
+      if (installed.has(prefLower)) return pref;
+      // Prefix match (e.g. 'llama3.2' matches 'llama3.2:latest' or 'llama3.2:3b')
+      const match = installedModels.find(m => m.toLowerCase().startsWith(prefLower));
+      if (match) return match;
+    }
+    return '';
+  };
+
+  // Pick vision model
+  const visionModel = pick(OLLAMA_VISION_MODEL_PREFERENCE);
+
+  // Pick text model: prefer a non-vision model to save context window
+  const textOnlyInstalled = installedModels.filter(m => !isOllamaVisionModel(m));
+  const textModel = pick(OLLAMA_TEXT_MODEL_PREFERENCE) || textOnlyInstalled[0] || installedModels[0] || '';
+
+  return { textModel, visionModel };
+}
 
 /** Result of scanning a single provider */
 export interface ProviderScanResult {
@@ -604,6 +682,11 @@ export async function scanProviders(): Promise<ProviderScanResult[]> {
       if (models.length > 0) {
         const modelList = models.slice(0, 5).join(', ') + (models.length > 5 ? `, +${models.length - 5} more` : '');
         ollamaResult.detail = `running (${modelList})`;
+
+        // Auto-select the best available text + vision models
+        const { textModel, visionModel } = selectOllamaModels(models);
+        if (textModel) PROVIDERS['ollama'].textModel = textModel;
+        if (visionModel) PROVIDERS['ollama'].visionModel = visionModel;
       } else {
         ollamaResult.detail = 'running (no models pulled)';
       }
