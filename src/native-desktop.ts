@@ -14,7 +14,8 @@ import { EventEmitter } from 'events';
 import sharp from 'sharp';
 import { mouse, keyboard, screen, Button, Key, Point } from '@nut-tree-fork/nut-js';
 import { normalizeKey } from './keys';
-import { getNativeHelper } from './native-helper';
+import { getNativeHelper, captureScreenViaHelper } from './native-helper';
+import * as fs from 'fs';
 import type { ClawdConfig, ScreenFrame, MouseAction, KeyboardAction } from './types';
 
 // On macOS, Command key = Key.LeftCmd. On other platforms, Super = Key.LeftSuper.
@@ -190,16 +191,24 @@ export class NativeDesktop extends EventEmitter {
    */
   async connect(): Promise<void> {
     try {
-      if (IS_MAC && this.helper) {
-        const frame = await this.helper.captureScreen();
-        this.screenWidth = frame.width;
-        this.screenHeight = frame.height;
-        this.scaleFactor = this.screenWidth > LLM_TARGET_WIDTH ? this.screenWidth / LLM_TARGET_WIDTH : 1;
-        this.connected = true;
-        console.log(`🐾 Native desktop connected (macOS host path)`);
-        console.log(`   Screen: ${this.screenWidth}x${this.screenHeight}`);
-        console.log(`   LLM scale factor: ${this.scaleFactor.toFixed(2)}x`);
-        return;
+      if (IS_MAC) {
+        // Use the standalone screenshot-helper binary — avoids ReplayKit CPU spin
+        // bug and runs in an isolated subprocess for clean TCC permission scoping.
+        try {
+          const result = await captureScreenViaHelper();
+          this.screenWidth = result.width;
+          this.screenHeight = result.height;
+          this.scaleFactor = this.screenWidth > LLM_TARGET_WIDTH ? this.screenWidth / LLM_TARGET_WIDTH : 1;
+          // Clean up the temp file from connect probe
+          try { fs.unlinkSync(result.path); } catch { /* ignore */ }
+          this.connected = true;
+          console.log(`🐾 Native desktop connected (macOS screenshot-helper)`);
+          console.log(`   Screen: ${this.screenWidth}x${this.screenHeight}`);
+          console.log(`   LLM scale factor: ${this.scaleFactor.toFixed(2)}x`);
+          return;
+        } catch (err: any) {
+          console.warn(`⚠️  macOS screenshot-helper failed, falling back to nut-js: ${err?.message || err}`);
+        }
       }
 
       // Configure nut-js for speed
@@ -293,17 +302,23 @@ export class NativeDesktop extends EventEmitter {
       throw new Error('Not connected to native desktop');
     }
 
-    if (IS_MAC && this.helper) {
-      const frame = await this.helper.captureScreen();
-      this.screenWidth = frame.width;
-      this.screenHeight = frame.height;
-      return {
-        width: frame.width,
-        height: frame.height,
-        buffer: Buffer.from(frame.imageBase64, 'base64'),
-        timestamp: Date.now(),
-        format: 'png',
-      };
+    if (IS_MAC) {
+      try {
+        const result = await captureScreenViaHelper();
+        const buffer = fs.readFileSync(result.path);
+        try { fs.unlinkSync(result.path); } catch { /* cleanup */ }
+        this.screenWidth = result.width;
+        this.screenHeight = result.height;
+        return {
+          width: result.width,
+          height: result.height,
+          buffer,
+          timestamp: Date.now(),
+          format: 'png',
+        };
+      } catch (err: any) {
+        console.warn(`⚠️  macOS screenshot-helper failed, falling back to nut-js: ${err?.message || err}`);
+      }
     }
 
     const img = await screen.grab();
@@ -342,27 +357,31 @@ export class NativeDesktop extends EventEmitter {
       throw new Error('Not connected to native desktop');
     }
 
-    if (IS_MAC && this.helper) {
-      const frame = await this.captureScreen();
-      this.screenWidth = frame.width;
-      this.screenHeight = frame.height;
-      this.scaleFactor = this.screenWidth > LLM_TARGET_WIDTH ? this.screenWidth / LLM_TARGET_WIDTH : 1;
-      const llmWidth = Math.min(this.screenWidth, LLM_TARGET_WIDTH);
-      const llmHeight = Math.round(this.screenHeight / this.scaleFactor);
-      const pipeline = sharp(frame.buffer).resize(llmWidth, llmHeight);
-      const processed = this.config.capture.format === 'jpeg'
-        ? await pipeline.jpeg({ quality: this.config.capture.quality }).toBuffer()
-        : await pipeline.png().toBuffer();
-      return {
-        width: this.screenWidth,
-        height: this.screenHeight,
-        buffer: processed,
-        timestamp: Date.now(),
-        format: this.config.capture.format,
-        scaleFactor: this.scaleFactor,
-        llmWidth,
-        llmHeight,
-      };
+    if (IS_MAC) {
+      try {
+        const frame = await this.captureScreen();
+        this.screenWidth = frame.width;
+        this.screenHeight = frame.height;
+        this.scaleFactor = this.screenWidth > LLM_TARGET_WIDTH ? this.screenWidth / LLM_TARGET_WIDTH : 1;
+        const llmWidth = Math.min(this.screenWidth, LLM_TARGET_WIDTH);
+        const llmHeight = Math.round(this.screenHeight / this.scaleFactor);
+        const pipeline = sharp(frame.buffer).resize(llmWidth, llmHeight);
+        const processed = this.config.capture.format === 'jpeg'
+          ? await pipeline.jpeg({ quality: this.config.capture.quality }).toBuffer()
+          : await pipeline.png().toBuffer();
+        return {
+          width: this.screenWidth,
+          height: this.screenHeight,
+          buffer: processed,
+          timestamp: Date.now(),
+          format: this.config.capture.format,
+          scaleFactor: this.scaleFactor,
+          llmWidth,
+          llmHeight,
+        };
+      } catch (err: any) {
+        console.warn(`⚠️  macOS screenshot-helper LLM capture failed, falling back to nut-js: ${err?.message || err}`);
+      }
     }
 
     const img = await screen.grab();

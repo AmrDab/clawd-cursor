@@ -7,10 +7,19 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Ensure this script is executable (no dependency on caller having set +x)
+if [ ! -x "$0" ]; then
+    chmod +x "$0"
+fi
+
 echo "🔨 Building ClawdCursor native helper..."
 
 # Build all targets in release mode
-swift build -c release
+if ! swift build -c release; then
+    echo "❌ Swift build failed. Ensure Xcode Command Line Tools are installed:"
+    echo "   xcode-select --install"
+    exit 1
+fi
 
 # Get the build directory
 BUILD_DIR=".build/release"
@@ -19,15 +28,26 @@ BUILD_DIR=".build/release"
 APP_DIR="ClawdCursor.app/Contents/MacOS"
 mkdir -p "$APP_DIR"
 
-# Copy binaries into the bundle
-for binary in ClawdCursorHost clawdcursor-helper screenshot-helper permission-check; do
+# These four binaries are ALL required for correct operation
+REQUIRED_BINARIES="ClawdCursorHost clawdcursor-helper screenshot-helper permission-check"
+MISSING=0
+
+for binary in $REQUIRED_BINARIES; do
     if [ -f "$BUILD_DIR/$binary" ]; then
         cp "$BUILD_DIR/$binary" "$APP_DIR/"
         echo "   ✓ Copied $binary"
     else
-        echo "   ⚠ Missing $binary (may be optional)"
+        echo "   ❌ MISSING required binary: $binary"
+        MISSING=1
     fi
 done
+
+if [ "$MISSING" -eq 1 ]; then
+    echo ""
+    echo "❌ Build incomplete — one or more required binaries are missing."
+    echo "   Check the swift build output above for compilation errors."
+    exit 1
+fi
 
 echo "✅ Built ClawdCursor.app"
 

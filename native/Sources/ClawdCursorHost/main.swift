@@ -102,11 +102,25 @@ private func handleRequest(raw: Data) -> Data {
     }
 
     if method == "GET" && path == "/status" {
+        // Always delegate to the permission-check binary — it runs in the SAME
+        // app-bundle context (same TCC identity) and returns the canonical format
+        // including processPath + bundleId.  This keeps doctor, CLI status, and
+        // readiness.ts consistent.
+        let result = runBinary("permission-check", args: [])
+        if result.exitCode == 0, !result.stdout.isEmpty,
+           let text = String(data: result.stdout, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.isEmpty {
+            return textResponse(status: 200, text: text)
+        }
+
+        // Fallback: permission-check binary missing or crashed.
+        // Check directly but match the SAME JSON schema so callers don't break.
         let axOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: kCFBooleanFalse] as CFDictionary
         let axGranted = AXIsProcessTrustedWithOptions(axOptions)
         let screenGranted = CGPreflightScreenCaptureAccess()
         let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
-        let payload = "{\"accessibility\":\(axGranted),\"screenRecording\":\(screenGranted),\"bundleId\":\"\(bundleId)\"}"
+        let processPath = ProcessInfo.processInfo.arguments.first ?? "unknown"
+        let payload = "{\"accessibility\":\(axGranted),\"screenRecording\":\(screenGranted),\"processPath\":\"\(processPath)\",\"bundleId\":\"\(bundleId)\"}"
         return textResponse(status: 200, text: payload)
     }
 

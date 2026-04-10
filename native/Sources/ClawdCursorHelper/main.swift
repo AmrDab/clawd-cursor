@@ -178,10 +178,14 @@ class ClawdCursorHelper {
         let axOptions = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: kCFBooleanFalse] as CFDictionary
         let axGranted = AXIsProcessTrustedWithOptions(axOptions)
         let screenGranted = CGPreflightScreenCaptureAccess()
-        
+        let processPath = ProcessInfo.processInfo.arguments.first ?? "unknown"
+        let bundleId = Bundle.main.bundleIdentifier ?? "unknown"
+
         return JsonRpcResponse(id: id, result: AnyCodable([
             "accessibility": axGranted,
-            "screenRecording": screenGranted
+            "screenRecording": screenGranted,
+            "processPath": processPath,
+            "bundleId": bundleId
         ]), error: nil)
     }
     
@@ -447,25 +451,36 @@ class ClawdCursorHelper {
             return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32001, message: "screen_recording_denied"))
         }
 
-        guard let image = CGWindowListCreateImage(
-            CGRect.infinite,
-            .optionOnScreenOnly,
-            kCGNullWindowID,
-            [.nominalResolution]
-        ) else {
-            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to capture screen"))
+        let tempPath = (NSTemporaryDirectory() as NSString).appendingPathComponent("clawdcursor-capture-\(UUID().uuidString).png")
+        let proc = Process()
+        proc.executableURL = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/screenshot-helper")
+        proc.arguments = ["--fullscreen", tempPath]
+
+        let stderr = Pipe()
+        proc.standardError = stderr
+
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+        } catch {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to launch screenshot-helper: \(error.localizedDescription)"))
         }
 
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
-            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to create image destination"))
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to encode screenshot"))
+        guard proc.terminationStatus == 0 else {
+            let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+            let errText = String(data: errData, encoding: .utf8) ?? "unknown screenshot-helper error"
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "screenshot-helper failed: \(errText.trimmingCharacters(in: .whitespacesAndNewlines))"))
         }
 
-        let base64 = (data as Data).base64EncodedString()
+        let url = URL(fileURLWithPath: tempPath)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        guard let data = try? Data(contentsOf: url),
+              let image = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap({ CGImageSourceCreateImageAtIndex($0, 0, nil) }) else {
+            return JsonRpcResponse(id: id, result: nil, error: JsonRpcError(code: -32000, message: "Failed to read screenshot-helper output"))
+        }
+
+        let base64 = data.base64EncodedString()
         return JsonRpcResponse(id: id, result: AnyCodable([
             "success": true,
             "width": image.width,

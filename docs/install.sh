@@ -94,7 +94,7 @@ if [ "$(uname)" = "Darwin" ]; then
     # Build with ad-hoc signing (CRITICAL for TCC on macOS 26+)
     # Use temp file to capture exit status properly (bash pipeline bug workaround)
     set +e  # Don't exit on error, we'll handle it
-    ./build.sh --adhoc > "$BUILD_LOG" 2>&1
+    bash ./build.sh --adhoc > "$BUILD_LOG" 2>&1
     BUILD_EXIT=$?
     set -e
     
@@ -115,18 +115,24 @@ if [ "$(uname)" = "Darwin" ]; then
         echo "       • Check build errors above"
         echo ""
         echo "     Manual build:"
-        echo "       cd $INSTALL_DIR/native && ./build.sh --adhoc"
+        echo "       cd $INSTALL_DIR/native && bash ./build.sh --adhoc"
         exit 1
     fi
     
-    # Verify binaries exist
-    if [ ! -f "$NATIVE_HOST" ]; then
+    # Verify ALL required binaries exist
+    NATIVE_APP_DIR="$INSTALL_DIR/native/ClawdCursor.app/Contents/MacOS"
+    MISSING_BINS=""
+    for bin in ClawdCursorHost clawdcursor-helper screenshot-helper permission-check; do
+        if [ ! -f "$NATIVE_APP_DIR/$bin" ]; then
+            MISSING_BINS="$MISSING_BINS $bin"
+        fi
+    done
+    if [ -n "$MISSING_BINS" ]; then
         echo ""
-        echo "  ❌ Build succeeded but ClawdCursorHost binary not found"
-        echo "     Expected: $NATIVE_HOST"
+        echo "  ❌ Build succeeded but required binaries are missing:$MISSING_BINS"
         echo ""
         echo "     Try rebuilding manually:"
-        echo "       cd $INSTALL_DIR/native && ./build.sh --adhoc"
+        echo "       cd $INSTALL_DIR/native && bash ./build.sh --adhoc"
         exit 1
     fi
     
@@ -171,17 +177,21 @@ npm link --force 2>/dev/null || true
 # ── 7. Verify ─────────────────────────────────────────────────────────────────
 echo ""
 
-# Final macOS verification: ensure native host binary exists
+# Final macOS verification: ensure all native binaries exist
 if [ "$(uname)" = "Darwin" ]; then
-    NATIVE_HOST="$INSTALL_DIR/native/ClawdCursor.app/Contents/MacOS/ClawdCursorHost"
-    if [ ! -f "$NATIVE_HOST" ]; then
+    NATIVE_APP_DIR="$INSTALL_DIR/native/ClawdCursor.app/Contents/MacOS"
+    FINAL_MISSING=""
+    for bin in ClawdCursorHost clawdcursor-helper screenshot-helper permission-check; do
+        [ ! -f "$NATIVE_APP_DIR/$bin" ] && FINAL_MISSING="$FINAL_MISSING $bin"
+    done
+    if [ -n "$FINAL_MISSING" ]; then
         echo "  ❌ INSTALLATION INCOMPLETE"
         echo ""
-        echo "     The macOS native host app (ClawdCursorHost) is missing."
-        echo "     This is required for clawdcursor to work on macOS."
+        echo "     Missing native binaries:$FINAL_MISSING"
+        echo "     These are required for clawdcursor to work on macOS."
         echo ""
         echo "     Try rebuilding manually:"
-        echo "       cd $INSTALL_DIR/native && ./build.sh"
+        echo "       cd $INSTALL_DIR/native && bash ./build.sh"
         echo ""
         exit 1
     fi

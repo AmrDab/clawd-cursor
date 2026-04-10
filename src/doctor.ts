@@ -36,6 +36,7 @@ import { DEFAULT_CONFIG } from './types';
 import { resolveApiConfig } from './credentials';
 import { callVisionLLMDirect } from './llm-client';
 import { hasConsent } from './onboarding';
+import { checkPermissionsQuick, requestPermissions, isMacOS } from './native-helper';
 
 const CONFIG_FILE = '.clawdcursor-config.json';
 const execFileAsync = promisify(execFile);
@@ -239,60 +240,60 @@ export async function runDoctor(opts: {
   }
 
   // ─── 1b. macOS Permissions (Screen Recording + Accessibility) ───
-  if (process.platform === 'darwin') {
-    console.log('🍎 macOS permissions...');
-    // Screen Recording: try to capture — if it fails with "not permitted" TCC denied it
+  // Uses the SAME canonical path as readiness.ts and CLI status:
+  //   Host /status → permission-check binary → direct AXIsProcessTrusted fallback
+  // This ensures doctor, status, and readiness always agree.
+  if (isMacOS()) {
+    console.log('🍎 macOS permissions (via native permission-check)...');
     try {
-      const { execFileAsync } = await import('child_process').then(m => ({
-        execFileAsync: require('util').promisify(m.execFile) as (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>,
-      }));
-      // osascript can query Accessibility permission
-      const { stdout: axOut } = await execFileAsync('osascript', [
-        '-e', 'tell application "System Events" to return (UI elements enabled as string)',
-      ]).catch(() => ({ stdout: 'false', stderr: '' }));
-      const axOk = axOut.trim() === 'true';
+      let perms = await checkPermissionsQuick();
+
+      // If any permission is missing, trigger system popups to request them
+      if (!perms.accessibility || !perms.screenRecording) {
+        console.log('   🔐 Requesting macOS permissions (system dialogs may appear)...');
+        try {
+          perms = await requestPermissions();
+        } catch {
+          // If requesting fails, continue with the original check results
+        }
+      }
+
       results.push({
         name: 'macOS Accessibility permission',
-        ok: axOk,
-        detail: axOk
+        ok: perms.accessibility,
+        detail: perms.accessibility
           ? 'Granted — clawdcursor can read UI elements'
           : 'DENIED — open System Settings → Privacy & Security → Accessibility → enable ClawdCursor',
       });
-      if (axOk) {
+      if (perms.accessibility) {
         console.log('   ✅ Accessibility permission granted');
       } else {
         console.log('   ❌ Accessibility permission DENIED');
         console.log('   → System Settings → Privacy & Security → Accessibility → enable ClawdCursor');
       }
-    } catch {
-      results.push({ name: 'macOS Accessibility permission', ok: false, detail: 'Could not query — run manually in a terminal' });
-    }
 
-    // Screen Recording: attempt a screencapture dry run
-    try {
-      const { execFileAsync } = await import('child_process').then(m => ({
-        execFileAsync: require('util').promisify(m.execFile) as (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>,
-      }));
-      const tmpFile = `/tmp/.clawdcursor-scrtest-${Date.now()}.png`;
-      const { stderr } = await execFileAsync('screencapture', ['-x', '-t', 'png', tmpFile])
-        .catch(e => ({ stdout: '', stderr: String(e) }));
-      const denied = stderr.toLowerCase().includes('not permitted') || stderr.toLowerCase().includes('permission');
-      try { require('fs').unlinkSync(tmpFile); } catch { /* cleanup */ }
       results.push({
         name: 'macOS Screen Recording permission',
-        ok: !denied,
-        detail: denied
-          ? 'DENIED — open System Settings → Privacy & Security → Screen & System Audio Recording → enable ClawdCursor'
-          : 'Granted — clawdcursor can capture the screen',
+        ok: perms.screenRecording,
+        detail: perms.screenRecording
+          ? 'Granted — clawdcursor can capture the screen'
+          : 'DENIED — open System Settings → Privacy & Security → Screen & System Audio Recording → enable ClawdCursor',
       });
-      if (denied) {
+      if (perms.screenRecording) {
+        console.log('   ✅ Screen Recording permission granted');
+      } else {
         console.log('   ❌ Screen Recording permission DENIED');
         console.log('   → System Settings → Privacy & Security → Screen & System Audio Recording → enable ClawdCursor');
-      } else {
-        console.log('   ✅ Screen Recording permission granted');
       }
-    } catch {
-      results.push({ name: 'macOS Screen Recording permission', ok: false, detail: 'Could not verify — check manually' });
+
+      if (perms.bundleId) {
+        console.log(`   ℹ  Checked process: ${perms.bundleId}`);
+      }
+    } catch (err) {
+      results.push({ name: 'macOS Accessibility permission', ok: false, detail: `Could not query: ${err}` });
+      results.push({ name: 'macOS Screen Recording permission', ok: false, detail: `Could not query: ${err}` });
+      console.log(`   ❌ Permission check failed: ${err}`);
+      console.log('   → Ensure ClawdCursor.app is built: cd native && ./build.sh');
     }
   }
 

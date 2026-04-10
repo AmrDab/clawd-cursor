@@ -439,6 +439,32 @@ program
   });
 
 program
+  .command('grant')
+  .description('🔐 Request macOS permissions (triggers system permission dialogs)')
+  .action(async () => {
+    if (process.platform !== 'darwin') {
+      console.log('Permission grants are only needed on macOS.');
+      return;
+    }
+    const { requestPermissions } = await import('./native-helper');
+    console.log('🔐 Requesting macOS permissions...');
+    console.log('   System dialogs may appear — please allow access.\n');
+    try {
+      const perms = await requestPermissions();
+      console.log(`   Accessibility:    ${perms.accessibility ? '✅ Granted' : '❌ Denied'}`);
+      console.log(`   Screen Recording: ${perms.screenRecording ? '✅ Granted' : '❌ Denied'}`);
+      if (perms.accessibility && perms.screenRecording) {
+        console.log('\n🎉 All permissions granted — ready for desktop control!');
+      } else {
+        console.log('\n⚠️  Some permissions still missing. Grant them in System Settings, then run this again.');
+      }
+    } catch (err) {
+      console.error(`❌ Failed to request permissions: ${err}`);
+      console.error('   Ensure ClawdCursor.app is built: cd native && ./build.sh');
+    }
+  });
+
+program
   .command('stop')
   .description('Stop a running Clawd Cursor instance')
   .option('--port <port>', 'API server port', '3847')

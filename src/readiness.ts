@@ -49,20 +49,32 @@ export interface ReadinessStatus {
 /**
  * Check if AI config exists and has models configured
  */
-function checkAiConfig(): { configured: boolean; hasTextModel: boolean; hasVisionModel: boolean } {
-  const configPath = path.join(process.cwd(), CONFIG_FILE);
-  
-  if (!fs.existsSync(configPath)) {
-    return { configured: false, hasTextModel: false, hasVisionModel: false };
+function getCandidateConfigPaths(): string[] {
+  const candidates = [
+    path.join(process.cwd(), CONFIG_FILE),
+    path.join(os.homedir(), 'clawdcursor', CONFIG_FILE),
+    path.join(__dirname, '..', CONFIG_FILE),
+  ];
+
+  return Array.from(new Set(candidates));
+}
+
+function checkAiConfig(): { configured: boolean; hasTextModel: boolean; hasVisionModel: boolean; configFile: string } {
+  const configPath = getCandidateConfigPaths().find(p => fs.existsSync(p));
+
+  if (!configPath) {
+    return { configured: false, hasTextModel: false, hasVisionModel: false, configFile: getCandidateConfigPaths()[0] };
   }
-  
+
   try {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const hasTextModel = !!(config.pipeline?.textModel || config.textModel);
-    const hasVisionModel = !!(config.pipeline?.visionModel || config.visionModel);
-    return { configured: true, hasTextModel, hasVisionModel };
+    const textLayer = config.pipeline?.textModel ?? config.pipeline?.layer2;
+    const visionLayer = config.pipeline?.visionModel ?? config.pipeline?.layer3;
+    const hasTextModel = !!(textLayer?.model || config.textModel || config.layer2?.model);
+    const hasVisionModel = !!(visionLayer?.model || config.visionModel || config.layer3?.model);
+    return { configured: true, hasTextModel, hasVisionModel, configFile: configPath };
   } catch {
-    return { configured: false, hasTextModel: false, hasVisionModel: false };
+    return { configured: false, hasTextModel: false, hasVisionModel: false, configFile: configPath };
   }
 }
 
@@ -72,7 +84,7 @@ function checkAiConfig(): { configured: boolean; hasTextModel: boolean; hasVisio
 export async function getReadinessStatus(): Promise<ReadinessStatus> {
   const consentDir = path.join(os.homedir(), '.clawdcursor');
   const consentFile = path.join(consentDir, 'consent');
-  const configFile = path.join(process.cwd(), CONFIG_FILE);
+  const configFile = getCandidateConfigPaths()[0];
   
   // Check consent
   const consentGranted = hasConsent();
@@ -139,7 +151,7 @@ export async function getReadinessStatus(): Promise<ReadinessStatus> {
     macPermissions,
     aiConfig: {
       ...aiConfig,
-      configFile,
+      configFile: aiConfig.configFile || configFile,
     },
     ready,
     readyForDesktopControl,

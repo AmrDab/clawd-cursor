@@ -182,6 +182,8 @@ export class NativeHelper {
     const id = ++this.requestId;
     const request: JsonRpcRequest = { id, method, params };
 
+    const timeoutMs = method === 'captureScreen' ? 90000 : 30000;
+
     if (this.useHostIpc) {
       await ensureHostAppRunning();
       const res = await fetch(`${HOST_BASE_URL}/rpc`, {
@@ -191,7 +193,7 @@ export class NativeHelper {
           'x-clawdcursor-token': getOrCreateHostToken(),
         },
         body: JSON.stringify(request),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
         throw new Error(`Host IPC call failed (${res.status})`);
@@ -214,7 +216,6 @@ export class NativeHelper {
         return;
       }
 
-      const timeoutMs = 30000; // 30 second timeout
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(id);
         reject(new Error(`Request ${method} timed out after ${timeoutMs}ms`));
@@ -366,6 +367,52 @@ export async function checkPermissionsQuick(): Promise<PermissionStatus> {
   });
 }
 
+// Request permissions with system popups (triggers macOS permission dialogs)
+// Spawns permission-check with --prompt (Accessibility) and --request-screen-recording flags
+export async function requestPermissions(): Promise<PermissionStatus> {
+  if (!IS_MACOS) {
+    return {
+      accessibility: true,
+      screenRecording: true,
+      processPath: process.execPath,
+      bundleId: undefined,
+    };
+  }
+
+  const permissionCheckPath = getNativeHelperPath('permission-check');
+
+  if (!fs.existsSync(permissionCheckPath)) {
+    throw new Error('permission-check binary not found. Run: cd native && ./build.sh');
+  }
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(permissionCheckPath, ['--prompt', '--request-screen-recording']);
+    let stdout = '';
+    let stderr = '';
+
+    const timeout = setTimeout(() => {
+      proc.kill();
+      reject(new Error('permission-check timed out'));
+    }, 30000);
+
+    proc.stdout.on('data', (data: Buffer) => { stdout += data; });
+    proc.stderr.on('data', (data: Buffer) => { stderr += data; });
+
+    proc.on('close', (code: number | null) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error(`permission-check failed: ${stderr}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        reject(new Error(`Invalid permission-check output: ${stdout}`));
+      }
+    });
+  });
+}
+
 function getNativeHelperPath(binary: string): string {
   const locations = [
     path.join(__dirname, '..', 'native', 'ClawdCursor.app', 'Contents', 'MacOS', binary),
@@ -439,6 +486,58 @@ function getOrCreateHostToken(): string {
   const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 18)}`;
   fs.writeFileSync(tokenPath, token, { mode: 0o600 });
   return token;
+}
+
+/**
+ * Capture the screen using the standalone screenshot-helper binary.
+ * This avoids the ReplayKit CPU spin bug (19% idle CPU after capture in-process)
+ * by running capture in an isolated subprocess that exits immediately.
+ *
+ * Returns { path, width, height } on success.
+ */
+export async function captureScreenViaHelper(outputPath?: string): Promise<{ path: string; width: number; height: number }> {
+  if (!IS_MACOS) {
+    throw new Error('screenshot-helper is only available on macOS');
+  }
+
+  const helperPath = getNativeHelperPath('screenshot-helper');
+  const tmpPath = outputPath || path.join(os.tmpdir(), `.clawdcursor-cap-${Date.now()}.png`);
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(helperPath, ['--fullscreen', tmpPath]);
+    let stdout = '';
+    let stderr = '';
+
+    const timeout = setTimeout(() => {
+      proc.kill();
+      reject(new Error('screenshot-helper timed out after 15s'));
+    }, 15000);
+
+    proc.stdout.on('data', (data) => { stdout += data; });
+    proc.stderr.on('data', (data) => { stderr += data; });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 2) {
+        reject(new Error('Screen Recording permission denied — grant it in System Settings → Privacy & Security'));
+        return;
+      }
+      if (code !== 0) {
+        reject(new Error(`screenshot-helper failed (exit ${code}): ${stderr}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout.trim());
+        if (result.success) {
+          resolve({ path: result.path, width: result.width, height: result.height });
+        } else {
+          reject(new Error(`screenshot-helper returned failure: ${stdout}`));
+        }
+      } catch {
+        reject(new Error(`Invalid screenshot-helper output: ${stdout}`));
+      }
+    });
+  });
 }
 
 /**

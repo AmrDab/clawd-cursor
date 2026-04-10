@@ -54,6 +54,22 @@ function check() {
     console.warn(`   Fix: npx playwright install chromium`);
   }
 
+  // ── macOS native build check ──
+  if (process.platform === 'darwin') {
+    const path = require('path');
+    const fs = require('fs');
+    const appDir = path.join(__dirname, '..', 'native', 'ClawdCursor.app', 'Contents', 'MacOS');
+    const requiredBinaries = ['ClawdCursorHost', 'clawdcursor-helper', 'screenshot-helper', 'permission-check'];
+    const missing = requiredBinaries.filter(b => !fs.existsSync(path.join(appDir, b)));
+    if (missing.length > 0) {
+      console.warn(`⚠️  Native macOS binaries not built: ${missing.join(', ')}`);
+      console.warn(`   Fix: cd native && chmod +x build.sh && ./build.sh`);
+      ok = false;
+    } else {
+      console.log(`✅ Native macOS binaries (ClawdCursor.app)`);
+    }
+  }
+
   if (ok) {
     console.log(`\n🐾 All dependencies verified. Run: npm run setup\n`);
   } else {

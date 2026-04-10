@@ -22,8 +22,14 @@ let axGranted = AXIsProcessTrustedWithOptions(axOptions)
 
 // Check Screen Recording permission
 // CGPreflightScreenCaptureAccess() returns current state without prompting
-// CGRequestScreenCaptureAccess() would trigger the prompt
-let screenGranted = CGPreflightScreenCaptureAccess()
+// CGRequestScreenCaptureAccess() triggers the system prompt dialog
+let shouldRequestScreen = CommandLine.arguments.contains("--request-screen-recording")
+let screenGranted: Bool
+if shouldRequestScreen {
+    screenGranted = CGRequestScreenCaptureAccess()
+} else {
+    screenGranted = CGPreflightScreenCaptureAccess()
+}
 
 // Get process info for debugging
 let processPath = ProcessInfo.processInfo.arguments[0]
