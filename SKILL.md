@@ -1,6 +1,6 @@
 ---
 name: clawdcursor
-version: 0.8.3
+version: 0.8.4
 description: >
   The skill that gives AI agents eyes, hands, and ears on a real desktop.
   When the user asks you to do something a human would normally do at their

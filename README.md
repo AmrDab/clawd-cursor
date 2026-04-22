@@ -5,8 +5,8 @@
 <h1 align="center">Clawd Cursor</h1>
 
 <p align="center">
-  <strong>OS-level desktop automation server. Gives any AI model eyes, hands, and ears on a real computer.</strong><br>
-  Model-agnostic &middot; Works with Claude, GPT, Gemini, Llama, or any tool-calling model &middot; Free with local models
+  <strong>A desktop automation server for AI agents.</strong><br>
+  Gives any tool-calling model eyes, hands, and a keyboard on a real computer — Windows, macOS, Linux.
 </p>
 
 <p align="center">
@@ -21,97 +21,108 @@
   <a href="https://clawdcursor.com">Website</a> &middot;
   <a href="https://discord.gg/UGBWKvmj">Discord</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
-  <a href="#connect">Connect</a> &middot;
+  <a href="#integration">Integration</a> &middot;
   <a href="#api">API</a> &middot;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
 
-## What's New in v0.8.0 — V2 Architecture
+## Overview
 
-A vision-first alternative to the legacy cascade, opt in with `--v2`:
+Clawd Cursor is a local tool server that exposes the desktop — mouse, keyboard, screen, windows, accessibility tree, and browser — as a set of callable tools. Any model that can call functions can drive it.
 
-```bash
-clawdcursor start --v2
+```
+Your AI  →  "click the Send button"      →  find_element + mouse_click
+Your AI  →  "what's on screen?"          →  screenshot + read_screen
+Your AI  →  "open Chrome and go to gmail" →  open_app + navigate_browser
 ```
 
-- **Ground-truth verifier** — six independent signals (pixel diff, window state, focus change, OCR delta, task-type assertions, error-pattern detection). Independent of the agent, so it can't be fooled by "done" self-reports. Caught false positives in testing where the legacy pipeline reported `UNVERIFIED_SUCCESS`.
-- **Single vision-first agent loop** — screenshot → tool call → new screenshot → repeat. 6-rule system prompt (down from 36). Works with Anthropic, OpenAI, OpenRouter, or anything with vision + tool calls.
-- **PlatformAdapter abstraction** — platform-specific code now lives in `src/v2/platform/{macos,windows,linux}.ts` behind one interface. Replaces 142+ scattered `if (IS_MAC)` branches across 34 files. Adding a new OS is a single file.
-- **Legacy pipeline untouched** — `clawdcursor start` (no flag) behaves exactly as before. Zero breaking changes.
+No app-specific integrations, no per-service API keys, no cloud round-trip. If it renders on your screen, Clawd Cursor can read it and interact with it.
 
-Full history in [CHANGELOG.md](CHANGELOG.md).
+**Design goals:** model-agnostic (Claude, GPT, Gemini, local models), OS-agnostic (a single `PlatformAdapter` replaces every `if (process.platform)` branch in the codebase), and transport-agnostic (REST, MCP, or an autonomous built-in agent — same tools, same semantics).
 
 ---
 
-## What It Does
+## What's New in v0.8.4
 
-Clawd Cursor is a **tool server**. It wraps your desktop as 42 callable tools: mouse, keyboard, screen, windows, browser. Any AI that can call functions can use it.
+Security maintenance release. Patches every fixable CVE in the dependency tree:
 
-```
-Your AI → "Click the Send button"  →  find_element + mouse_click
-Your AI → "What's on screen?"      →  desktop_screenshot + read_screen
-Your AI → "Open Chrome to gmail"   →  open_app + navigate_browser
-```
+| Package | Severity | Issue |
+|---|---|---|
+| `vite` | High | Path traversal, `server.fs.deny` bypass, arbitrary read via WebSocket |
+| `path-to-regexp` | High | ReDoS via multiple route parameters |
+| `picomatch` | High | ReDoS + method injection in POSIX character classes |
+| `hono` | Moderate | HTML injection in `hono/jsx` SSR |
+| `follow-redirects` | Moderate | Auth headers leaked to cross-domain redirects |
 
-No app-specific integrations. No per-service API keys. If it's on screen, clawdcursor can interact with it.
+See [CHANGELOG.md](CHANGELOG.md) for the full v0.8.x history — unified blind/hybrid/vision pipeline (v0.8.2), compact MCP surface, Linux AT-SPI + Wayland support, Electron/WebView2 bridge, and session-reliability fixes.
 
 ---
 
 ## Quick Start
 
-**Windows**
+### Windows
+
 ```powershell
 powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
 clawdcursor start
 ```
 
-**macOS**
+### macOS
+
 ```bash
 curl -fsSL https://clawdcursor.com/install.sh | bash
-clawdcursor grant     # grant Accessibility + Screen Recording permissions
+clawdcursor grant     # Accessibility + Screen Recording
 clawdcursor start
 ```
 
-**Linux**
+### Linux
+
 ```bash
 curl -fsSL https://clawdcursor.com/install.sh | bash
 clawdcursor start
 ```
 
-First run auto-detects your AI provider from environment variables. Or be explicit:
+The server auto-detects your provider from environment variables, or set it explicitly:
+
 ```bash
 clawdcursor start --provider anthropic --api-key sk-ant-...
-clawdcursor start --provider gemini     # GEMINI_API_KEY in env
-clawdcursor start                       # free with Ollama
+clawdcursor start --provider openai    # OPENAI_API_KEY
+clawdcursor start --provider ollama    # local, offline, free
 ```
 
-> See [docs/MACOS-SETUP.md](docs/MACOS-SETUP.md) for macOS permission setup.
+See [docs/MACOS-SETUP.md](docs/MACOS-SETUP.md) for macOS permission setup.
 
 ---
 
-## Connect
+## Integration
 
-Three modes. Same 42 tools.
+Three transports. Same tool catalog behind each.
 
-### 1. Built-in Agent (`start`)
-Full autonomous agent. Send a task, get a result.
+### 1. Autonomous agent &mdash; `clawdcursor start`
+
+Ships with a built-in agent. Send a plain-English task, get a result.
+
 ```bash
 clawdcursor start
-curl http://localhost:3847/task -d '{"task": "Open Notepad and write Hello"}'
+curl http://localhost:3847/task -d '{"task":"Open Notepad and write Hello"}'
 ```
 
-### 2. Tools-Only Server (`serve`)
-Exposes tools over REST. You bring the AI.
+### 2. Tool server &mdash; `clawdcursor serve`
+
+REST-only. Bring your own agent.
+
 ```bash
 clawdcursor serve
-curl http://localhost:3847/tools          # discover tools
+curl http://localhost:3847/tools                        # discover
 curl http://localhost:3847/execute/mouse_click -d '{"x":500,"y":300}'
 ```
 
-### 3. MCP Mode (`mcp`)
-MCP stdio server for Claude Code, Cursor, Windsurf, Zed.
+### 3. MCP server &mdash; `clawdcursor mcp`
+
+stdio MCP for Claude Code, Cursor, Windsurf, Zed, and any MCP-aware client.
+
 ```jsonc
 // ~/.claude/settings.json
 {
@@ -126,130 +137,160 @@ MCP stdio server for Claude Code, Cursor, Windsurf, Zed.
 
 ---
 
-## Tools
+## Tool Surface
 
-42 tools across 6 categories:
+Two tool catalogs are exposed side-by-side. Pick the one that fits your agent.
+
+### Compact (6 compound tools, recommended)
+
+Anthropic `computer_20250124`-style: one tool per capability, with an `action` enum for the verb. Small prompt footprint (~1,500 tokens), easy to learn, the default for most agents.
+
+| Tool | Actions |
+|---|---|
+| `computer` | `screenshot`, `click`, `type`, `key`, `scroll`, `drag`, `drag_path`, `wait` |
+| `accessibility` | `read_screen`, `find`, `get_focused`, `wait_for_element`, `invoke` |
+| `window` | `list`, `focus`, `set_state`, `set_bounds`, `get_active` |
+| `system` | `open_app`, `detect_webview`, `relaunch_with_cdp`, `read_clipboard`, `write_clipboard` |
+| `browser` | `connect`, `click`, `type`, `read_text`, `evaluate`, `navigate` |
+| `task` | `delegate`, `status`, `confirm`, `abort` |
+
+Activate with `clawdcursor mcp --compact` or `GET /tools?mode=compact`.
+
+### Granular (74 individual tools, power users)
+
+Full catalog for agents that prefer one tool per action. Grouped by capability:
 
 | Category | Count | Examples |
-|----------|-------|---------|
-| Perception | 9 | `desktop_screenshot`, `read_screen`, `get_active_window`, `smart_read`, `ocr_read_screen` |
-| Mouse | 6 | `mouse_click`, `mouse_double_click`, `mouse_drag`, `mouse_scroll` |
+|---|---|---|
+| Perception | 9 | `screenshot`, `read_screen`, `smart_read`, `ocr_read_screen`, `get_active_window` |
+| Mouse | 6 | `mouse_click`, `mouse_double_click`, `mouse_drag`, `mouse_drag_stepped`, `mouse_scroll` |
 | Keyboard | 5 | `key_press`, `type_text`, `smart_type`, `shortcuts_list`, `shortcuts_execute` |
-| Window / App | 6 | `focus_window`, `open_app`, `get_windows`, `invoke_element` |
+| Window / App | 8 | `focus_window`, `open_app`, `get_windows`, `invoke_element`, `detect_webview_apps` |
 | Browser (CDP) | 10 | `cdp_connect`, `cdp_click`, `cdp_type`, `cdp_read_text`, `cdp_evaluate` |
+| Accessibility | 6 | `get_ui_tree`, `find_elements`, `wait_for_element`, `get_focused_element` |
 | Orchestration | 6 | `smart_click`, `navigate_browser`, `delegate_to_agent`, `wait` |
+| &hellip; | &hellip; | &hellip; |
+
+Full catalog at `GET /tools` or `clawdcursor mcp`.
 
 ---
 
 ## Pipeline
 
-Two pipelines ship side by side. Same 42 tools, same MCP interface — only the decision-maker differs.
-
-### V2 — vision-first (`--v2`)
-
-Three stages, each does one thing:
+The built-in agent runs a unified blind/hybrid/vision loop. One agent, three modes, same tool catalog. The router picks the cheapest mode that can complete the task.
 
 ```
-┌──────────┐     ┌────────────────┐     ┌──────────────────────┐
-│  Router  │  →  │  VisionAgent   │  →  │  GroundTruthVerifier │
-│          │     │                │     │                      │
-│  regex   │     │  screenshot    │     │  pixel diff · window │
-│  shortcut│     │  → tool call   │     │  focus · OCR delta   │
-│  zero    │     │  → screenshot  │     │  task assertions     │
-│  LLM     │     │  → repeat      │     │  anti-patterns       │
-└──────────┘     └────────────────┘     └──────────────────────┘
+         ┌────────────────────────────────────────────┐
+task ──▶ │  Router   (regex shortcuts · zero LLM)    │ ──▶ done
+         └───────────────────┬────────────────────────┘
+                             │  (no match)
+                             ▼
+         ┌────────────────────────────────────────────┐
+         │  Blind     (accessibility tree only)       │ ──▶ done
+         └───────────────────┬────────────────────────┘
+                             │  (a11y sparse, stagnation)
+                             ▼
+         ┌────────────────────────────────────────────┐
+         │  Hybrid    (a11y + screenshot-on-demand)   │ ──▶ done
+         └───────────────────┬────────────────────────┘
+                             │  (still stuck)
+                             ▼
+         ┌────────────────────────────────────────────┐
+         │  Vision    (screenshot every turn)         │ ──▶ done
+         └────────────────────────────────────────────┘
 ```
 
-Router handles trivial tasks ("open Safari") without a model. Everything else hits the VisionAgent (16 tools, 6-rule prompt, model-agnostic). The Verifier runs six independent checks against the screen *after* the agent claims done — so "done" has to be true, not just asserted.
+Every tool call routes through a single `safety.evaluate()` chokepoint. The agent cannot bypass this path — it is the only way tools execute.
 
-### Legacy — text-first cascade (default, no flag)
+**Ground-truth verification.** On claims of completion, six independent signals are checked against the post-task screen: pixel diff, window-state change, focus change, OCR delta, task-type assertions (`send_email`, `navigate_url`, `open_app`, `type_text`, etc.), and anti-pattern detection (error dialogs, auth failures, "cannot send", "draft saved"). Weighted voting with hard-fail rules. The agent cannot self-report its way past the verifier.
 
-Cheapest-first. Kept for backwards compatibility.
-
-```
-L1.5   Deterministic flows  →  hardcoded sequences. Zero LLM.
-L2     Skill Cache          →  learned action patterns. Zero LLM.
-L2.5   OCR Reasoner         →  OS OCR + cheap text LLM. ~90% of tasks.
-L2.5b  A11y Reasoner        →  fallback when OCR is unavailable.
-L3     Computer Use         →  vision model. Last resort.
-```
+**Runaway guard.** If the agent calls the same tool with identical arguments three or more times in a six-turn window, the loop exits with a targeted diagnostic. Catches the common "retry because a11y is opaque" anti-pattern on Electron/WebView2 apps.
 
 ---
 
 ## API
 
-`http://localhost:3847`
+Base URL: `http://localhost:3847` (localhost-only, bearer-token auth)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/tools` | GET | All tools in OpenAI function-calling format |
-| `/execute/:name` | POST | Execute a tool |
-| `/task` | POST | Submit a plain-English task |
-| `/status` | GET | Agent state |
-| `/screenshot` | GET | Current screen as PNG |
-| `/task-logs` | GET | Recent task logs (JSONL) |
-| `/confirm` | POST | Approve/reject a safety-gated action |
-| `/abort` | POST | Stop current task |
-| `/health` | GET | Version + health check |
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/tools` | GET | Full catalog in OpenAI function-calling format. `?mode=compact` for the 6-tool surface. |
+| `/execute/:name` | POST | Execute a tool by name. Returns structured JSON. |
+| `/task` | POST | Submit a plain-English task to the built-in agent. |
+| `/status` | GET | Current agent state and active task. |
+| `/screenshot` | GET | Current screen as PNG. |
+| `/task-logs` | GET | Recent task logs as JSONL. |
+| `/confirm` | POST | Approve or reject a safety-gated action. |
+| `/abort` | POST | Stop the current task. |
+| `/health` | GET | Version, uptime, and health check. |
 
 ---
 
 ## Safety
 
-| Tier | Actions | Behavior |
-|------|---------|----------|
-| Auto | Navigation, reading, opening apps | Runs immediately |
-| Preview | Typing, form filling | Logged before executing |
-| Confirm | Sending messages, deleting, purchases | Pauses for approval |
+Tools are classified into three tiers, enforced at the single `safety.evaluate()` chokepoint:
 
-Server binds to `localhost` only. Dangerous key combos blocked. Consent required on first run.
+| Tier | Actions | Behavior |
+|---|---|---|
+| Auto | Reading, navigation, opening apps | Executes immediately |
+| Preview | Typing, form fill, arbitrary input | Logged before executing |
+| Confirm | Sending messages, deleting, purchases | Pauses for user approval |
+
+Additional hardening: server binds to `localhost` only, bearer-token authentication on every request, dangerous key combinations (Cmd+Q, Alt+F4, Ctrl+Alt+Del) blocked by default, first-run consent prompt required.
 
 ---
 
 ## CLI
 
 ```
-clawdcursor start        Full agent (built-in LLM pipeline)
-clawdcursor serve        Tools-only REST server
+clawdcursor start        Autonomous agent (built-in LLM pipeline)
+clawdcursor serve        REST-only tool server
 clawdcursor mcp          MCP stdio server
-clawdcursor doctor       Diagnose and configure
+clawdcursor doctor       Diagnose install and configuration
 clawdcursor grant        Grant macOS permissions (interactive)
-clawdcursor task <t>     Send task to running agent
-clawdcursor stop         Stop server
-clawdcursor dashboard    Open web dashboard
+clawdcursor task <t>     Send a task to a running agent
+clawdcursor stop         Stop all running modes (start, serve, mcp)
+clawdcursor dashboard    Open the web dashboard
 
 Options:
   --port <port>          Default: 3847
-  --provider <name>      anthropic | openai | gemini | groq | ollama | deepseek | ...
-  --model <model>        Override model
-  --api-key <key>        Provider API key
+  --provider <name>      anthropic | openai | gemini | groq | ollama | deepseek | openrouter
+  --model <model>        Override the default model for the provider
+  --api-key <key>        Provider API key (else read from env)
   --base-url <url>       OpenAI-compatible endpoint
-  --accept               Skip consent prompt (non-interactive)
-  --v2                   Use v2 architecture (vision-first agent + ground truth verifier)
+  --compact              Expose compact 6-tool surface (MCP / serve)
+  --accept               Skip the consent prompt (non-interactive)
 ```
 
 ---
 
 ## Platform Support
 
-Platform-specific code lives in `src/v2/platform/{macos,windows,linux}.ts` behind one `PlatformAdapter` interface — business logic never reads `process.platform`.
+Platform-specific code lives in `src/v2/platform/{windows,macos,linux}.ts` behind a single `PlatformAdapter` interface. Business logic never reads `process.platform`.
 
 | Platform | UI Automation | OCR | Browser |
-|----------|---------------|-----|---------|
-| **Windows** x64 / ARM64 | PowerShell + UI Automation | Windows.Media.Ocr | Chrome / Edge |
-| **macOS** Intel / Apple Silicon | JXA + System Events | Apple Vision | Chrome / Edge |
-| **Linux** x64 / ARM64 | AT-SPI | Tesseract | Chrome / Edge |
+|---|---|---|---|
+| **Windows** x64 / ARM64 | UI Automation via PowerShell bridge | `Windows.Media.Ocr` | Chrome / Edge (CDP) |
+| **macOS** Intel / Apple Silicon | JXA + System Events (TCC-safe) | Apple Vision | Chrome / Edge (CDP) |
+| **Linux** X11 | AT-SPI + nut-js | Tesseract | Chrome / Edge (CDP) |
+| **Linux** Wayland | AT-SPI + `ydotool` / `wtype` | Tesseract | Chrome / Edge (CDP) |
+
+---
 
 ## Prerequisites
 
-- Node.js 20+
-- **macOS** — Xcode CLI tools: `xcode-select --install`, then `clawdcursor grant` for Accessibility + Screen Recording
-- **Linux** — `sudo apt install tesseract-ocr`
-- **AI key** — optional; works fully offline with Ollama
+- **Node.js** 20 or newer
+- **macOS** — Xcode CLI tools (`xcode-select --install`), then `clawdcursor grant` for Accessibility + Screen Recording
+- **Linux** — `tesseract-ocr` (OCR), `at-spi2-core` + `python3-gi` (accessibility), `ydotool` or `wtype` (Wayland input)
+- **AI provider key** — optional; works fully offline with Ollama
+
+---
 
 ## Tech Stack
 
-TypeScript · Node.js · nut-js · Playwright · sharp · Express · MCP SDK · Zod
+TypeScript · Node.js 20+ · nut-js · Playwright · sharp · Express · Hono · Model Context Protocol SDK · Zod
+
+---
 
 ## License
 

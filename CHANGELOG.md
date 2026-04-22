@@ -2,6 +2,26 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [0.8.4] - 2026-04-21 — Security maintenance + README rewrite
+
+Dependency audit release. No functional changes, no schema changes, 429/430 tests still pass.
+
+### Security
+
+Patched every fixable advisory in the dependency tree (5 of 12 surfaced by `npm audit`). The remaining 7 moderate alerts all chain through `jimp → @nut-tree-fork/nut-js` and have no upstream fix yet; tracked for a follow-up once nut-js releases a jimp upgrade.
+
+- **`vite`** → 7.3.2+ · **High** · path traversal in optimized-deps `.map` handling ([GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9)), `server.fs.deny` bypass via query strings ([GHSA-v2wj-q39q-566r](https://github.com/advisories/GHSA-v2wj-q39q-566r)), arbitrary file read via dev-server WebSocket ([GHSA-p9ff-h696-f583](https://github.com/advisories/GHSA-p9ff-h696-f583)).
+- **`path-to-regexp`** → 0.1.13+ · **High** · ReDoS via multiple route parameters ([GHSA-37ch-88jc-xwx2](https://github.com/advisories/GHSA-37ch-88jc-xwx2)).
+- **`picomatch`** → 4.0.4+ · **High** · method injection in POSIX character classes + ReDoS via extglob quantifiers ([GHSA-3v7f-55p6-f55p](https://github.com/advisories/GHSA-3v7f-55p6-f55p), [GHSA-c2c7-rcm5-vvqj](https://github.com/advisories/GHSA-c2c7-rcm5-vvqj)).
+- **`hono`** → 4.12.14+ · Moderate · HTML injection in `hono/jsx` SSR via unsafe attribute names ([GHSA-458j-xx4x-4375](https://github.com/advisories/GHSA-458j-xx4x-4375)).
+- **`follow-redirects`** → 1.15.12+ · Moderate · custom auth headers leaked across cross-domain redirects ([GHSA-r4q5-vmmm-2653](https://github.com/advisories/GHSA-r4q5-vmmm-2653)).
+
+### Changed
+
+- **README rewrite.** Removed stale "What's New in v0.8.0 — V2 Architecture" headliner (v0.8.0's V2-vs-legacy split was unified in v0.8.2 — no opt-in flag, no two pipelines). Pipeline section now reflects the unified blind → hybrid → vision router, the `safety.evaluate()` chokepoint, ground-truth verification, and the v0.8.3 runaway guard. Tool surface reorganized around the 6-tool compact catalog and the 74-tool granular catalog. Tone tightened; marketing phrasing trimmed.
+
+---
+
 ## [0.8.3] - 2026-04-19 — Hotfix: "Outlook keeps opening" + runaway guard
 
 User reported Outlook launching repeatedly during a test. Root-cause diagnosis traced to three compounding failures: (1) `PlatformAdapter.openApp` spawned a new instance even when the app was already running, (2) the escalation ladder (router → blind → hybrid → vision) re-ran `open_app` at each rung because earlier rungs couldn't verify success through New Outlook's sparse WebView2 accessibility tree, (3) `clawdcursor stop` only killed the `start` process on port 3847, missing `serve` (different port / same port different process) and `mcp` (stdio, no port) entirely. A stale `serve` kept receiving MCP traffic after the user thought they'd stopped everything.
