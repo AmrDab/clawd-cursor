@@ -35,6 +35,8 @@ metadata:
 
 **If a human can do it on a screen, you can too.** No API? No integration? No problem.
 
+> **No task is impossible.** If the user has a GUI, a mouse, and a keyboard — you have everything you need. There is no "I can't do that in this app." There is only the right sequence of reads, clicks, keys, and waits to get it done. Clawdcursor gives you all of them.
+
 > **USE AS A FALLBACK — NOT FIRST CHOICE**
 >
 > Before reaching for any clawdcursor tool, ask:
@@ -102,6 +104,17 @@ task({instruction})       See above — hand off a whole task to the pipeline
 Pick a compound FIRST based on what kind of operation it is, then set the
 `action` enum, then supply the args. The catalog is ~1,500 tokens — ~12× smaller
 than the granular surface — so small models (Haiku, Kimi, Ollama) stay focused.
+
+### Cost tier — always use the cheapest tier that works
+
+| Tier | Label | Cost | Use when |
+|---|---|---|---|
+| T1 | **structured** | ~free | Default. `accessibility.*`, `window.*`, `browser.read_text`, clipboard. Returns structured text — no image, no vision LLM. |
+| T2 | **ocr** | cheap | A11y tree is empty or sparse. `system({"action":"ocr"})` — OS-level OCR, text out, no LLM vision. |
+| T3 | **screenshot** | medium | OCR isn't enough and you need pixel context. `computer({"action":"screenshot"})` — sends an image into the LLM context. Use sparingly. |
+| T4 | **vision** | expensive | Screen is canvas-only (Paint, Figma, games) or the task requires spatial reasoning that text cannot express. `smart_click`, `smart_read`, `smart_type`. Last resort. |
+
+**Rule: start at T1. Escalate to the next tier only when the current one fails.** The pipeline does this automatically via `task({...})`; apply the same logic when you call compound tools manually.
 
 ### Quick reference — what action to pick
 
