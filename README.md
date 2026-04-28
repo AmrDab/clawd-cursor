@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/amrdab-clawdcursor-badge.png)](https://mseep.ai/app/amrdab-clawdcursor)
+
 <p align="center">
   <img src="docs/favicon.svg" width="80" alt="Clawd Cursor">
 </p>
