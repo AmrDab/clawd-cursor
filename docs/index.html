@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clawd Cursor v0.8.4</title>
-  <meta name="description" content="Clawd Cursor v0.8.4: the skill that gives any AI agent eyes, hands, and ears on a real desktop. 74 granular tools OR 6 compact compound tools (Anthropic Computer-Use style). Blind-first unified pipeline. Windows, macOS, Linux (X11 + Wayland).">
+  <meta name="description" content="Clawd Cursor v0.8.4: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop. 74 granular tools OR 6 compact compound tools (Anthropic Computer-Use style). Blind-first unified pipeline. Windows, macOS, Linux (X11 + Wayland).">
   <meta property="og:title" content="Clawd Cursor v0.8.4">
   <meta property="og:description" content="Blind-first desktop automation. 74 tools via REST + MCP, or 6 compact compound tools (1 per 12, ~12× fewer tokens). Any AI model, any OS.">
 
@@ -16,7 +16,7 @@
 
   <!--
     AGENT-READABLE SUMMARY
-    clawdcursor v0.8.4: the skill that gives any AI agent eyes, hands, and ears on a real desktop.
+    clawdcursor v0.8.4: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop.
 
     Install: powershell -c "irm https://clawdcursor.com/install.ps1 | iex" (Windows)
              curl -fsSL https://clawdcursor.com/install.sh | bash (macOS/Linux)
@@ -328,7 +328,7 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v0.8.4: blind-first · compact MCP · idempotent open_app · runaway guard</div>
+    <div class="hero-badge"><div class="pulse"></div> v0.8.4: dependency security audit · vite / picomatch / path-to-regexp / hono CVE patches</div>
     <h1>Give your AI agent<br><span class="gr">eyes and hands</span><br>on your desktop</h1>
     <p>Any tool-calling model. Any OS. <strong>74 granular tools or 6 compact compound tools</strong> (Anthropic Computer-Use style). Blind-first pipeline tries accessibility trees before pixels — ~12× cheaper per turn than vision-only agents.</p>
     <div class="hero-btns">
@@ -523,23 +523,23 @@
     <div class="code-box" id="os-windows" style="display:block;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>PowerShell</span></div>
       <pre><code><span class="c-cmd">powershell -c</span> <span class="c-string">"irm https://clawdcursor.com/install.ps1 | iex"</span>
-<span class="c-cmd">clawdcursor start</span> <span class="c-flag">--v2</span>  <span class="c-comment"># opt into vision-first v2 pipeline</span></code></pre>
+<span class="c-cmd">clawdcursor start</span></code></pre>
     </div>
 
     <div class="code-box" id="os-macos" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
 <span class="c-cmd">clawdcursor grant</span>  <span class="c-comment"># Accessibility + Screen Recording</span>
-<span class="c-cmd">clawdcursor start</span> <span class="c-flag">--v2</span></code></pre>
+<span class="c-cmd">clawdcursor start</span></code></pre>
     </div>
 
     <div class="code-box" id="os-linux" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
-<span class="c-cmd">clawdcursor start</span> <span class="c-flag">--v2</span></code></pre>
+<span class="c-cmd">clawdcursor start</span></code></pre>
     </div>
 
-    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. Drop <code style="font-size:0.95em">--v2</code> to run the legacy pipeline.</p>
+    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. The blind/hybrid/vision pipeline is unified — no flags needed.</p>
   </section>
 
 </div>

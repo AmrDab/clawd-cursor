@@ -2,7 +2,7 @@
 name: clawdcursor
 version: 0.8.4
 description: >
-  The skill that gives AI agents eyes, hands, and ears on a real desktop.
+  The skill that gives AI agents eyes, hands, and a keyboard on a real desktop.
   When the user asks you to do something a human would normally do at their
   computer — click a button, type in a field, read what is on screen, open
   an app, send an email through a GUI, fill out a form, drive a web page
@@ -68,7 +68,7 @@ metadata:
 > - MCP clients: add `"args": ["mcp", "--compact"]` to your config.
 > - REST clients: use `GET /tools?mode=compact` and `POST /execute/{compound}` with an `action` enum.
 >
-> Granular mode's 72 tools are kept for back-compat. Compact's 6 tools are ~12× smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
+> Granular mode's 74 tools are kept for back-compat. Compact's 6 tools are ~12× smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
 
 If you connect via MCP with `--compact`, or hit REST's compact mode, you get a
 single tool that takes the whole task:
@@ -197,9 +197,9 @@ Never self-approve actions on these surfaces. The safety layer elevates them to 
 
 | Mode | Command | Brain | Tools available |
 |------|---------|-------|-----------------|
-| `serve` | `clawdcursor serve` | **You** (REST client) | 72 granular + 6 compact via HTTP |
-| `mcp` | `clawdcursor mcp [--compact]` | **You** (MCP client) | 72 granular (default) or 6 compact (`--compact`) via stdio |
-| `start` | `clawdcursor start` | Built-in LLM pipeline | 72 granular + autonomous agent (submit a task, poll for completion) |
+| `serve` | `clawdcursor serve` | **You** (REST client) | 74 granular + 6 compact via HTTP |
+| `mcp` | `clawdcursor mcp [--compact]` | **You** (MCP client) | 74 granular (default) or 6 compact (`--compact`) via stdio |
+| `start` | `clawdcursor start` | Built-in LLM pipeline | 74 granular + autonomous agent (submit a task, poll for completion) |
 
 In `serve` and `mcp` modes: **you reason, clawdcursor acts.** There is no built-in LLM. You call tools, interpret results, decide next steps. In `start` mode: clawdcursor reasons AND acts — hand it a plain-English task and poll for completion.
 
@@ -221,7 +221,7 @@ In `serve` and `mcp` modes: **you reason, clawdcursor acts.** There is no built-
 }
 ```
 
-**Granular — 72 individual tools (power-user, back-compat, larger prompt budget):**
+**Granular — 74 individual tools (power-user, back-compat, larger prompt budget):**
 ```json
 {
   "mcpServers": {
@@ -243,7 +243,7 @@ All POST endpoints require `Authorization: Bearer <token>` — token at
 `~/.clawdcursor/token`.
 
 ```
-GET  /tools                  → 72 granular schemas (OpenAI function-calling)
+GET  /tools                  → 74 granular schemas (OpenAI function-calling)
 GET  /tools?mode=compact     → 6 compound schemas (recommended for LLMs)
 POST /execute/{name}         → run any tool by name — granular or compact
 GET  /health                 → {"status":"ok","version":"0.8.2"}

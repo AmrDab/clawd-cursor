@@ -37,12 +37,12 @@ You install it once. Any tool-calling agent on the machine &mdash; Claude Code, 
 ```
 User: "Open Outlook and reply to the latest email from Sarah."
 
-Agent  →  system.open_app("Outlook")
-       →  accessibility.read_screen()
-       →  computer.click(sarah_email_row)
-       →  computer.key("Ctrl+R")
-       →  computer.type("...")
-       →  computer.click(send_button)
+Agent  →  window({"action":"open_app","name":"Outlook"})
+       →  accessibility({"action":"read_tree"})
+       →  accessibility({"action":"invoke","name":"Sarah's email"})
+       →  computer({"action":"key","combo":"mod+r"})
+       →  computer({"action":"type","text":"..."})
+       →  accessibility({"action":"invoke","name":"Send"})
        → done (verified by ground-truth verifier)
 ```
 
@@ -143,26 +143,27 @@ Anthropic `computer_20250124`-style: one tool per capability, with an `action` e
 
 | Tool | Actions |
 |---|---|
-| `computer` | `screenshot`, `click`, `type`, `key`, `scroll`, `drag`, `drag_path`, `wait` |
-| `accessibility` | `read_screen`, `find`, `get_focused`, `wait_for_element`, `invoke` |
-| `window` | `list`, `focus`, `set_state`, `set_bounds`, `get_active` |
-| `system` | `open_app`, `detect_webview`, `relaunch_with_cdp`, `read_clipboard`, `write_clipboard` |
-| `browser` | `connect`, `click`, `type`, `read_text`, `evaluate`, `navigate` |
-| `task` | `delegate`, `status`, `confirm`, `abort` |
+| `computer` | `screenshot`, `click`, `double_click`, `right_click`, `hover`, `move_relative`, `scroll`, `drag`, `drag_path`, `type`, `key`, `wait` |
+| `accessibility` | `read_tree`, `find`, `get_element`, `focused`, `invoke`, `focus`, `set_value`, `get_value`, `expand`, `collapse`, `toggle`, `select`, `state`, `wait_for` |
+| `window` | `list`, `active`, `focus`, `maximize`, `minimize`, `restore`, `close`, `resize`, `open_app`, `open_file`, `open_url`, `navigate` |
+| `system` | `clipboard_read`, `clipboard_write`, `system_time`, `ocr`, `undo`, `shortcuts_list`, `shortcuts_run`, `delegate`, `detect_webview`, `relaunch_with_cdp` |
+| `browser` | `connect`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
+| `task` | (no `action` enum &mdash; takes `{instruction: string}` and routes through the full pipeline) |
 
 ### Granular &mdash; 74 individual tools
 
-Full catalog for agents that prefer one tool per verb. Grouped by capability:
+Full catalog for agents that prefer one tool per verb. Sample of categories below; the full list is at `GET /tools` or `list_tools` over MCP.
 
-| Category | Count | Examples |
-|---|---|---|
-| Perception | 9 | `screenshot`, `read_screen`, `smart_read`, `ocr_read_screen` |
-| Mouse | 6 | `mouse_click`, `mouse_double_click`, `mouse_drag`, `mouse_drag_stepped`, `mouse_scroll` |
-| Keyboard | 5 | `key_press`, `type_text`, `smart_type`, `shortcuts_list`, `shortcuts_execute` |
-| Window / App | 8 | `focus_window`, `open_app`, `get_windows`, `invoke_element`, `detect_webview_apps` |
-| Browser (CDP) | 10 | `cdp_connect`, `cdp_click`, `cdp_type`, `cdp_read_text`, `cdp_evaluate` |
-| Accessibility | 6 | `get_ui_tree`, `find_elements`, `wait_for_element`, `get_focused_element` |
-| Orchestration | 6 | `smart_click`, `navigate_browser`, `delegate_to_agent`, `wait` |
+| Category | Examples |
+|---|---|
+| Perception | `read_screen`, `desktop_screenshot`, `desktop_screenshot_region`, `ocr_read_screen`, `smart_read` |
+| Mouse | `mouse_click`, `mouse_double_click`, `mouse_drag`, `mouse_drag_stepped`, `mouse_scroll` |
+| Keyboard | `key_press`, `type_text`, `smart_type`, `shortcuts_list`, `shortcuts_execute` |
+| Window / App | `focus_window`, `open_app`, `get_windows`, `invoke_element`, `detect_webview_apps` |
+| Browser (CDP) | `cdp_connect`, `cdp_click`, `cdp_type`, `cdp_read_text`, `cdp_evaluate` |
+| Accessibility | `find_element`, `wait_for_element`, `get_focused_element`, `a11y_expand`, `a11y_toggle` |
+| System | `read_clipboard`, `write_clipboard`, `get_system_time`, `undo_last`, `delegate_to_agent` |
+| Orchestration | `smart_click`, `navigate_browser`, `wait` |
 
 Full catalog visible to the agent through MCP `list_tools` or at `GET /tools`.
 
@@ -271,17 +272,20 @@ clawdcursor start        Run the built-in autonomous agent (testing)
 clawdcursor task <t>     Send a task to that agent (testing)
 
 Options:
-  --port <port>          Default: 3847
-  --compact              Expose compact 6-tool surface (MCP / serve)
-  --provider <name>      Only for `start`: anthropic | openai | gemini | ollama | ...
-  --accept               Skip the consent prompt (non-interactive)
+  --port <port>          Default: 3847 (start, serve, stop, task, status)
+  --compact              MCP only: expose 6 compound tools instead of 74 granular.
+                         For REST/serve, use the `?mode=compact` query parameter
+                         on `GET /tools` instead.
+  --provider <name>      `start` only: anthropic | openai | gemini | ollama | ...
+  --accept               `start` and `consent` only: skip the consent prompt.
+                         For `serve`, use `--skip-consent` (dev environments).
 ```
 
 ---
 
 ## Tech Stack
 
-TypeScript · Node.js 20+ · nut-js · Playwright · sharp · Express · Hono · Model Context Protocol SDK · Zod
+TypeScript · Node.js 20+ · nut-js · Playwright · sharp · Express · Model Context Protocol SDK · Zod · commander
 
 ---
 
