@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
+import { VERSION } from './version';
 
 const CONSENT_DIR = path.join(os.homedir(), '.clawdcursor');
 const CONSENT_FILE = path.join(CONSENT_DIR, 'consent');
@@ -28,7 +29,7 @@ function saveConsent(): void {
     accepted: true,
     timestamp: new Date().toISOString(),
     platform: process.platform,
-    version: '0.8.6',
+    version: VERSION,
   }, null, 2));
 }
 

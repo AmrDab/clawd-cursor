@@ -25,7 +25,7 @@ Useful scripts:
 | `npm run typecheck` | `tsc --noEmit` — must be clean |
 | `npm run lint` | ESLint over `src/` |
 | `npm run test` | `vitest` watch mode |
-| `npm run test:ci` | `vitest run` — 429/430 baseline, one intentional skip |
+| `npm run test:ci` | `vitest run` — 430/431 baseline, one intentional skip |
 | `npm run test:mcp-schema-snapshot` | Diffs the granular tool catalog against `schema.snapshot.json`. Fails if the schema changed. Commit the new snapshot (`:update`) when the change is intentional. |
 
 CI runs typecheck + lint + tests + schema snapshot on every PR across Windows, macOS, and Linux on Node 20 and 22. Match that locally before pushing where possible.

@@ -11,7 +11,7 @@
 <!-- How did you verify this works? Tick what applies. -->
 
 - [ ] `npm run typecheck` clean
-- [ ] `npm run test:ci` passing (429/430 baseline; note any new skips)
+- [ ] `npm run test:ci` passing (430/431 baseline; note any new skips)
 - [ ] `npm run test:mcp-schema-snapshot` &mdash; if you touched `src/tools/`, the snapshot diff is intentional and committed
 - [ ] Manual smoke on at least one OS (specify which: macOS / Windows / Linux)
 - [ ] If touching MCP or REST surface: verified the tool call you changed works end-to-end through that surface

@@ -1051,7 +1051,7 @@ program
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js' as any);
     const { z } = await import('zod');
 
-    const server = new McpServer({ name: 'clawdcursor', version: '0.8.6' });
+    const server = new McpServer({ name: 'clawdcursor', version: VERSION });
 
     // Register tools. `--compact` ships the 6 compound tools that mirror
     // Anthropic's computer_20250124 shape; default is the 74-tool granular
