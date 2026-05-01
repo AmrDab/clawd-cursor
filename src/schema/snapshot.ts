@@ -48,11 +48,15 @@ export function snapshotPath(): string {
   return path.resolve(__dirname, '..', '..', 'schema.snapshot.json');
 }
 
-/** Read the stored snapshot; null if missing. */
+/** Read the stored snapshot; null if missing.
+ *  EOLs are normalized to LF so Windows autocrlf checkouts don't
+ *  cause spurious diffs against `currentSnapshot()` (which writes
+ *  literal '\n'). The .gitattributes rule is the primary fix; this
+ *  is defense-in-depth. */
 export function readStoredSnapshot(): string | null {
   const p = snapshotPath();
   if (!fs.existsSync(p)) return null;
-  return fs.readFileSync(p, 'utf8');
+  return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 }
 
 /** Write the current snapshot to the committed file. */

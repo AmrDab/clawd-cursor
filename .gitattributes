@@ -1,0 +1,15 @@
+# Force LF for files compared byte-for-byte by tooling, so Windows
+# autocrlf=true checkouts don't break tests that hash-compare against
+# content written with explicit '\n' separators.
+schema.snapshot.json text eol=lf
+
+# JSON files generally — keep stable across platforms.
+*.json text eol=lf
+
+# Shell scripts must stay LF on every platform (CRLF breaks /usr/bin/env
+# shebangs and bash heredocs).
+*.sh text eol=lf
+
+# Other text files: let git normalize on commit, check out with the
+# platform's native EOL.
+* text=auto
