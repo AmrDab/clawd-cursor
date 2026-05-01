@@ -2,6 +2,40 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [0.8.6] - 2026-05-01 — Polish release: MCP server version, homepage simplification, repo hygiene
+
+A short follow-up to 0.8.5 that closes one user-visible bug carried over from the v0.7.x line and a handful of professionalism gaps surfaced in a pre-release audit. No schema changes, no behavior changes for agents — purely metadata, docs, and the public landing page.
+
+### Fixed
+
+- **`McpServer` advertised the wrong version.** `src/index.ts` constructed the MCP server with `version: '0.7.2'` and `src/onboarding.ts` wrote the same string into the consent file — both untouched since the 0.7.x line. MCP clients (Claude Code, Cursor, Windsurf, Zed) display this string in their server metadata, so users on v0.8.5 saw "clawdcursor v0.7.2" in their host UI. Both sites now read `0.8.6`. `src/index.ts:1054`, `src/onboarding.ts:31`.
+
+### Added
+
+- **`SECURITY.md`** — private vulnerability reporting path for a tool that runs with full Accessibility + Screen Recording permissions on the user's desktop. Points reporters at GitHub's private vulnerability reporting flow plus a mailbox fallback. Should have existed since v0.7.0; closing the gap now.
+
+### Changed
+
+- **Homepage simplified.** `docs/index.html` lost ~80 lines of decorative weight without losing information:
+  - Removed the page-wide green AI-cursor mouse-follower (CSS + HTML + JS, ~60 lines). Cute, but contradicts the "serious skill, not a demo" framing.
+  - Hero badge collapsed from a 4-fact release-summary string to a one-line `v0.8.6 — latest stable`. Release detail belongs in CHANGELOG, not the hero.
+  - Stats grid pruned from 4 tiles to 3 — the `any AI Model` tile was filler.
+  - "CLI Agent" mode card relabeled `CLI — testing only` to match the README's skill-first reframe (in 0.8.4) where `start` is explicitly the testing/troubleshooting path, not a recommended runtime mode.
+  - The `clawdcursor doctor` post-install comment used to read `# verify install + wire into your agent (MCP)`; `doctor` does not write to host config files. Corrected to `# verify install — then add the MCP block to your agent host config`.
+- **`LICENSE`** copyright year `2026` → `2025-2026`. The earliest CHANGELOG entry is March 2025.
+
+### Removed
+
+- **`V0.7.5-SPEC.md`** at the repo root — describes the v0.7.5 OCR+a11y parallel-merge architecture, which was superseded by the unified blind-first pipeline in v0.8.1/v0.8.2. Five releases of stale content with zero inbound references. Preserved in git history.
+- **`docs/v0.7.0/`, `docs/v0.7.2/`, `docs/v0.7.12/`, `docs/v0.7.14/`** — pinned-version landing pages for releases that were never published as GitHub Releases. Not linked from the live homepage or README. `docs/v0.7.5/` kept (only pre-0.8 release with a published GitHub Release).
+
+### Documentation
+
+- **GitHub Releases backfilled.** Tags v0.8.0, v0.8.2, v0.8.3, v0.8.4, v0.8.5 had existed for weeks without a corresponding Releases entry — only v0.7.5 was published. All five 0.8.x releases now have a Releases entry sourced from this CHANGELOG, with v0.8.5 marked latest until v0.8.6 ships.
+- SKILL.md "What's new" expanded to cover 0.8.6.
+
+---
+
 ## [0.8.5] - 2026-04-30 — Review-fix maintenance + compact-tool keyboard fix
 
 Two remote review passes (six findings + ten findings) on the v0.8.4 docs uncovered one real behavior bug, several factually wrong install instructions, and a long tail of documentation drift that had built up across SKILL.md, README, docs/index.html, and source comments. This release closes all of it. 429/430 tests still pass; granular schema snapshot unchanged.

@@ -1,6 +1,6 @@
 ---
 name: clawdcursor
-version: 0.8.5
+version: 0.8.6
 description: >
   The skill that gives AI agents eyes, hands, and a keyboard on a real desktop.
   When the user asks you to do something a human would normally do at their
@@ -448,6 +448,11 @@ Per-OS setup notes:
 - **Changelog:** CHANGELOG.md
 
 ---
+
+**What's new in 0.8.6:**
+- **`McpServer` advertises the right version** — the MCP server-info struct hardcoded `0.7.2` since v0.7.x; clients have been seeing stale metadata for seven minor releases. Now reflects the package version.
+- **Homepage simplified** — landing page trimmed of decorative cursor animation, hero badge tightened to a one-liner, "any AI Model" filler tile removed from stats, CLI mode card relabeled `testing only` to match the README skill-first reframe.
+- **Repo hygiene** — removed stale `V0.7.5-SPEC.md` (architecture doc superseded in v0.8.1), pruned unlinked pinned-version docs (`docs/v0.7.0/`, `v0.7.2/`, `v0.7.12/`, `v0.7.14/`), corrected `LICENSE` copyright year range, added `SECURITY.md` with private vulnerability reporting.
 
 **What's new in 0.8.5:**
 - **Compact-tool keyboard fix** — `computer({"action":"key","combo":"mod+s"})` now actually works. The remap `combo → key` documented in `compact.ts` since v0.8.1 was never implemented; it is now wired up across `key`, `key_press`, `key_down`, and `key_up` actions.

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawd Cursor v0.8.5</title>
-  <meta name="description" content="Clawd Cursor v0.8.5: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop. 74 granular tools OR 6 compact compound tools (Anthropic Computer-Use style). Blind-first unified pipeline. Windows, macOS, Linux (X11 + Wayland).">
-  <meta property="og:title" content="Clawd Cursor v0.8.5">
+  <title>Clawd Cursor v0.8.6</title>
+  <meta name="description" content="Clawd Cursor v0.8.6: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop. 74 granular tools or 6 compact compound tools. Windows, macOS, Linux.">
+  <meta property="og:title" content="Clawd Cursor v0.8.6">
   <meta property="og:description" content="Blind-first desktop automation. 74 tools via REST + MCP, or 6 compact compound tools (1 per 12, ~12× fewer tokens). Any AI model, any OS.">
 
   <meta property="og:type" content="website">
@@ -16,7 +16,7 @@
 
   <!--
     AGENT-READABLE SUMMARY
-    clawdcursor v0.8.5: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop.
+    clawdcursor v0.8.6: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop.
 
     Install: powershell -c "irm https://clawdcursor.com/install.ps1 | iex" (Windows)
              curl -fsSL https://clawdcursor.com/install.sh | bash (macOS/Linux)
@@ -187,7 +187,7 @@
 
     /* Stats */
     .stats {
-      display: grid; grid-template-columns: repeat(4, 1fr);
+      display: grid; grid-template-columns: repeat(3, 1fr);
       border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin: 0 auto 48px;
     }
     .stat { text-align: center; padding: 20px 12px; background: var(--bg2); border-right: 1px solid var(--border); }
@@ -283,19 +283,6 @@
     footer p { color: var(--text3); font-size: 0.75rem; }
     footer a { color: var(--text2); }
 
-    /* AI cursor */
-    .ai-cursor-container { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-    .ai-cursor { position: absolute; width: 28px; height: 28px; opacity: 0; transition: opacity 0.3s; will-change: transform; }
-    .ai-cursor svg { width: 100%; height: 100%; filter: drop-shadow(0 0 8px rgba(34,197,94,0.6)); }
-    .ai-trail {
-      position: absolute; width: 6px; height: 6px; background: var(--accent); border-radius: 50%;
-      opacity: 0; transform: translate(-50%,-50%); will-change: transform,opacity;
-    }
-    .ai-ripple {
-      position: absolute; width: 40px; height: 40px; border: 2px solid var(--accent);
-      border-radius: 50%; opacity: 0; transform: translate(-50%,-50%); pointer-events: none;
-    }
-
     /* Responsive */
     @media (max-width: 768px) {
       .stats { grid-template-columns: repeat(2, 1fr); }
@@ -307,28 +294,11 @@
 </head>
 <body>
 
-<!-- AI Cursor -->
-<div class="ai-cursor-container">
-  <div class="ai-cursor">
-    <svg viewBox="0 0 32 32" fill="none">
-      <path d="M4 4L14 28L17 18L28 14L4 4Z" fill="url(#cg)" stroke="#22c55e" stroke-width="1.5" stroke-linejoin="round"/>
-      <path d="M20 8L26 2" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
-      <path d="M22 12L30 6" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-      <path d="M18 6L22 0" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
-      <defs><linearGradient id="cg" x1="4" y1="4" x2="28" y2="28"><stop stop-color="#22c55e"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
-    </svg>
-  </div>
-  <div class="ai-trail"></div>
-  <div class="ai-trail"></div>
-  <div class="ai-trail"></div>
-  <div class="ai-ripple"></div>
-</div>
-
 <div class="wrap">
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v0.8.5: review-fix maintenance · keyboard `combo` arg fix · cost-tier ladder · 16 doc accuracy fixes</div>
+    <div class="hero-badge"><div class="pulse"></div> v0.8.6 — latest stable</div>
     <h1>Give your AI agent<br><span class="gr">eyes and hands</span><br>on your desktop</h1>
     <p>Any tool-calling model. Any OS. <strong>74 granular tools or 6 compact compound tools</strong> (Anthropic Computer-Use style). Blind-first pipeline tries accessibility trees before pixels — ~12× cheaper per turn than vision-only agents.</p>
     <div class="hero-btns">
@@ -349,7 +319,6 @@
     <div class="stat"><div class="stat-val">74</div><div class="stat-lbl">Granular Tools</div></div>
     <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Compact Tools</div></div>
     <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Operating Systems</div></div>
-    <div class="stat"><div class="stat-val">any</div><div class="stat-lbl">AI Model</div></div>
   </div>
 
   <!-- Who -->
@@ -398,7 +367,7 @@
         </div>
       </div>
       <div class="mode-card c">
-        <h3>CLI Agent</h3>
+        <h3>CLI <span style="font-size:0.7rem;font-weight:500;color:var(--text3);letter-spacing:0.04em;">— testing only</span></h3>
         <ol>
           <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor doctor</code></li>
           <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor start</code></li>
@@ -406,7 +375,7 @@
         </ol>
         <div class="mode-stats">
           <div><div class="mode-stat-val">13+</div><div class="mode-stat-lbl">Providers</div></div>
-          <div><div class="mode-stat-val">$0</div><div class="mode-stat-lbl">Simple tasks</div></div>
+          <div><div class="mode-stat-val">$0</div><div class="mode-stat-lbl">Smoke-test runs</div></div>
         </div>
       </div>
       <div class="mode-card a">
@@ -523,20 +492,20 @@
     <div class="code-box" id="os-windows" style="display:block;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>PowerShell</span></div>
       <pre><code><span class="c-cmd">powershell -c</span> <span class="c-string">"irm https://clawdcursor.com/install.ps1 | iex"</span>
-<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install + wire into your agent (MCP)</span></code></pre>
+<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install — then add the MCP block to your agent host config</span></code></pre>
     </div>
 
     <div class="code-box" id="os-macos" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
 <span class="c-cmd">clawdcursor grant</span>   <span class="c-comment"># Accessibility + Screen Recording</span>
-<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install + wire into your agent (MCP)</span></code></pre>
+<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install — then add the MCP block to your agent host config</span></code></pre>
     </div>
 
     <div class="code-box" id="os-linux" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
-<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install + wire into your agent (MCP)</span></code></pre>
+<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install — then add the MCP block to your agent host config</span></code></pre>
     </div>
 
     <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. clawdcursor is a <em>skill</em> — your agent calls it through MCP. <code style="font-size:0.95em">clawdcursor start</code> exists for manual testing only.</p>
@@ -557,7 +526,7 @@
 </div>
 
 <footer>
-  <p>clawd<strong>cursor</strong> v0.8.5 · localhost only · MIT · <a href="https://clawdcursor.com">Home</a> · <a href="https://github.com/AmrDab/clawdcursor">GitHub</a> · <a href="https://discord.gg/UGBWKvmj">Discord</a></p>
+  <p>clawd<strong>cursor</strong> v0.8.6 · localhost only · MIT · <a href="https://clawdcursor.com">Home</a> · <a href="https://github.com/AmrDab/clawdcursor">GitHub</a> · <a href="https://discord.gg/UGBWKvmj">Discord</a></p>
 </footer>
 
 <script>
@@ -604,56 +573,6 @@
     });
   }
 
-  // AI cursor animation
-  const cursor = document.querySelector('.ai-cursor');
-  const trails = document.querySelectorAll('.ai-trail');
-  const ripple = document.querySelector('.ai-ripple');
-  let mouseX = 0, mouseY = 0;
-  let trailPositions = Array(trails.length).fill().map(() => ({ x: 0, y: 0 }));
-  let animFrame;
-  let isActive = false;
-  let idleTimer;
-
-  document.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX; mouseY = e.clientY;
-    if (!isActive) {
-      isActive = true;
-      cursor.style.opacity = '1';
-      animate();
-    }
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
-      isActive = false;
-      cursor.style.opacity = '0';
-      trails.forEach(t => t.style.opacity = '0');
-      cancelAnimationFrame(animFrame);
-    }, 3000);
-  });
-
-  document.addEventListener('click', () => {
-    ripple.style.left = mouseX + 'px';
-    ripple.style.top = mouseY + 'px';
-    ripple.style.opacity = '0.6';
-    ripple.style.transform = 'translate(-50%, -50%) scale(0)';
-    ripple.style.transition = 'none';
-    requestAnimationFrame(() => {
-      ripple.style.transition = 'all 0.5s ease-out';
-      ripple.style.opacity = '0';
-      ripple.style.transform = 'translate(-50%, -50%) scale(2)';
-    });
-  });
-
-  function animate() {
-    cursor.style.transform = `translate(${mouseX - 4}px, ${mouseY - 4}px)`;
-    trailPositions.forEach((pos, i) => {
-      const target = i === 0 ? { x: mouseX, y: mouseY } : trailPositions[i - 1];
-      pos.x += (target.x - pos.x) * (0.15 + i * 0.05);
-      pos.y += (target.y - pos.y) * (0.15 + i * 0.05);
-      trails[i].style.transform = `translate(${pos.x}px, ${pos.y}px)`;
-      trails[i].style.opacity = String(0.35 - i * 0.1);
-    });
-    if (isActive) animFrame = requestAnimationFrame(animate);
-  }
 </script>
 </body>
 </html>
