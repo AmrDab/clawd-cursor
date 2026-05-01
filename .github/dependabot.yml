@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      types:
+        patterns:
+          - "@types/*"
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+    ignore:
+      # @nut-tree-fork/nut-js pulls in jimp; the moderate advisories chain through
+      # there. Track upstream rather than chasing transitive dependabot noise.
+      - dependency-name: "jimp"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

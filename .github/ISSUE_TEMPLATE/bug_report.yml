@@ -1,0 +1,90 @@
+name: Bug report
+description: Something is broken or behaving wrong
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        **Before filing:** if this is a security issue (privilege escalation, token theft, safety-layer bypass), please use [private vulnerability reporting](https://github.com/AmrDab/clawdcursor/security/advisories/new) instead — see [SECURITY.md](https://github.com/AmrDab/clawdcursor/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: clawdcursor version
+      description: Output of `clawdcursor --version`
+      placeholder: e.g. 0.8.6
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux (X11)
+        - Linux (Wayland)
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      placeholder: e.g. macOS 14.5, Windows 11 23H2, Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      description: Which entry point did you hit the bug through?
+      options:
+        - MCP (granular, default)
+        - MCP (compact, --compact flag)
+        - REST (clawdcursor serve)
+        - Autonomous agent (clawdcursor start)
+        - Installer
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent / model (if applicable)
+      placeholder: e.g. Claude Code with Sonnet 4.6, Cursor with GPT-4o, Ollama llama3
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+      description: Include error messages, screenshots, or recordings if useful.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps to reproduce. If possible, the exact tool call (`computer({...})`, REST `curl`, etc.).
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Output from `CLAWD_LOG=debug clawdcursor ...` or relevant lines from `~/.clawdcursor/logs/`. Redact any tokens or personal info.
+      render: shell
+  - type: textarea
+    id: doctor
+    attributes:
+      label: clawdcursor doctor output
+      description: Paste the output of `clawdcursor doctor`.
+      render: shell

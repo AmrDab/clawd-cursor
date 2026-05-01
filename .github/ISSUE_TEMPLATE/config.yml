@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/AmrDab/clawdcursor/security/advisories/new
+    about: Report privately via GitHub Security Advisories. See SECURITY.md for scope.
+  - name: Question / discussion
+    url: https://discord.gg/UGBWKvmj
+    about: Ask in the #clawdcursor channel on Discord.

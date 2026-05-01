@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest a new capability or improvement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What is the agent or user trying to do that doesn't work today, or works clumsily?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would you like clawdcursor to do? If you have a specific tool name, action enum, or API shape in mind, include it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools or workarounds you've already tried, and why they fall short.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Single OS (macOS only)
+        - Single OS (Windows only)
+        - Single OS (Linux only)
+        - Cross-platform
+        - Documentation / SKILL.md
+        - Installer / packaging
+        - Not sure
+    validations:
+      required: true

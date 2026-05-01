@@ -52,19 +52,19 @@ No app-specific integrations. No per-service API keys. No cloud round-trip &mdas
 
 ---
 
-## What's New in v0.8.4
+## Latest Release
 
-Security maintenance release. Patches every fixable CVE in the dependency tree:
+**v0.8.6** &mdash; polish release. Fixes a stale `McpServer` version string that had been advertising `v0.7.2` in MCP client metadata since the v0.7.x line; adds `SECURITY.md` and a private vulnerability reporting channel; trims the homepage; prunes stale repo artifacts.
 
-| Package | Severity | Issue |
-|---|---|---|
-| `vite` | High | Path traversal, `server.fs.deny` bypass, arbitrary read via WebSocket |
-| `path-to-regexp` | High | ReDoS via multiple route parameters |
-| `picomatch` | High | ReDoS + method injection in POSIX character classes |
-| `hono` | Moderate | HTML injection in `hono/jsx` SSR |
-| `follow-redirects` | Moderate | Auth headers leaked to cross-domain redirects |
+The substantive work landed earlier in the v0.8.x line:
 
-See [CHANGELOG.md](CHANGELOG.md) for the full v0.8.x history &mdash; unified blind/hybrid/vision pipeline (v0.8.2), compact MCP surface, Linux AT-SPI + Wayland, Electron/WebView2 bridge, idempotent `open_app`, runaway guard.
+- **v0.8.5** &mdash; `computer({"action":"key","combo":"..."})` now actually works (compact-tool keyboard remap was missing); 16 documentation accuracy fixes; cost-tier ladder added to SKILL.md.
+- **v0.8.4** &mdash; security maintenance: patches every fixable CVE in the dependency tree (vite, path-to-regexp, picomatch, hono, follow-redirects); README rewritten to frame clawdcursor as a *skill* rather than a standalone server.
+- **v0.8.3** &mdash; idempotent `open_app` (no more N copies of Outlook stacking up under retry), agent runaway guard, `clawdcursor stop` sweeps every mode.
+- **v0.8.2** &mdash; silent-401 auth bug fixed, force-focus on Windows through the foreground lock, Electron/WebView2 detection + CDP relaunch hint.
+- **v0.8.1 (rolled into 0.8.2)** &mdash; unified blind/hybrid/vision pipeline (one loop, three strategy modes), compact MCP surface (6 tools, ~12&times; smaller catalog), Linux AT-SPI bridge, Wayland input routing.
+
+Full per-release detail in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
