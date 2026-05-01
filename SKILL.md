@@ -29,7 +29,6 @@ metadata:
     install:
       - npm install -g clawdcursor
       - clawdcursor consent --accept
-      - clawdcursor serve
     skill_dir: ~/.openclaw/workspace/skills/clawdcursor
 ---
 
@@ -246,7 +245,7 @@ All POST endpoints require `Authorization: Bearer <token>` — token at
 GET  /tools                  → 74 granular schemas (OpenAI function-calling)
 GET  /tools?mode=compact     → 6 compound schemas (recommended for LLMs)
 POST /execute/{name}         → run any tool by name — granular or compact
-GET  /health                 → {"status":"ok","version":"0.8.2"}
+GET  /health                 → {"status":"ok","version":"<x.y.z>"}
 GET  /docs                   → full docs for the granular surface
 GET  /docs?mode=compact      → docs for the compact surface
 ```
@@ -450,6 +449,16 @@ Per-OS setup notes:
 
 ---
 
+**What's new in 0.8.4:**
+- **Dependency security audit** — patches every fixable advisory in the lockfile: vite (3× high — path traversal, fs.deny bypass, WS read), path-to-regexp (high — ReDoS), picomatch (high — ReDoS + method injection), hono (moderate — JSX SSR HTML injection), follow-redirects (moderate — auth-header leak across cross-domain redirects). 7 moderate alerts in the `jimp → @nut-tree-fork/nut-js` chain remain — no upstream fix yet.
+- **README rewrite** — reframed clawdcursor as a *skill* rather than a standalone server. The `start`/`task` CLI is now explicitly testing-only; agents reach the skill via MCP (`clawdcursor mcp --compact`) or the local REST surface (`clawdcursor serve`).
+- **Compact-tool fix** — `computer({"action":"key","combo":"mod+s"})` now actually works. The remap `combo → key` documented in `compact.ts` since v0.8.1 was never implemented; it is now wired up across `key`, `key_press`, `key_down`, and `key_up` actions.
+
+**What's new in 0.8.3:**
+- **Idempotent `open_app`** — repeated `open_app("Outlook")` calls focus the existing window instead of stacking new instances. Closes the "N copies of Outlook" class of bug under any retry loop.
+- **Agent runaway guard** — if the agent calls the same tool with identical args ≥ 3 times in a 6-turn window, the loop exits with a `give_up` and a targeted hint (typically pointing at `detect_webview` for Electron/WebView2 targets with sparse a11y trees).
+- **`clawdcursor stop` sweeps every mode** — tears down `start`, `serve`, AND `mcp` (stdio) processes by walking `~/.clawdcursor/*.pid`. Fixes the "stale `serve` keeps receiving traffic" footgun.
+
 **What's new in 0.8.2:**
 - **Silent-401 auth bug fixed** — `requireAuth` now accepts the on-disk token with an mtime cache so concurrent clawdcursor processes no longer cause mid-session 401s.
 - **Force-focus-window** — Windows `focus_window` now uses the `AttachThreadInput` + `AllowSetForegroundWindow` + topmost-toggle sequence to raise windows across foreground lock.
@@ -459,3 +468,5 @@ Per-OS setup notes:
 - **SKILL.md polish** — harder push to compact mode, Escape-in-web-apps warning, a11y-empty troubleshooting split between Electron and true-canvas cases.
 
 **0.8.1 features (now stable in 0.8.2):** unified blind/hybrid/vision agent (one loop, three modes), compact MCP surface (`--compact`, 6 tools, ~1.5k tokens — Anthropic Computer-Use style), Linux AT-SPI bridge (read-only), Wayland input routing via `ydotool`/`wtype`, cross-OS PlatformAdapter verified on Windows 11 + macOS 14 + Ubuntu 24. Model-agnostic (Claude, GPT, Gemini, Llama, Kimi, Ollama) over REST or MCP.
+
+> See [CHANGELOG.md](CHANGELOG.md) for full v0.8.x history.

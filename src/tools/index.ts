@@ -23,7 +23,7 @@ export type { ToolDefinition, ToolContext, ToolResult };
 export { toOpenAiFunctions, toJsonSchema };
 export { getCompactTools };
 
-/** Get all registered GRANULAR tools (the 72-tool surface). */
+/** Get all registered GRANULAR tools (the 74-tool surface). */
 export function getAllTools(): ToolDefinition[] {
   return [
     ...getDesktopTools(),

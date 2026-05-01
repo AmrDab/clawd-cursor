@@ -32,7 +32,7 @@
 
 Clawd Cursor is a **skill**, not an application. It gives an AI agent the ability to use the user's computer &mdash; mouse, keyboard, screen, windows, browser &mdash; the same way a human would.
 
-You install it once. Any tool-calling agent on the machine &mdash; Claude Code, Cursor, Windsurf, OpenClaw, the Anthropic Agent SDK, or a bring-your-own-model setup &mdash; picks it up automatically through MCP or the skill registry. The agent then knows how to click, type, read the screen, open apps, and drive GUIs whenever the task requires it.
+You install it once. Any tool-calling agent on the machine &mdash; Claude Code, Cursor, Windsurf, OpenClaw, the Claude Agent SDK, or a bring-your-own-model setup &mdash; picks it up through MCP or the skill registry once configured. The agent then knows how to click, type, read the screen, open apps, and drive GUIs whenever the task requires it.
 
 ```
 User: "Open Outlook and reply to the latest email from Sarah."
@@ -89,9 +89,9 @@ clawdcursor grant     # Accessibility + Screen Recording
 curl -fsSL https://clawdcursor.com/install.sh | bash
 ```
 
-The installer drops the skill into `~/.clawdcursor`, registers an MCP server, and copies `SKILL.md` into every detected agent's skill directory (Claude Code, OpenClaw, Cursor). Nothing needs to run in the foreground &mdash; agents invoke the skill on demand through MCP stdio.
+The installer clones the skill into `~/clawdcursor`, runs `npm install`, builds, and registers a global `clawdcursor` shim via `npm link`. Runtime state (auth token, pidfiles, logs) lives at `~/.clawdcursor/`. To wire the skill into an agent host, follow [Connect Your Agent](#connect-your-agent) below &mdash; the installer does not edit any host config files automatically.
 
-> Linux notes: install `tesseract-ocr` for OCR, `at-spi2-core` + `python3-gi` for accessibility, and `ydotool` (or `wtype`) for Wayland input.
+> Linux notes: install `tesseract-ocr` for OCR, `python3-gi` + `gir1.2-atspi-2.0` for accessibility (the AT-SPI typelib `python3-gi` consumes), and `ydotool` (or `wtype`) for Wayland input.
 
 ---
 
@@ -101,7 +101,7 @@ The skill is transport-agnostic. Every agent below exposes the same tool catalog
 
 ### Claude Code
 
-Already done. The installer writes an MCP entry to `~/.claude/settings.json`. Claude Code picks up `clawdcursor` automatically on next start. If you are configuring it manually:
+Add the MCP entry to `~/.claude/settings.json` (the installer leaves agent host config untouched, so this step is required):
 
 ```jsonc
 // ~/.claude/settings.json
@@ -127,7 +127,7 @@ The skill metadata in [SKILL.md](SKILL.md) tells OpenClaw how to install, bootst
 
 Any MCP-aware editor. Add a stdio MCP entry pointing to `clawdcursor mcp --compact`. Refer to the host's MCP configuration docs.
 
-### Anthropic Agent SDK / bring-your-own-model
+### Claude Agent SDK / bring-your-own-model
 
 The skill also exposes a local REST surface for agents that do not speak MCP. Start the skill server once, then discover tools at `GET http://127.0.0.1:3847/tools?mode=compact` and call them at `POST /execute/:name`. Bearer-token auth; token written to `~/.clawdcursor/token`. See [API](#api) below.
 
@@ -141,13 +141,15 @@ The skill exposes two catalogs side by side. Agents pick the one that fits.
 
 Anthropic `computer_20250124`-style: one tool per capability, with an `action` enum for the verb. Small prompt footprint (~1,500 tokens), easy for a model to learn zero-shot, the default for most agents.
 
-| Tool | Actions |
+Most-used actions per compound below. The full enum is at `GET /tools?mode=compact` or via MCP `list_tools`.
+
+| Tool | Most-used actions |
 |---|---|
-| `computer` | `screenshot`, `click`, `double_click`, `right_click`, `hover`, `move_relative`, `scroll`, `drag`, `drag_path`, `type`, `key`, `wait` |
-| `accessibility` | `read_tree`, `find`, `get_element`, `focused`, `invoke`, `focus`, `set_value`, `get_value`, `expand`, `collapse`, `toggle`, `select`, `state`, `wait_for` |
-| `window` | `list`, `active`, `focus`, `maximize`, `minimize`, `restore`, `close`, `resize`, `open_app`, `open_file`, `open_url`, `navigate` |
+| `computer` | `screenshot`, `click`, `double_click`, `right_click`, `triple_click`, `hover`, `scroll`, `scroll_horizontal`, `drag`, `drag_path`, `type`, `key`, `wait` |
+| `accessibility` | `read_tree`, `find`, `get_element`, `focused`, `invoke`, `focus`, `set_value`, `get_value`, `expand`, `collapse`, `toggle`, `select`, `state`, `list_children`, `wait_for` |
+| `window` | `list`, `active`, `focus`, `maximize`, `minimize`, `restore`, `close`, `resize`, `list_displays`, `screen_size`, `open_app`, `open_file`, `open_url`, `switch_tab`, `navigate` |
 | `system` | `clipboard_read`, `clipboard_write`, `system_time`, `ocr`, `undo`, `shortcuts_list`, `shortcuts_run`, `delegate`, `detect_webview`, `relaunch_with_cdp` |
-| `browser` | `connect`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
+| `browser` | `connect`, `page_context`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
 | `task` | (no `action` enum &mdash; takes `{instruction: string}` and routes through the full pipeline) |
 
 ### Granular &mdash; 74 individual tools
@@ -159,9 +161,9 @@ Full catalog for agents that prefer one tool per verb. Sample of categories belo
 | Perception | `read_screen`, `desktop_screenshot`, `desktop_screenshot_region`, `ocr_read_screen`, `smart_read` |
 | Mouse | `mouse_click`, `mouse_double_click`, `mouse_drag`, `mouse_drag_stepped`, `mouse_scroll` |
 | Keyboard | `key_press`, `type_text`, `smart_type`, `shortcuts_list`, `shortcuts_execute` |
-| Window / App | `focus_window`, `open_app`, `get_windows`, `invoke_element`, `detect_webview_apps` |
+| Window / App | `focus_window`, `open_app`, `get_windows`, `get_active_window`, `detect_webview_apps` |
 | Browser (CDP) | `cdp_connect`, `cdp_click`, `cdp_type`, `cdp_read_text`, `cdp_evaluate` |
-| Accessibility | `find_element`, `wait_for_element`, `get_focused_element`, `a11y_expand`, `a11y_toggle` |
+| Accessibility | `find_element`, `invoke_element`, `wait_for_element`, `get_focused_element`, `a11y_expand`, `a11y_toggle` |
 | System | `read_clipboard`, `write_clipboard`, `get_system_time`, `undo_last`, `delegate_to_agent` |
 | Orchestration | `smart_click`, `navigate_browser`, `wait` |
 
@@ -249,7 +251,7 @@ Platform-specific code lives in `src/v2/platform/{windows,macos,linux}.ts` behin
 
 - **Node.js** 20 or newer
 - **macOS** &mdash; Xcode CLI tools (`xcode-select --install`), then `clawdcursor grant` for Accessibility + Screen Recording
-- **Linux** &mdash; `tesseract-ocr`, `at-spi2-core` + `python3-gi`, `ydotool` or `wtype` (Wayland)
+- **Linux** &mdash; `tesseract-ocr`, `python3-gi` + `gir1.2-atspi-2.0` (AT-SPI typelib), `ydotool` or `wtype` (Wayland)
 - **AI provider key** &mdash; configured on the agent side; the skill itself is model-agnostic
 
 ---
@@ -261,10 +263,14 @@ The CLI below is intended for humans diagnosing an install. Agents should not in
 ```
 clawdcursor doctor       Diagnose install, permissions, and platform bridges
 clawdcursor grant        Grant macOS permissions (interactive)
+clawdcursor consent      Manage desktop-control consent (--accept / --revoke / --status)
+clawdcursor status       Check readiness (consent, permissions, AI config)
 clawdcursor mcp          MCP stdio server (the primary skill transport)
 clawdcursor serve        REST-only tool server (bring-your-own-agent)
-clawdcursor dashboard    Open the web dashboard
 clawdcursor stop         Stop every running mode (mcp, serve, start)
+
+# The web dashboard is reachable at http://127.0.0.1:3847 while
+# `clawdcursor serve` (or `start`) is running — no separate command.
 
 # The two commands below exist for manual end-to-end testing only.
 # Real agents should not use these — they should call the skill through MCP.
@@ -272,7 +278,7 @@ clawdcursor start        Run the built-in autonomous agent (testing)
 clawdcursor task <t>     Send a task to that agent (testing)
 
 Options:
-  --port <port>          Default: 3847 (start, serve, stop, task, status)
+  --port <port>          Default: 3847 (start, serve, stop, task)
   --compact              MCP only: expose 6 compound tools instead of 74 granular.
                          For REST/serve, use the `?mode=compact` query parameter
                          on `GET /tools` instead.

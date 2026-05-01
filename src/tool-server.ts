@@ -71,7 +71,7 @@ export function createToolServer(ctx: ToolContext): express.Router {
 
   router.get('/tools', (_req, res) => {
     // `?mode=compact` → 6 compound tools (Anthropic Computer-Use style).
-    // Default   → 72 granular tools (back-compat, fine-grained control).
+    // Default   → 74 granular tools (back-compat, fine-grained control).
     const mode = _req.query.mode === 'compact' ? 'compact' : 'granular';
     const tools = mode === 'compact' ? getCompactSurface() : getAllTools();
     const format = _req.query.format as string;
@@ -154,8 +154,8 @@ export function createToolServer(ctx: ToolContext): express.Router {
     md += `**Two tool surfaces** are available over this server:\n\n`;
     md += `| Surface | Tools | Use when |\n`;
     md += `|---|---|---|\n`;
-    md += `| **Granular** (default) | 72 | You're writing code that calls individual primitives by name (\`mouse_click\`, \`type_text\`, …). |\n`;
-    md += `| **Compact** (\`?mode=compact\`) | 6 | You're an LLM agent. Collapses the 72 primitives into 6 compound tools with action enums — Anthropic Computer-Use style. ~12× fewer tool-catalog tokens. |\n\n`;
+    md += `| **Granular** (default) | 74 | You're writing code that calls individual primitives by name (\`mouse_click\`, \`type_text\`, …). |\n`;
+    md += `| **Compact** (\`?mode=compact\`) | 6 | You're an LLM agent. Collapses the 74 primitives into 6 compound tools with action enums — Anthropic Computer-Use style. ~12× fewer tool-catalog tokens. |\n\n`;
     md += `You are currently viewing the **${mode}** surface.\n\n`;
     md += `## Endpoints\n\n`;
     md += `- \`GET /tools\` — Granular schemas (OpenAI function format)\n`;

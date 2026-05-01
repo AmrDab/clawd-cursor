@@ -1010,7 +1010,7 @@ async function createToolContext() {
 program
   .command('mcp')
   .description('Run as MCP tool server over stdio (for Claude Code, Cursor, Windsurf, Zed)')
-  .option('--compact', 'Expose 6 compound tools instead of 72 granular ones (Anthropic Computer-Use style — recommended for most agents)')
+  .option('--compact', 'Expose 6 compound tools instead of 74 granular ones (Anthropic Computer-Use style — recommended for most agents)')
   .action(async (opts: { compact?: boolean }) => {
     // Single-instance guard (MCP servers can accumulate when editors restart them)
     const existingMcpPid = claimPidFile('mcp');
@@ -1054,7 +1054,7 @@ program
     const server = new McpServer({ name: 'clawdcursor', version: '0.7.2' });
 
     // Register tools. `--compact` ships the 6 compound tools that mirror
-    // Anthropic's computer_20250124 shape; default is the 72-tool granular
+    // Anthropic's computer_20250124 shape; default is the 74-tool granular
     // surface (back-compat for existing MCP wirings).
     const tools = opts.compact ? getCompactSurface() : getAllTools();
     for (const tool of tools) {

@@ -3,10 +3,10 @@
  * primitive, Anthropic-Computer-Use-style.
  *
  * Why this exists:
- *   An agent driving clawdcursor via MCP otherwise sees 72 granular
+ *   An agent driving clawdcursor via MCP otherwise sees 74 granular
  *   tool schemas (~18,000 tokens of tool catalog). Most models
  *   over-think the choice, pick near-duplicates, and burn context.
- *   This file collapses the 72 tools into 6 action-discriminated
+ *   This file collapses the 74 tools into 6 action-discriminated
  *   compound tools — the same "1 tool with N sub-actions" shape that
  *   Anthropic uses for computer_20250124.
  *
@@ -22,7 +22,7 @@
  * pick which shape to consume.
  *
  * Selection:
- *   `clawdcursor mcp`             → 72 granular tools (back-compat)
+ *   `clawdcursor mcp`             → 74 granular tools (back-compat)
  *   `clawdcursor mcp --compact`   → 6 compound tools (this file)
  *   GET /tools?mode=compact      → REST gets the same compact schemas
  *
@@ -71,12 +71,14 @@ const COMPUTER_ACTIONS: ActionRoute[] = [
   { action: 'drag_path',     delegate: 'mouse_drag_stepped', argRemap: { path: 'path' } },
   { action: 'mouse_down',    delegate: 'mouse_down' },
   { action: 'mouse_up',      delegate: 'mouse_up' },
-  // Keyboard
+  // Keyboard — `combo` is the natural compound name for a key chord;
+  // it remaps to the granular `key_press`'s `key` parameter (see argRemap
+  // doc-comment above).
   { action: 'type',      delegate: 'type_text' },
-  { action: 'key',       delegate: 'key_press' },
-  { action: 'key_press', delegate: 'key_press' },
-  { action: 'key_down',  delegate: 'key_down' },
-  { action: 'key_up',    delegate: 'key_up' },
+  { action: 'key',       delegate: 'key_press', argRemap: { combo: 'key' } },
+  { action: 'key_press', delegate: 'key_press', argRemap: { combo: 'key' } },
+  { action: 'key_down',  delegate: 'key_down',  argRemap: { combo: 'key' } },
+  { action: 'key_up',    delegate: 'key_up',    argRemap: { combo: 'key' } },
   // Flow
   { action: 'wait',      delegate: 'wait' },
 ];

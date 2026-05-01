@@ -328,7 +328,7 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v0.8.4: dependency security audit · vite / picomatch / path-to-regexp / hono CVE patches</div>
+    <div class="hero-badge"><div class="pulse"></div> v0.8.4: dependency security audit · vite / picomatch / path-to-regexp / hono / follow-redirects CVE patches</div>
     <h1>Give your AI agent<br><span class="gr">eyes and hands</span><br>on your desktop</h1>
     <p>Any tool-calling model. Any OS. <strong>74 granular tools or 6 compact compound tools</strong> (Anthropic Computer-Use style). Blind-first pipeline tries accessibility trees before pixels — ~12× cheaper per turn than vision-only agents.</p>
     <div class="hero-btns">
@@ -523,23 +523,23 @@
     <div class="code-box" id="os-windows" style="display:block;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>PowerShell</span></div>
       <pre><code><span class="c-cmd">powershell -c</span> <span class="c-string">"irm https://clawdcursor.com/install.ps1 | iex"</span>
-<span class="c-cmd">clawdcursor start</span></code></pre>
+<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install + wire into your agent (MCP)</span></code></pre>
     </div>
 
     <div class="code-box" id="os-macos" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
-<span class="c-cmd">clawdcursor grant</span>  <span class="c-comment"># Accessibility + Screen Recording</span>
-<span class="c-cmd">clawdcursor start</span></code></pre>
+<span class="c-cmd">clawdcursor grant</span>   <span class="c-comment"># Accessibility + Screen Recording</span>
+<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install + wire into your agent (MCP)</span></code></pre>
     </div>
 
     <div class="code-box" id="os-linux" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
-<span class="c-cmd">clawdcursor start</span></code></pre>
+<span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install + wire into your agent (MCP)</span></code></pre>
     </div>
 
-    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. The blind/hybrid/vision pipeline is unified — no flags needed.</p>
+    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. clawdcursor is a <em>skill</em> — your agent calls it through MCP. <code style="font-size:0.95em">clawdcursor start</code> exists for manual testing only.</p>
   </section>
 
 </div>
