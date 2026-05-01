@@ -1,6 +1,6 @@
 ---
 name: clawdcursor
-version: 0.8.4
+version: 0.8.5
 description: >
   The skill that gives AI agents eyes, hands, and a keyboard on a real desktop.
   When the user asks you to do something a human would normally do at their
@@ -449,10 +449,14 @@ Per-OS setup notes:
 
 ---
 
+**What's new in 0.8.5:**
+- **Compact-tool keyboard fix** — `computer({"action":"key","combo":"mod+s"})` now actually works. The remap `combo → key` documented in `compact.ts` since v0.8.1 was never implemented; it is now wired up across `key`, `key_press`, `key_down`, and `key_up` actions.
+- **Cost-tier ladder** — added an explicit T1/T2/T3/T4 ladder to SKILL.md (structured a11y → OCR → screenshot → vision) so agents know to escalate cost only when the cheaper tier fails. Plus a "no task is impossible" callout: GUI + mouse + keyboard = everything you need.
+- **Documentation accuracy pass** — 16 review findings closed across README, SKILL.md, docs/index.html, and source comments: corrected installer claims (no MCP auto-register, no SKILL.md propagation, install path is `~/clawdcursor` not `~/.clawdcursor`); fixed compact-action enum names (`accessibility.read_tree` not `read_screen`, `system.clipboard_read` not `read_clipboard`, etc.); fixed Linux a11y package (`gir1.2-atspi-2.0`, not `at-spi2-core`); removed non-existent `clawdcursor dashboard` command; renamed "Anthropic Agent SDK" → "Claude Agent SDK"; aligned tool counts at 74 across all docs and source comments.
+
 **What's new in 0.8.4:**
 - **Dependency security audit** — patches every fixable advisory in the lockfile: vite (3× high — path traversal, fs.deny bypass, WS read), path-to-regexp (high — ReDoS), picomatch (high — ReDoS + method injection), hono (moderate — JSX SSR HTML injection), follow-redirects (moderate — auth-header leak across cross-domain redirects). 7 moderate alerts in the `jimp → @nut-tree-fork/nut-js` chain remain — no upstream fix yet.
 - **README rewrite** — reframed clawdcursor as a *skill* rather than a standalone server. The `start`/`task` CLI is now explicitly testing-only; agents reach the skill via MCP (`clawdcursor mcp --compact`) or the local REST surface (`clawdcursor serve`).
-- **Compact-tool fix** — `computer({"action":"key","combo":"mod+s"})` now actually works. The remap `combo → key` documented in `compact.ts` since v0.8.1 was never implemented; it is now wired up across `key`, `key_press`, `key_down`, and `key_up` actions.
 
 **What's new in 0.8.3:**
 - **Idempotent `open_app`** — repeated `open_app("Outlook")` calls focus the existing window instead of stacking new instances. Closes the "N copies of Outlook" class of bug under any retry loop.
