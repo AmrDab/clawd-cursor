@@ -41,8 +41,9 @@ metadata:
 > Before reaching for any clawdcursor tool, ask:
 > 1. Is there a native API? (Gmail API, GitHub API, Slack API, Stripe API) → **use the API.**
 > 2. Is there a CLI? (`git`, `gh`, `aws`, `npm`, `curl`) → **use the CLI.**
-> 3. Can you edit the file directly? → **do that.**
-> 4. Is there a browser automation already wired up (Playwright, Puppeteer) for this exact site? → **use that.**
+> 3. Does the host OS expose a scripting interface for the target app? On macOS, `osascript` drives any app with a scripting dictionary (Mail, Notes, Reminders, Calendar, Messages, Music, Finder, Safari, Pages); on Windows, PowerShell + COM drives Office (`New-Object -ComObject Outlook.Application`) and most ActiveX-aware apps; on Linux, `gdbus` / `dbus-send` reaches Thunderbird, Evolution, and most GNOME apps. → **script it.** It uses the app's stored credentials, runs in microseconds, and never breaks when the toolbar moves.
+> 4. Can you edit the file directly? → **do that.**
+> 5. Is there a browser automation already wired up (Playwright, Puppeteer) for this exact site? → **use that.**
 >
 > **None of the above work? Now use clawdcursor.** It's for the last mile.
 
@@ -54,7 +55,7 @@ metadata:
 > 3. You **CAN** drive browsers, native apps, and system settings.
 > 4. You **MUST** respect safety tiers — Auto runs freely, Confirm requires user approval.
 > 5. You **MUST** ask the user before touching email, banking, messaging, or password managers.
-> 6. You **SHOULD** prefer direct tools (API, CLI, file edit) over GUI automation when available.
+> 6. You **SHOULD** prefer direct tools (API, CLI, OS scripting, file edit) over GUI automation when available.
 >
 > clawdcursor is your hands and eyes on the user's computer — used with their permission.
 
@@ -171,12 +172,16 @@ Pick clawdcursor when the task requires eyes and hands on a real desktop. Concre
 
 1. Is there a native API? (Gmail API, GitHub API, Slack API, Stripe API) → **use the API.**
 2. Is there a CLI? (`git`, `gh`, `aws`, `npm`, `curl`, `sqlite3`) → **use the CLI.**
-3. Can you edit the file directly on disk? → **do that.**
-4. Is there a browser automation already wired up (Playwright, Puppeteer) for this exact site? → **use that.**
+3. Does the host OS expose a scripting interface for the target app? → **script it.** A 5-line `osascript` (macOS), PowerShell COM call (Windows), or `gdbus` invocation (Linux) is faster, more reliable, and uses the app's own stored credentials — no clicking, no vision, no token exchange.
+   - **macOS** — `osascript -e 'tell application "Mail" to send …'` works for any app with a scripting dictionary: Mail, Notes, Reminders, Calendar, Messages, Music, Finder, Safari, Pages, Keynote, Numbers, Terminal, iTerm. Also reachable via JXA (`osascript -l JavaScript`).
+   - **Windows** — `New-Object -ComObject Outlook.Application` (and equivalents for Word, Excel, PowerPoint, IE/Edge) covers almost the entire Office and ActiveX ecosystem. UIAutomation via PowerShell's `System.Windows.Automation` for everything else.
+   - **Linux** — `gdbus call` / `dbus-send` reaches Thunderbird, Evolution, Nautilus, and most GNOME-stack apps. KDE apps expose D-Bus interfaces by default.
+4. Can you edit the file directly on disk? → **do that.**
+5. Is there a browser automation already wired up (Playwright, Puppeteer) for this exact site? → **use that.**
 
 If and only if none of those apply, use clawdcursor. It's the last mile.
 
-In OpenClaw terminology: clawdcursor is a **skill** (packaged workflow) that ultimately dispatches to **tools** (primitive API / CLI / GUI ops). Route API / CLI / file-edit tools first; reach for clawdcursor when only the GUI surface remains.
+In OpenClaw terminology: clawdcursor is a **skill** (packaged workflow) that ultimately dispatches to **tools** (primitive API / CLI / OS-script / GUI ops). Route API / CLI / scripting / file-edit tools first; reach for clawdcursor when only the GUI surface remains.
 
 ### ⚠️ Sensitive App Policy
 
