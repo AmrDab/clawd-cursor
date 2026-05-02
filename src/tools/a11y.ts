@@ -7,6 +7,26 @@
 
 import type { ToolDefinition, ToolContext } from './types';
 import { a11yToMouse } from './types';
+import type { UiElement, WindowInfo } from '../v2/platform/types';
+
+function formatWindow(w: WindowInfo): string {
+  return `${w.isMinimized ? '[MIN]' : '[OK]'} [${w.processName}] "${w.title}" pid:${w.processId}` +
+    (!w.isMinimized ? ` at (${w.bounds.x},${w.bounds.y}) ${w.bounds.width}x${w.bounds.height}` : ' (minimized)');
+}
+
+function formatElement(el: UiElement): string {
+  return `[${el.controlType}] "${el.name}"` +
+    (el.automationId ? ` id:${el.automationId}` : '') +
+    ` @${el.bounds.x},${el.bounds.y} ${el.bounds.width}x${el.bounds.height}` +
+    (el.disabled || el.enabled === false ? ' DISABLED' : '') +
+    (el.focused ? ' FOCUSED' : '');
+}
+
+async function getActivePid(ctx: ToolContext, processId?: number): Promise<number | undefined> {
+  if (typeof processId === 'number') return processId;
+  if (ctx.platform) return (await ctx.platform.getActiveWindow())?.processId;
+  return (await ctx.a11y.getActiveWindow())?.processId;
+}
 
 export function getA11yTools(): ToolDefinition[] {
   return [
@@ -19,7 +39,27 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'perception',
       handler: async ({ processId }, ctx) => {
         await ctx.ensureInitialized();
-        const active = processId ?? (await ctx.a11y.getActiveWindow())?.processId;
+        if (ctx.platform) {
+          const [windows, activeWindow, focused] = await Promise.all([
+            ctx.platform.listWindows().catch(() => []),
+            ctx.platform.getActiveWindow().catch(() => null),
+            ctx.platform.getFocusedElement().catch(() => null),
+          ]);
+          const active = processId ?? activeWindow?.processId;
+          const tree = await ctx.platform.getUiTree(active);
+          const sections = [
+            'WINDOWS',
+            windows.length ? windows.map(formatWindow).join('\n') : '(no windows found)',
+            '',
+            'FOCUSED WINDOW UI TREE',
+            tree.length ? tree.slice(0, 200).map(formatElement).join('\n') : '(no elements found)',
+            '',
+            'FOCUSED ELEMENT',
+            focused ? formatElement(focused) : '(no focused element)',
+          ];
+          return { text: sections.join('\n') };
+        }
+        const active = await getActivePid(ctx, processId);
         const context = await ctx.a11y.getScreenContext(active);
         return { text: context };
       },
@@ -32,12 +72,14 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'window',
       handler: async (_params, ctx) => {
         await ctx.ensureInitialized();
+        if (ctx.platform) {
+          const windows = await ctx.platform.listWindows();
+          if (!windows?.length) return { text: '(no windows found)' };
+          return { text: windows.map(formatWindow).join('\n') };
+        }
         const windows = await ctx.a11y.getWindows(true);
         if (!windows?.length) return { text: '(no windows found)' };
-        const lines = windows.map((w: any) =>
-          `${w.isMinimized ? '[MIN]' : '[OK]'} [${w.processName}] "${w.title}" pid:${w.processId}` +
-          (!w.isMinimized ? ` at (${w.bounds.x},${w.bounds.y}) ${w.bounds.width}x${w.bounds.height}` : ' (minimized)')
-        );
+        const lines = windows.map((w: any) => formatWindow(w));
         return { text: lines.join('\n') };
       },
     },
@@ -49,6 +91,11 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'window',
       handler: async (_params, ctx) => {
         await ctx.ensureInitialized();
+        if (ctx.platform) {
+          const win = await ctx.platform.getActiveWindow();
+          if (!win) return { text: '(no active window)' };
+          return { text: JSON.stringify(win) };
+        }
         const win = await ctx.a11y.getActiveWindow();
         if (!win) return { text: '(no active window)' };
         return {
@@ -67,6 +114,11 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'window',
       handler: async (_params, ctx) => {
         await ctx.ensureInitialized();
+        if (ctx.platform) {
+          const el = await ctx.platform.getFocusedElement();
+          if (!el) return { text: '(no focused element)' };
+          return { text: JSON.stringify(el) };
+        }
         const el = await ctx.a11y.getFocusedElement();
         if (!el) return { text: '(no focused element)' };
         return { text: JSON.stringify(el) };
@@ -205,12 +257,22 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'window',
       handler: async ({ name, controlType, automationId, processId }, ctx) => {
         await ctx.ensureInitialized();
+        if (ctx.platform) {
+          const elements = await ctx.platform.findElements({ name, controlType, processId });
+          const filtered = automationId
+            ? elements.filter((el: UiElement) => el.automationId === automationId)
+            : elements;
+          if (!filtered?.length) return { text: '(no elements found)' };
+          const lines = filtered.slice(0, 20).map(formatElement);
+          if (filtered.length > 20) lines.push(`... and ${filtered.length - 20} more`);
+          return { text: lines.join('\n') };
+        }
         const elements = await ctx.a11y.findElement({ name, controlType, automationId, processId });
         if (!elements?.length) return { text: '(no elements found)' };
-        const lines = elements.slice(0, 20).map((el: any) =>
-          `[${el.controlType}] "${el.name}" id:${el.automationId} @${el.bounds.x},${el.bounds.y} ${el.bounds.width}x${el.bounds.height}` +
-          (el.isEnabled === false ? ' DISABLED' : '')
-        );
+        const lines = elements.slice(0, 20).map((el: any) => formatElement({
+          ...el,
+          enabled: el.enabled ?? el.isEnabled,
+        }));
         if (elements.length > 20) lines.push(`... and ${elements.length - 20} more`);
         return { text: lines.join('\n') };
       },
@@ -223,6 +285,10 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'clipboard',
       handler: async (_params, ctx) => {
         await ctx.ensureInitialized();
+        if (ctx.platform) {
+          const text = await ctx.platform.readClipboard();
+          return { text: text || '(clipboard empty or non-text)' };
+        }
         const text = await ctx.a11y.readClipboard();
         return { text: text || '(clipboard empty or non-text)' };
       },
@@ -237,6 +303,10 @@ export function getA11yTools(): ToolDefinition[] {
       category: 'clipboard',
       handler: async ({ text }, ctx) => {
         await ctx.ensureInitialized();
+        if (ctx.platform) {
+          await ctx.platform.writeClipboard(text);
+          return { text: `Clipboard set (${text.length} chars)` };
+        }
         await ctx.a11y.writeClipboard(text);
         return { text: `Clipboard set (${text.length} chars)` };
       },

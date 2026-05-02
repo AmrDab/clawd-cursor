@@ -1044,6 +1044,7 @@ program
     console.log(`clawdcursor MCP mode starting... (${mode})`);
 
     const { getAllTools, getCompactSurface } = await import('./tools');
+    const { evaluateToolCall } = await import('./tools/safety-gate');
     const ctx = await createToolContext();
 
     // Dynamic import MCP SDK (ESM package from CJS)
@@ -1079,6 +1080,10 @@ program
         tool.description,
         hasParams ? zodParams : {},
         async (params: any) => {
+          const safetyError = evaluateToolCall(tool, params ?? {});
+          if (safetyError) {
+            return { content: [{ type: 'text', text: safetyError.text }], isError: true };
+          }
           const result = await tool.handler(params, ctx);
           const content: any[] = [];
           if (result.image) {

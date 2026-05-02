@@ -16,6 +16,7 @@ import express from 'express';
 import { getAllTools, getCompactSurface, toOpenAiFunctions, getTool, toJsonSchema } from './tools';
 import type { ToolContext } from './tools';
 import type { ToolDefinition } from './tools/types';
+import { evaluateToolCall } from './tools/safety-gate';
 import { VERSION } from './version';
 
 /**
@@ -111,6 +112,10 @@ export function createToolServer(ctx: ToolContext): express.Router {
       const validationError = validateParams(body, tool);
       if (validationError) {
         return res.status(400).json({ tool: name, text: validationError, isError: true });
+      }
+      const safetyError = evaluateToolCall(tool, body);
+      if (safetyError) {
+        return res.status(403).json({ tool: name, text: safetyError.text, isError: true });
       }
       const result = await tool.handler(body, ctx);
 
