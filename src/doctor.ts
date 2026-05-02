@@ -494,7 +494,6 @@ export async function runDoctor(opts: {
     const smokeKey = smokeScan?.apiKey || '';
 
     // Quick round-trip: read active window title via a11y, ask LLM to echo it
-    let smokeOk = false;
     try {
       const smokeA11y = new AccessibilityBridge();
       const activeWin = await smokeA11y.getActiveWindow();
@@ -524,7 +523,7 @@ export async function runDoctor(opts: {
         smokeText = data.content?.[0]?.text || '';
       }
 
-      smokeOk = smokeText.includes('SMOKE_PASS');
+      const smokeOk = smokeText.includes('SMOKE_PASS');
       if (smokeOk) {
         console.log(`   ✅ A11y → LLM round-trip passed (window: "${windowTitle}")`);
         results.push({ name: 'Smoke test (a11y→LLM)', ok: true, detail: `Window "${windowTitle}" — model confirmed` });

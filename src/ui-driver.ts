@@ -945,6 +945,7 @@ export class UIDriver {
       if (err instanceof SyntaxError) {
         throw new Error(
           `Invalid JSON from ${path.basename(scriptPath)}: ${trimmed.substring(0, 200)}`,
+          { cause: err },
         );
       }
       throw err;

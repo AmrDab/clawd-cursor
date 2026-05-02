@@ -220,7 +220,6 @@ export class OcrReasoner {
     }
 
     // Guide prompt is loaded lazily on step 0 after target window is detected
-    let guidePrompt = '';
     let guideLoaded = false;
 
     // Build conversation history for context (sliding window applied before each LLM call)
@@ -345,7 +344,7 @@ export class OcrReasoner {
               try {
                 const { getGuidePrompt } = require('./guide-loader');
                 // Try process name first (more specific), then title
-                guidePrompt = getGuidePrompt(activeWin.processName) || getGuidePrompt(this.currentAppProcess.split(' ')[0]);
+                const guidePrompt = getGuidePrompt(activeWin.processName) || getGuidePrompt(this.currentAppProcess.split(' ')[0]);
                 if (guidePrompt) {
                   console.log(`   [OCR] 📖 Loaded app guide for "${activeWin.processName}"`);
                   // Inject guide into the system prompt (first message)

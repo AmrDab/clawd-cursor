@@ -140,7 +140,7 @@ export const mouseCompound: UnifiedTool = {
         return { success: true, text: `Dragged (${sx},${sy})→(${ex},${ey})` };
       }
       case 'drag_stepped': {
-        let points: Array<{ x: number; y: number }> = [];
+        let points: Array<{ x: number; y: number }>;
         try { points = JSON.parse(String(args.path ?? '[]')); }
         catch { return { success: false, text: 'drag_stepped: path must be JSON array of {x,y}' }; }
         if (!Array.isArray(points) || points.length < 2) {

@@ -510,14 +510,10 @@ export class SmartInteractionLayer {
 
     console.log(`   🔄 Smart Interaction: starting ReAct loop (max ${MAX_REACT_STEPS} steps)...`);
 
-    // Track current a11y state for polling
-    let currentA11yState = '';
-
     for (let step = 0; step < MAX_REACT_STEPS; step++) {
       // 1. Get FRESH a11y snapshot each iteration
       const currentWindow = await this.a11y.getActiveWindow();
       const a11yContext = await this.a11y.getScreenContext(currentWindow?.processId).catch(() => '');
-      currentA11yState = a11yContext;
 
       if (!a11yContext || a11yContext.includes('unavailable')) {
         if (step === 0) {
@@ -568,7 +564,7 @@ export class SmartInteractionLayer {
       if (action === 'wait') {
         // Don't count as a step — just poll silently
         console.log(`   ⏳ Auto-polling for state change (free step)...`);
-        currentA11yState = await this.pollUntilStateChanges(currentA11yState, 3000);
+        await this.pollUntilStateChanges(a11yContext, 3000);
         continue; // don't increment step counter
       }
 
@@ -632,9 +628,8 @@ export class SmartInteractionLayer {
 
       // After pressKey or typeAtFocus — poll for state change instead of burning LLM steps
       if (stepResult.action === 'pressKey' || stepResult.action === 'typeAtFocus') {
-        const updatedState = await this.pollUntilStateChanges(currentA11yState, 5000);
-        if (updatedState !== currentA11yState) {
-          currentA11yState = updatedState;
+        const updatedState = await this.pollUntilStateChanges(a11yContext, 5000);
+        if (updatedState !== a11yContext) {
           console.log(`   ✅ State changed after ${stepResult.description} — proceeding`);
         }
       }

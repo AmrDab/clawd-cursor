@@ -275,7 +275,7 @@ export class CDPDriver {
           const rect = el.getBoundingClientRect();
 
           // Generate a unique CSS selector inside evaluate where we have DOM access
-          let selector = '';
+          let selector: string;
           if (el.id) {
             selector = `#${el.id}`;
           } else {
