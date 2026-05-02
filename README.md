@@ -30,7 +30,7 @@
 
 ## What This Is
 
-Clawd Cursor is a **skill**, not an application. It gives an AI agent the ability to use the user's computer &mdash; mouse, keyboard, screen, windows, browser &mdash; the same way a human would.
+Clawd Cursor is a **skill**, not an application or a script bundle. It gives an AI agent the ability to use the user's computer &mdash; mouse, keyboard, screen, windows, browser &mdash; the same way a human would.
 
 You install it once. Any tool-calling agent on the machine &mdash; Claude Code, Cursor, Windsurf, OpenClaw, the Claude Agent SDK, or a bring-your-own-model setup &mdash; picks it up through MCP or the skill registry once configured. The agent then knows how to click, type, read the screen, open apps, and drive GUIs whenever the task requires it.
 
@@ -46,9 +46,23 @@ Agent  →  window({"action":"open_app","name":"Outlook"})
        → done (verified by ground-truth verifier)
 ```
 
-No app-specific integrations. No per-service API keys. No cloud round-trip &mdash; everything runs locally on `127.0.0.1`. If it renders on screen, the agent can read it and act on it.
+No app-specific integrations. No bundled workflow scripts for individual services. No per-service API keys. No cloud round-trip &mdash; everything runs locally on `127.0.0.1`. If it renders on screen, the agent can read it and act on it.
 
 **Design principles.** Model-agnostic (Claude, GPT, Gemini, local models via Ollama). OS-agnostic (a single `PlatformAdapter` handles Windows, macOS, and Linux behind one interface). Skill-first (the AI is the primary consumer; the CLI exists for testing).
+
+---
+
+## Use It As Fallback
+
+Clawd Cursor is for the last mile of desktop automation. Agents should prefer more direct and deterministic paths first:
+
+1. Use a native API when one exists.
+2. Use a CLI or script when the task can be expressed reliably that way.
+3. Edit files directly when the requested change is on disk.
+4. Use browser automation when the page is already scriptable through a DOM or test harness.
+5. Use Clawd Cursor when the remaining surface is a real GUI that needs screen reading, clicks, typing, drag gestures, window focus, or OS-level interaction.
+
+In other words: Clawd Cursor is not a replacement for scripts, APIs, CLIs, or file edits. It also does not include app-specific scripts as its core product. It exposes OS-level desktop-control tools so an agent can handle the cases those cleaner paths cannot reach.
 
 ---
 
