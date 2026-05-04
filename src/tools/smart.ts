@@ -216,35 +216,64 @@ export function getSmartTools(): ToolDefinition[] {
         // OCR finds text coordinates, a11y tries invoke — whoever succeeds first wins.
 
         // Start OCR scan
-        const ocrPromise = (async (): Promise<{ x: number; y: number; text: string } | null> => {
+        const ocrPromise = (async (): Promise<{ x: number; y: number; text: string; warning?: string } | null> => {
           try {
             const engine = getOcr();
             if (!engine.isAvailable()) return null;
             const result = await engine.recognizeScreen();
             const targetLower = target.toLowerCase();
 
-            let bestMatch: any = null;
-            let bestScore = 0;
-
-            for (const el of result.elements) {
-              const elText = el.text.toLowerCase();
-              if (elText === targetLower) {
-                bestMatch = el; bestScore = 1; break;
+            // Pick best OCR candidate from a (possibly filtered) subset.
+            // Returns null when no candidate clears the 0.3 score threshold.
+            const pickBest = (candidates: typeof result.elements) => {
+              let best: typeof candidates[number] | null = null;
+              let bestScore = 0;
+              for (const el of candidates) {
+                const elText = el.text.toLowerCase();
+                if (elText === targetLower) { best = el; bestScore = 1; break; }
+                if (elText.includes(targetLower) || targetLower.includes(elText)) {
+                  const score = Math.min(elText.length, targetLower.length) / Math.max(elText.length, targetLower.length);
+                  if (score > bestScore) { best = el; bestScore = score; }
+                }
               }
-              if (elText.includes(targetLower) || targetLower.includes(elText)) {
-                const score = Math.min(elText.length, targetLower.length) / Math.max(elText.length, targetLower.length);
-                if (score > bestScore) { bestMatch = el; bestScore = score; }
+              return best && bestScore > 0.3 ? { match: best, score: bestScore } : null;
+            };
+
+            // Prefer matches inside the focused window's bounds — full-screen OCR can
+            // see text in background windows (e.g. Outlook visible behind a "Pick an
+            // account" dialog showing the same email). Only widen to the full screen
+            // when the foreground window has no match. See issue #71.
+            const winBounds = activeWin?.bounds;
+            let pick: { match: typeof result.elements[number]; score: number } | null = null;
+            let warning: string | undefined;
+
+            if (winBounds && winBounds.width > 0 && winBounds.height > 0) {
+              const inWindow = result.elements.filter(el => {
+                const cx = el.x + el.width / 2;
+                const cy = el.y + el.height / 2;
+                return cx >= winBounds.x && cx < winBounds.x + winBounds.width &&
+                       cy >= winBounds.y && cy < winBounds.y + winBounds.height;
+              });
+              pick = pickBest(inWindow);
+            }
+
+            // Fall through to full-screen only if foreground produced nothing.
+            // Annotate the response so the caller has a signal that the click may
+            // have landed in a background window.
+            if (!pick) {
+              pick = pickBest(result.elements);
+              if (pick && winBounds && winBounds.width > 0) {
+                warning = 'matched outside focused window';
               }
             }
 
-            if (bestMatch && bestScore > 0.3) {
-              return {
-                x: bestMatch.x + Math.round(bestMatch.width / 2),
-                y: bestMatch.y + Math.round(bestMatch.height / 2),
-                text: bestMatch.text,
-              };
-            }
-            return null;
+            if (!pick) return null;
+            return {
+              x: pick.match.x + Math.round(pick.match.width / 2),
+              y: pick.match.y + Math.round(pick.match.height / 2),
+              text: pick.match.text,
+              warning,
+            };
           } catch { return null; }
         })();
 
@@ -292,7 +321,8 @@ export function getSmartTools(): ToolDefinition[] {
         if (ocrMatch) {
           await ctx.desktop.mouseClick(ocrMatch.x, ocrMatch.y);
           ctx.a11y.invalidateCache();
-          return { text: `Clicked "${target}" via OCR (matched "${ocrMatch.text}" at ${ocrMatch.x},${ocrMatch.y})` };
+          const warningSuffix = ocrMatch.warning ? `  [WARNING: ${ocrMatch.warning} — verify with read_screen]` : '';
+          return { text: `Clicked "${target}" via OCR (matched "${ocrMatch.text}" at ${ocrMatch.x},${ocrMatch.y})${warningSuffix}` };
         }
 
         // a11y had bounds but couldn't invoke — coordinate fallback

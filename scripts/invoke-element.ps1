@@ -149,29 +149,59 @@ try {
     # Execute the requested action
     switch ($Action) {
         "click" {
-            # Try InvokePattern first, then fall back to SetFocus + boundary click info
-            try {
-                $pattern = $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-                $pattern.Invoke()
-                [Console]::Out.Write((@{ success = $true; action = "click"; method = "InvokePattern" } | ConvertTo-Json -Compress))
-            } catch {
-                # If InvokePattern not supported, try TogglePattern (for checkboxes)
+            # Some web/Electron buttons advertise InvokePattern but block on Invoke()
+            # without ever throwing — caller would hang indefinitely. Wrap the pattern
+            # call in a Task with a 2s timeout, then fall through to the bounds-fallback
+            # JSON the legacy catch path already produces. See issue #71.
+            $rect = $element.Current.BoundingRectangle
+            $clickX = [int]($rect.X + $rect.Width / 2)
+            $clickY = [int]($rect.Y + $rect.Height / 2)
+
+            # Result is mutated by the Task action via reference (PSCustomObject).
+            # Closure capture (.GetNewClosure()) keeps $element and $invokeResult
+            # references valid inside the Task delegate.
+            $invokeResult = [PSCustomObject]@{ Method = $null; Error = $null }
+            $localElement = $element
+            $invokeBlock = {
                 try {
-                    $togglePattern = $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
-                    $togglePattern.Toggle()
-                    [Console]::Out.Write((@{ success = $true; action = "click"; method = "TogglePattern" } | ConvertTo-Json -Compress))
+                    $p = $localElement.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                    $p.Invoke()
+                    $invokeResult.Method = "InvokePattern"
                 } catch {
-                    # Last resort: report bounds so caller can click by coordinates
-                    $rect = $element.Current.BoundingRectangle
-                    $clickX = [int]($rect.X + $rect.Width / 2)
-                    $clickY = [int]($rect.Y + $rect.Height / 2)
-                    [Console]::Out.Write((@{
-                        success  = $false
-                        action   = "click"
-                        error    = "No InvokePattern or TogglePattern supported. Use coordinate click."
-                        clickPoint = @{ x = $clickX; y = $clickY }
-                    } | ConvertTo-Json -Depth 5 -Compress))
+                    try {
+                        $p = $localElement.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                        $p.Toggle()
+                        $invokeResult.Method = "TogglePattern"
+                    } catch {
+                        $invokeResult.Error = $_.Exception.Message
+                    }
                 }
+            }.GetNewClosure()
+
+            $task = [System.Threading.Tasks.Task]::Run([System.Action]$invokeBlock)
+            $completedInTime = $task.Wait(2000)
+
+            if ($completedInTime -and $invokeResult.Method) {
+                # Pattern call returned within timeout — success
+                [Console]::Out.Write((@{ success = $true; action = "click"; method = $invokeResult.Method } | ConvertTo-Json -Compress))
+            } elseif ($completedInTime) {
+                # Pattern call returned but threw on both Invoke and Toggle — bounds fallback (legacy behaviour)
+                [Console]::Out.Write((@{
+                    success    = $false
+                    action     = "click"
+                    error      = "No InvokePattern or TogglePattern supported. Use coordinate click."
+                    clickPoint = @{ x = $clickX; y = $clickY }
+                } | ConvertTo-Json -Depth 5 -Compress))
+            } else {
+                # Hung past 2s — element advertises a pattern but does not honour it (typical for
+                # React/Chromium buttons wired to onclick). The Task is left to finish on its own;
+                # the PowerShell process will exit shortly and clean it up.
+                [Console]::Out.Write((@{
+                    success    = $false
+                    action     = "click"
+                    error      = "InvokePattern timed out after 2s (element advertises pattern but blocks on Invoke). Use coordinate click."
+                    clickPoint = @{ x = $clickX; y = $clickY }
+                } | ConvertTo-Json -Depth 5 -Compress))
             }
         }
         "set-value" {
