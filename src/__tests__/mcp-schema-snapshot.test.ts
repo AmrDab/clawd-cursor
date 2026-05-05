@@ -11,7 +11,6 @@
 
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
-import * as path from 'path';
 import { currentSnapshot, readStoredSnapshot, snapshotPath } from '../schema/snapshot';
 
 describe('MCP schema snapshot', () => {

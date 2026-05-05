@@ -6,7 +6,7 @@
  * correct from day one.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { CostMeter, priceFor } from '../pipeline/observability/cost-meter';
 import {
   newCorrelationId,

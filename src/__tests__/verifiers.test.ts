@@ -3,7 +3,7 @@
  * All a11y and LLM calls are mocked — no native desktop access.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // ── Mock native deps ──────────────────────────────────────────────────────────
 vi.mock('@nut-tree-fork/nut-js', () => ({
@@ -18,9 +18,8 @@ vi.mock('sharp', () => ({
   default: vi.fn(() => ({ resize: vi.fn().mockReturnThis(), png: vi.fn().mockReturnThis(), toBuffer: vi.fn().mockResolvedValue(Buffer.from('')) })),
 }));
 
-import { TaskVerifier, type VerifyResult } from '../verifiers';
+import { TaskVerifier } from '../verifiers';
 import type { AccessibilityBridge } from '../accessibility';
-import type { PipelineConfig } from '../providers';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function makeA11y(overrides?: Partial<any>): AccessibilityBridge {
@@ -33,18 +32,6 @@ function makeA11y(overrides?: Partial<any>): AccessibilityBridge {
     isShellAvailable: vi.fn().mockResolvedValue(true),
     warmup: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as any;
-}
-
-function makePipelineConfig(textModelOverride?: any): PipelineConfig {
-  return {
-    provider: 'openai',
-    providerKey: 'sk-test',
-    apiKey: 'sk-test',
-    layer1: { enabled: true },
-    layer2: { enabled: true, model: 'gpt-4o-mini', baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', provider: 'openai' },
-    layer3: { enabled: false, model: 'gpt-4o', baseUrl: '', apiKey: '', provider: 'openai' },
-    ...(textModelOverride ?? {}),
   } as any;
 }
 

@@ -1076,7 +1076,7 @@ export class A11yReasoner {
     };
   }
 
-  private parseResponse(response: string, step?: number): any {
+  private parseResponse(response: string, _step?: number): any {
     // Strip markdown code fences (haiku often wraps in ```json ... ```)
     const stripped = response.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
 
@@ -1101,7 +1101,7 @@ export class A11yReasoner {
         if (depth === 0) {
           try {
             return JSON.parse(stripped.slice(start, i + 1));
-          } catch (e) {
+          } catch {
             return { action: 'unsure', description: 'Failed to parse LLM JSON' };
           }
         }
@@ -1256,7 +1256,7 @@ export class A11yReasoner {
       this.cdpAvailable = true;
       const ctx = await this.cdpDriver.getPageContext();
       return '\n\n⚠️ CDP PAGE CONTEXT — you MUST use cdp_click/cdp_type/cdp_read_text actions (NOT key_press) to interact with this page:\n' + ctx;
-    } catch (err) {
+    } catch {
       this.cdpAvailable = false;
       this.cdpDriver = null;
       return null;

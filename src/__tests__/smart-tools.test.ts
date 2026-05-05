@@ -278,7 +278,7 @@ describe('Smart Tools', () => {
     it('clicks to focus when UIA focus fails but bounds available', async () => {
       mockInvokeElement.mockResolvedValue({ success: false, clickPoint: { x: 400, y: 250 } });
       const ctx = createCtx();
-      const result = await smartType.handler({ text: 'test', target: 'Input field' }, ctx);
+      await smartType.handler({ text: 'test', target: 'Input field' }, ctx);
       // Should click at coordinates directly (no a11yToMouse conversion)
       expect(mockMouseClick).toHaveBeenCalledWith(400, 250);
       expect(mockWriteClipboard).toHaveBeenCalledWith('test');
