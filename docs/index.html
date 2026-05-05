@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clawd Cursor v0.8.8</title>
-  <meta name="description" content="Clawd Cursor v0.8.8: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop. 75 granular tools or 6 compact compound tools. Windows, macOS, Linux.">
+  <meta name="description" content="Clawd Cursor v0.8.8 — one skill replaces a dozen APIs. Give your agent native desktop control: Gmail, Slack, Jira, Figma — if you can click it, your agent can too.">
   <meta property="og:title" content="Clawd Cursor v0.8.8">
-  <meta property="og:description" content="Blind-first desktop automation. 75 tools via REST + MCP, or 6 compact compound tools (1 per 12, ~12× fewer tokens). Any AI model, any OS.">
+  <meta property="og:description" content="One skill replaces a dozen APIs. Native desktop control for any tool-calling AI. Windows, macOS, Linux.">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://clawdcursor.com/">
@@ -16,37 +16,16 @@
 
   <!--
     AGENT-READABLE SUMMARY
-    clawdcursor v0.8.8: the skill that gives any AI agent eyes, hands, and a keyboard on a real desktop.
+    clawdcursor v0.8.8: a skill that gives any AI agent control of a real desktop.
 
-    Install: powershell -c "irm https://clawdcursor.com/install.ps1 | iex" (Windows)
-             curl -fsSL https://clawdcursor.com/install.sh | bash (macOS/Linux)
-    Commands: consent, doctor, grant, start, serve, mcp [--compact], task "..."
+    Install (Windows):  powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
+    Install (macOS/Linux): curl -fsSL https://clawdcursor.com/install.sh | bash
 
-    Transport:
-      • start (REST :3847, autonomous agent with built-in pipeline)
-      • serve (REST :3847, you reason + clawdcursor acts)
-      • mcp (stdio, 75 granular tools — back-compat)
-      • mcp --compact (stdio, 6 compound tools — recommended for LLM agents)
+    Connect via MCP (recommended): clawdcursor mcp --compact → 6 compound tools.
+    Connect via REST: clawdcursor serve → 75 granular tools on localhost:3847.
 
-    Two surfaces:
-      • Granular (default): 75 tools — mouse_click, type_text, read_screen,
-        cdp_*, smart_click, invoke_element, a11y_toggle/expand/select,
-        maximize_window, resize_window, detect_webview_apps, etc.
-      • Compact (?mode=compact or --compact): 6 action-discriminated compound
-        tools — computer, accessibility, window, system, browser, task.
-        Anthropic Computer-Use style. ~12× fewer tool-catalog tokens.
-
-    Unified pipeline (all modes): Router (zero LLM) → blind agent (a11y-first)
-      → hybrid (a11y + on-demand screenshot) → vision fallback. Picks the
-      cheapest path that works.
-
-    OS-agnostic: src/v2/platform/{macos,windows,linux}.ts — one PlatformAdapter
-      interface, one file per OS. No `if (IS_MAC)` branches in business logic.
-      Linux X11 + Wayland (ydotool/wtype) + AT-SPI a11y.
-    Providers (13+): Anthropic, OpenAI, Groq, Together, DeepSeek, Kimi, Gemini,
-      Ollama local, Mistral, xAI, Qwen, Fireworks, Cohere, Perplexity.
-    macOS: System Events keyboard (TCC-safe), nut-js mouse, `clawdcursor grant`
-      for permissions.
+    Cross-platform: Windows, macOS, Linux (X11 + Wayland).
+    Model-agnostic: any LLM with tool calling.
   -->
 
   <style>
@@ -299,8 +278,8 @@
   <!-- Hero -->
   <div class="hero">
     <div class="hero-badge"><div class="pulse"></div> v0.8.8 — latest stable</div>
-    <h1>Give your AI agent<br><span class="gr">eyes and hands</span><br>on your desktop</h1>
-    <p>Any tool-calling model. Any OS. <strong>75 granular tools or 6 compact compound tools</strong> (Anthropic Computer-Use style). Blind-first pipeline tries accessibility trees before pixels — ~12× cheaper per turn than vision-only agents.</p>
+    <h1>One skill replaces<br><span class="gr">a dozen APIs</span></h1>
+    <p>Give your agent a screen. Gmail, Slack, Jira, Figma — if you can click it, your agent can too. Native desktop control. No servers. No API keys per service.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -323,21 +302,20 @@
 
   <!-- Who -->
   <section class="sect">
-    <div class="sect-label">Use it your way</div>
-    <h2>No app integrations. No API keys per service.</h2>
-    <p class="sub">If it's on your screen, your AI can use it.</p>
+    <div class="sect-label">Two ways to use it</div>
+    <h2>Run it yourself, or hand it to your agent.</h2>
     <div class="who-grid">
       <div class="who-card human">
-        <h3>Tell it what to do</h3>
-        <p>Describe what you want. clawdcursor executes it.</p>
+        <h3>Test from the CLI</h3>
+        <p>Plain English in, actions out.</p>
         <div class="tag-row">
           <span class="tag g">clawdcursor doctor</span>
           <span class="tag g">clawdcursor start</span>
         </div>
       </div>
       <div class="who-card agent">
-        <h3>Connect your AI directly</h3>
-        <p>Add clawdcursor to get desktop control as a native tool.</p>
+        <h3>Wire it into your agent</h3>
+        <p>One MCP entry, desktop control appears as native tools.</p>
         <div class="tag-row">
           <span class="tag b">Claude Code</span>
           <span class="tag b">Cursor</span>
@@ -351,8 +329,8 @@
   <!-- Three modes -->
   <section class="sect" id="modes">
     <div class="sect-label">Setup</div>
-    <h2>Three ways to connect</h2>
-    <p class="sub">One server. Three modes. Same desktop access.</p>
+    <h2>Pick a transport.</h2>
+    <p class="sub">Same tools underneath.</p>
     <div class="modes-grid">
       <div class="mode-card b">
         <h3>MCP (Claude Code / Cursor / Windsurf)</h3>
@@ -395,93 +373,87 @@
 
   <!-- Unified Pipeline -->
   <section class="sect" id="pipeline">
-    <div class="sect-label">Unified Pipeline · blind-first by default</div>
-    <h2>Tries a11y first. Vision is the fallback.</h2>
-    <p class="sub">One loop, three modes. The pipeline picks the cheapest path that works: router → blind agent → hybrid → vision. Most tasks never touch a screenshot.</p>
+    <div class="sect-label">How it works</div>
+    <h2>Cheap paths first.</h2>
+    <p class="sub">A11y tree before pixels. Vision only when needed.</p>
 
     <div class="pipe-flow">
       <div class="pipe-step router">
         <h4><span class="pipe-num">1</span> Router</h4>
-        <span class="pipe-tag">Free · zero LLM</span>
-        <p>Regex shortcuts + knowledge guides for trivial tasks. "Open Safari", "navigate to github.com" resolves in under a second. Everything else falls through.</p>
+        <span class="pipe-tag">Zero LLM</span>
+        <p>Pattern-match shortcuts for common tasks. Sub-second.</p>
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step agent">
-        <h4><span class="pipe-num">2</span> Blind / Hybrid / Vision Agent</h4>
-        <span class="pipe-tag">One loop · 3 strategy modes</span>
-        <p>Blind tries the a11y tree first (cheapest). Hybrid allows on-demand screenshots. Vision is the fallback when the UI is custom-canvas. Native tool_use for Anthropic / tool_calls for OpenAI / prose-JSON for everyone else.</p>
+        <h4><span class="pipe-num">2</span> Agent</h4>
+        <span class="pipe-tag">One loop, three modes</span>
+        <p>Blind reads the a11y tree. Hybrid adds on-demand screenshots. Vision is the fallback for canvas UIs.</p>
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step verifier">
-        <h4><span class="pipe-num">3</span> Safety + Verification</h4>
+        <h4><span class="pipe-num">3</span> Safety</h4>
         <span class="pipe-tag">Single chokepoint</span>
-        <p>Every tool call routes through the SafetyLayer. Destructive verbs (send, delete, close_window) escalate to confirm. Stagnation detection forces the agent to try a different approach or give_up.</p>
+        <p>Every tool call gates through one safety layer. Destructive actions need confirmation.</p>
       </div>
     </div>
 
     <div class="feat-grid" style="grid-template-columns: repeat(2, 1fr);">
       <div class="feat-card">
         <div class="feat-icon">🎯</div>
-        <h4>Compact MCP surface</h4>
-        <p>6 compound tools — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code> — that collapse the 75 granular primitives into Anthropic-Computer-Use shape. ~12× smaller tool catalog. <code style="font-size:0.82em">clawdcursor mcp --compact</code> or <code style="font-size:0.82em">?mode=compact</code>.</p>
+        <h4>Compact tool surface</h4>
+        <p>6 compound tools — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code>. ~12× smaller catalog than the granular surface.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">🧩</div>
-        <h4>PlatformAdapter</h4>
-        <p>One interface, one file per OS: <code style="font-size:0.78em">macos.ts</code>, <code style="font-size:0.78em">windows.ts</code>, <code style="font-size:0.78em">linux.ts</code>. Replaces 142+ scattered <code style="font-size:0.78em">if (IS_MAC)</code> branches. Linux covers both X11 (nut-js) and Wayland (ydotool/wtype) with AT-SPI a11y.</p>
+        <h4>One adapter per OS</h4>
+        <p>Windows, macOS, Linux behind a single interface. Linux covers X11 and Wayland.</p>
       </div>
-    </div>
-
-    <div class="pipe-legacy">
-      <strong style="color:var(--text);font-weight:600;">One unified pipeline.</strong>
-      No more <code>--v2</code> vs legacy split. The 0.8.0 V2 agent and legacy cascade merged into a single blind-first loop. Existing <code>clawdcursor start</code> users get the unified pipeline automatically; the internal decision-maker is now the same whether you use REST, MCP, or the built-in autonomous agent.
     </div>
   </section>
 
   <!-- Features -->
   <section class="sect">
     <div class="sect-label">Features</div>
-    <h2>OS-agnostic. Model-agnostic.</h2>
-    <p class="sub">Business logic never sees <code style="font-size:0.85em">process.platform</code>. Any tool-calling LLM, any desktop.</p>
+    <h2>Any OS. Any model.</h2>
     <div class="feat-grid">
       <div class="feat-card">
         <div class="feat-icon">🍎</div>
-        <h4>macOS — TCC-safe</h4>
-        <p>System Events keyboard, nut-js mouse. <code style="font-size:0.82em">clawdcursor grant</code> walks you through Accessibility + Screen Recording.</p>
+        <h4>macOS</h4>
+        <p>TCC-safe. <code style="font-size:0.82em">clawdcursor grant</code> handles Accessibility + Screen Recording.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">🪟</div>
-        <h4>Windows — UIA native</h4>
-        <p>PowerShell + .NET UI Automation, Windows.Media.Ocr. x64 and ARM64.</p>
+        <h4>Windows</h4>
+        <p>Native UIA + Windows.Media.Ocr. x64 and ARM64.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">🐧</div>
-        <h4>Linux — AT-SPI + Tesseract</h4>
-        <p>Same 75 tools (or 6 compact), same MCP interface. X11 + Wayland supported. <code style="font-size:0.82em">sudo apt install tesseract-ocr python3-gi gir1.2-atspi-2.0</code> for full a11y; <code style="font-size:0.82em">ydotool</code> or <code style="font-size:0.82em">wtype</code> on Wayland for input.</p>
+        <h4>Linux</h4>
+        <p>X11 and Wayland. AT-SPI for a11y, Tesseract for OCR.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">🖱️</div>
-        <h4>Smart Tools</h4>
-        <p>Click by name, type by label, read text. Accessibility + OCR fallback — no screenshots needed.</p>
+        <h4>Smart tools</h4>
+        <p>Click by name, type by label, read screen. A11y first, OCR as fallback.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">⌨️</div>
-        <h4>Shortcuts Engine</h4>
-        <p><code style="font-size:0.82em">shortcuts_list</code> and <code style="font-size:0.82em">shortcuts_execute</code>. Platform-aware: Cmd on macOS, Ctrl elsewhere. Zero LLM cost.</p>
+        <h4>Shortcuts engine</h4>
+        <p>Platform-aware key combos — Cmd on macOS, Ctrl elsewhere. No LLM cost.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">📖</div>
-        <h4>App Guides (86+ apps)</h4>
-        <p>Community JSON guides with shortcuts and tips. <code style="font-size:0.82em">clawdcursor guides install excel</code></p>
+        <h4>App guides</h4>
+        <p>Optional community JSON guides for the autonomous-agent mode.</p>
       </div>
     </div>
   </section>
 
   <!-- Install -->
   <section id="install" class="sect">
-    <div class="sect-label">Get Started</div>
-    <h2>Two commands.</h2>
-    <p class="sub">Install, start. Providers auto-detected.</p>
+    <div class="sect-label">Install</div>
+    <h2>One line per OS.</h2>
+    <p class="sub">Providers auto-detected.</p>
 
     <div class="os-tabs">
       <button class="os-tab active" onclick="switchOS('windows')">Windows</button>
@@ -508,7 +480,7 @@
 <span class="c-cmd">clawdcursor doctor</span>  <span class="c-comment"># verify install — then add the MCP block to your agent host config</span></code></pre>
     </div>
 
-    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. clawdcursor is a <em>skill</em> — your agent calls it through MCP. <code style="font-size:0.95em">clawdcursor start</code> exists for manual testing only.</p>
+    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only. <code style="font-size:0.95em">clawdcursor start</code> is for manual testing — agents should use MCP.</p>
   </section>
 
 </div>
@@ -517,7 +489,7 @@
 <div class="wrap">
   <div class="cta">
     <h2>Give your AI a body.</h2>
-    <p>Open source. Any model. Your desktop.</p>
+    <p>Open source. Any model. Localhost only.</p>
     <a href="https://github.com/AmrDab/clawdcursor" class="btn-p">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
       Star on GitHub
