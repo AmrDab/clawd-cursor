@@ -5,6 +5,15 @@
  * to internal key identifiers used across the codebase.
  */
 
+/**
+ * Platform-aware "primary modifier" — `mod` resolves to Cmd on macOS and
+ * Ctrl on Windows/Linux. This matches the convention used by editor
+ * frameworks (CodeMirror, ProseMirror, Tiptap) and the v2 PlatformAdapter.
+ * Without this alias the legacy `NativeDesktop.keyPress` would either throw
+ * `Unknown key: "mod"` (Win/Linux) or silently drop the modifier on macOS.
+ */
+const PLATFORM_PRIMARY_MOD = process.platform === 'darwin' ? 'Super' : 'Control';
+
 /** Canonical key name map — input (case-insensitive) → normalized name */
 const KEY_ALIASES: Record<string, string> = {
   // Enter / Return
@@ -49,6 +58,10 @@ const KEY_ALIASES: Record<string, string> = {
   'cmd': 'Super',
   'command': 'Super',
   'command_l': 'Super',
+
+  // Platform-aware "primary" modifier — Cmd on macOS, Ctrl on Win/Linux.
+  // Resolved at module load via PLATFORM_PRIMARY_MOD above.
+  'mod': PLATFORM_PRIMARY_MOD,
 
   // Function keys
   'f1': 'F1', 'f2': 'F2', 'f3': 'F3', 'f4': 'F4',

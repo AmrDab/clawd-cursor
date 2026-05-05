@@ -109,6 +109,42 @@ export function getA11yDepthTools(): ToolDefinition[] {
       },
     },
 
+    // ── ValuePattern (text fields, combos, set value directly) ──
+
+    {
+      name: 'set_field_value',
+      description:
+        'Set the value of a named text field directly via accessibility — more ' +
+        'reliable than focus+type for forms (no IME issues, no autocomplete races). ' +
+        'Uses UIA ValuePattern on Windows and AXValue on macOS. Referenced as the ' +
+        'delegate for the compact `accessibility({"action":"set_value", ...})` route.',
+      parameters: {
+        name:        { type: 'string', description: 'Accessibility name of the field', required: true },
+        value:       { type: 'string', description: 'Value to write', required: true },
+        controlType: { type: 'string', description: 'Optional role filter (e.g. "Edit")', required: false },
+        processId:   { type: 'number', description: 'Scope to a process', required: false },
+      },
+      category: 'perception',
+      handler: async ({ name, value, controlType, processId }, ctx) => {
+        await ctx.ensureInitialized();
+        if (!ctx.platform) return needPlatform('set_field_value');
+        if (ctx.platform.platform === 'linux') return notSupportedOnLinux('set_field_value');
+        const pid = await resolveProcessId(ctx, processId);
+        const res = await ctx.platform.invokeElement({
+          name: String(name),
+          controlType,
+          processId: pid,
+          action: 'set-value',
+          value: String(value),
+        });
+        if (!res.success) {
+          return { text: `set_field_value failed for "${name}".`, isError: true };
+        }
+        const preview = String(value).length > 40 ? String(value).slice(0, 40) + '…' : String(value);
+        return { text: `Set "${name}" = "${preview}".` };
+      },
+    },
+
     // ── Toggle pattern (checkboxes, switches, toggle buttons) ──
 
     {

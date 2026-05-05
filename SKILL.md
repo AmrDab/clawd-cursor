@@ -27,7 +27,10 @@ metadata:
   openclaw:
     requires: {}
     install:
-      - npm install -g clawdcursor
+      # clawdcursor isn't published to the npm registry — `npm install -g clawdcursor`
+      # would 404. The documented installer clones the repo into ~/clawdcursor,
+      # runs npm install + build, and `npm link`s the global shim.
+      - curl -fsSL https://clawdcursor.com/install.sh | bash
       - clawdcursor consent --accept
     skill_dir: ~/.openclaw/workspace/skills/clawdcursor
 ---

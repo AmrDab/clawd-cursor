@@ -1287,6 +1287,36 @@
       }
     },
     {
+      "name": "set_field_value",
+      "description": "Set the value of a named text field directly via accessibility — more reliable than focus+type for forms (no IME issues, no autocomplete races). Uses UIA ValuePattern on Windows and AXValue on macOS. Referenced as the delegate for the compact `accessibility({\"action\":\"set_value\", ...})` route.",
+      "category": "perception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Accessibility name of the field"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value to write"
+          },
+          "controlType": {
+            "type": "string",
+            "description": "Optional role filter (e.g. \"Edit\")"
+          },
+          "processId": {
+            "type": "number",
+            "description": "Scope to a process"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ]
+      }
+    },
+    {
       "name": "shortcuts_execute",
       "description": "Execute a keyboard shortcut by describing what you want to do (e.g. \"scroll down\", \"close tab\", \"upvote\"). Uses fuzzy matching against the shortcuts database. Provide context (active app name) for app-specific shortcuts like Reddit or Outlook.",
       "category": "keyboard",

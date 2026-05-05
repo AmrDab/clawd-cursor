@@ -702,10 +702,13 @@ export class NativeDesktop extends EventEmitter {
     const key = parts[parts.length - 1] || keyCombo;
     const mods = parts.slice(0, -1).map(k => k.toLowerCase());
 
-    // Map modifier names to System Events syntax
+    // Map modifier names to System Events syntax.
+    // `mod` is the platform-aware "primary" modifier that resolves to Cmd
+    // on macOS — without this branch macKeyPress would silently type the
+    // bare letter (e.g. `mod+s` becomes a literal `s` keystroke).
     const modUsing: string[] = [];
     for (const m of mods) {
-      if (m === 'cmd' || m === 'command' || m === 'super') modUsing.push('command down');
+      if (m === 'cmd' || m === 'command' || m === 'super' || m === 'mod') modUsing.push('command down');
       else if (m === 'shift') modUsing.push('shift down');
       else if (m === 'alt' || m === 'option') modUsing.push('option down');
       else if (m === 'ctrl' || m === 'control') modUsing.push('control down');

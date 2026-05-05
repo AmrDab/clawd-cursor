@@ -10,9 +10,20 @@
  * path (text-agent, vision-agent, MCP direct, REST /action, playbooks).
  */
 
-/** Normalize a user-supplied combo for comparison — lowercase, trim, collapse whitespace. */
+/**
+ * Platform-aware substitution for the `mod` modifier — resolves to `cmd` on
+ * macOS and `ctrl` on Windows/Linux. Mirrors the `mod` alias in `src/keys.ts`
+ * so `mod+q` on macOS is treated the same as `cmd+q` for blocklist matching.
+ */
+const PLATFORM_MOD_LOWER = process.platform === 'darwin' ? 'cmd' : 'ctrl';
+
+/** Normalize a user-supplied combo for comparison — lowercase, trim, collapse whitespace, resolve `mod`. */
 export function normalizeCombo(combo: string): string {
-  return combo.toLowerCase().replace(/\s+/g, '').replace(/[+_-]+/g, '+');
+  const flat = combo.toLowerCase().replace(/\s+/g, '').replace(/[+_-]+/g, '+');
+  // Resolve the platform-aware `mod` token in any position so `mod+q` matches
+  // `cmd+q` on macOS and `ctrl+q` (etc.) on Win/Linux.
+  if (!flat.includes('mod')) return flat;
+  return flat.split('+').map(p => p === 'mod' ? PLATFORM_MOD_LOWER : p).join('+');
 }
 
 /** Base set stored in normalized form. */
