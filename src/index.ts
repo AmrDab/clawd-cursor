@@ -1011,6 +1011,11 @@ program
     const releaseMcp = () => { releasePidFile('mcp'); process.exit(0); };
     process.on('SIGINT', releaseMcp);
     process.on('SIGTERM', releaseMcp);
+    // Exit when our stdio parent dies (host crash, terminal close on Windows, etc.).
+    // Abrupt parent termination doesn't deliver SIGTERM on Windows, but the stdin
+    // pipe still closes — without this the MCP server lingers as a zombie.
+    process.stdin.on('end', releaseMcp);
+    process.stdin.on('close', releaseMcp);
   });
 
 // ── Tool Server (model-agnostic, no LLM needed) ──
