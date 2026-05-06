@@ -134,6 +134,23 @@ function releasePidFile(mode: 'start' | 'mcp' | 'serve'): void {
   }
 }
 
+/**
+ * Graceful exit on a startup-time init failure (bad API key, no providers,
+ * etc.). Synchronous `process.exit(N)` while async handles are mid-close
+ * triggers libuv asserts on Windows ("Assertion failed: !(handle->flags &
+ * UV_HANDLE_CLOSING), src\\win\\async.c:76") — so set the exit code, kick
+ * off cleanup, and let the event loop drain. A 2-second hard-kill safety
+ * net guarantees the process always exits even if a handle gets stuck.
+ */
+function gracefulExitOnInitFailure(code: number, agent: { disconnect: () => unknown }): void {
+  process.exitCode = code;
+  releasePidFile('start');
+  try { agent.disconnect(); } catch { /* non-fatal */ }
+  // Hard-kill safety net: if the loop hangs, force-exit after 2s.
+  // .unref() so the timer itself doesn't keep the loop alive.
+  setTimeout(() => process.exit(code), 2000).unref();
+}
+
 const program = new Command();
 
 async function isClawdInstance(port: number): Promise<boolean> {
@@ -394,16 +411,14 @@ program
             console.error(`   1. Update your API key in .env or environment variables`);
             console.error(`   2. Run: clawdcursor start   (will re-detect providers)`);
             console.error(`   Or run: clawdcursor doctor   to reconfigure manually\n`);
-            releasePidFile('start');
-            agent.disconnect();
-            process.exit(1);
+            gracefulExitOnInitFailure(1, agent);
+            return;
           } else if (err.name === 'LLMBillingError') {
             console.error(`\n${e('❌', '[ERR]')} API credits exhausted for ${pipelineConfig.provider.name}`);
             console.error(`   Add credits or switch providers, then restart.`);
             console.error(`   Run: clawdcursor doctor   to reconfigure\n`);
-            releasePidFile('start');
-            agent.disconnect();
-            process.exit(1);
+            gracefulExitOnInitFailure(1, agent);
+            return;
           } else {
             console.warn(`${e('⚠️', '[WARN]')} Could not validate API key: ${err.message?.substring(0, 100)}`);
             // Network error or timeout — don't exit, might be transient
@@ -420,9 +435,8 @@ program
           console.error(`   Option 2 (API key): Set an environment variable:`);
           console.error(`      ANTHROPIC_API_KEY, OPENAI_API_KEY, MOONSHOT_API_KEY, etc.\n`);
           console.error(`   Then run: clawdcursor start\n`);
-          releasePidFile('start');
-          agent.disconnect();
-          process.exit(1);
+          gracefulExitOnInitFailure(1, agent);
+          return;
         } else {
           console.log(`${e('✅', '[OK]')} Using externally configured models: text=${config.ai.model} | vision=${config.ai.visionModel}`);
         }

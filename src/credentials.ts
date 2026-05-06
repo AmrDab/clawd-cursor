@@ -406,15 +406,29 @@ export function resolveApiConfig(opts?: {
 }): ResolvedApiConfig {
   // Explicit CLI flags always win over auto-detection
   if (opts?.apiKey || opts?.provider || opts?.baseUrl) {
-    // If provider is specified but no API key, check environment variables for that provider
+    // If provider is specified but no API key, walk a defined precedence:
+    //   1. Provider-scoped env vars (e.g. KIMI_API_KEY)
+    //   2. External host auth-profiles (e.g. OpenClaw ~/.openclaw/.../auth-profiles.json)
+    //      — same store doctor's scanner reads, so per-provider lookups can never
+    //      disagree with what doctor told the user about.
+    //   3. Generic AI_API_KEY fallback
     let explicitApiKey = opts.apiKey || '';
+    const normalizedProvider = normalizeProvider(opts.provider) || '';
     if (!explicitApiKey && opts.provider) {
       const { PROVIDER_ENV_VARS } = require('./providers');
-      const envVarNames = PROVIDER_ENV_VARS[normalizeProvider(opts.provider) || ''] || [];
+      const envVarNames = PROVIDER_ENV_VARS[normalizedProvider] || [];
       for (const envVar of envVarNames) {
         if (process.env[envVar]) { explicitApiKey = process.env[envVar]!; break; }
       }
-      // Also check generic AI_API_KEY
+      if (!explicitApiKey && normalizedProvider) {
+        // External host (OpenClaw, etc.) — read the requested provider's key
+        // from auth-profiles, NOT a generic "best provider" guess. This closes
+        // the v0.8.8 bug where start fell back to the wrong provider's key.
+        const { getExternalProviderKey } = require('./external-creds');
+        const extKey = getExternalProviderKey(normalizedProvider);
+        if (extKey) explicitApiKey = extKey;
+      }
+      // Last resort: generic AI_API_KEY
       if (!explicitApiKey && process.env.AI_API_KEY) explicitApiKey = process.env.AI_API_KEY;
     }
     const explicitBaseUrl = normalizeBaseUrl(opts.baseUrl);
