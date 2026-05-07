@@ -122,9 +122,22 @@ export const PROVIDERS: Record<string, ProviderProfile> = {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
     authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
-    textModel: 'deepseek-chat',
-    visionModel: 'deepseek-chat',
-    textContextWindow: 64000,
+    // DeepSeek V4 (April 2026) — flagship `deepseek-v4-pro` (1.6T MoE,
+    // ~Claude-Opus-tier on coding, 1M context, ~7× cheaper than Opus).
+    // `deepseek-v4-flash` is the budget alternative (284B MoE).
+    // Legacy `deepseek-chat` and `deepseek-reasoner` deprecate 2026-07-24
+    // and map to V4-Flash non-thinking / thinking respectively. clawdcursor
+    // defaults to Pro for better tool-use reliability — users can override
+    // via --text-model or .clawdcursor-config.json.
+    textModel: 'deepseek-v4-pro',
+    // DeepSeek has no native vision model. The visionModel field is a
+    // placeholder so the provider profile stays uniform; for vision
+    // workflows pair with Anthropic / GPT-4o / Gemini Flash via a mixed
+    // pipeline (text=DeepSeek, vision=other).
+    visionModel: 'deepseek-v4-pro',
+    // V4 ships with a 1M-token context window. The 64k figure was the
+    // V3-era default.
+    textContextWindow: 1_000_000,
     openaiCompat: true,
     computerUse: false,
     supportsJsonMode: true,
