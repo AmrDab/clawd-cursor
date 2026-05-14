@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-14T06:14:04.625Z",
+  "guides": {
+    "discord": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "3fc7c38f10c2a95c"
+    },
+    "excel": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "a582f71fbd935f03"
+    },
+    "figma": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "47a4d3c712924655"
+    },
+    "gmail": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "76a0c80ab13ac1b0"
+    },
+    "mspaint": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "1dbc189dd000372a"
+    },
+    "olk": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "d3ae51dbe2f89964"
+    },
+    "outlook": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "f51276b975bd3630"
+    },
+    "slack": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "d9ca09db2c37780a"
+    },
+    "spotify": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "eeed3a237d8b704d"
+    },
+    "youtube": {
+      "version": "1.0.0",
+      "trust": "verified",
+      "upvotes": 0,
+      "downvotes": 0,
+      "submitter": "@AmrDab",
+      "etag": "e03ae6130c09be9e"
+    }
+  }
+}

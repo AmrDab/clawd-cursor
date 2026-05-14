@@ -1,0 +1,90 @@
+name: sync-app-guides
+
+# Mirrors the public guides registry into docs/app-guides/ so GitHub Pages
+# can serve them at https://clawdcursor.com/app-guides/{app}.json.
+#
+# Source-of-truth repo: https://github.com/AmrDab/clawdcursor-guides
+# Public URL the client expects:  https://clawdcursor.com/app-guides
+# How it works: this repo's docs/ is the Pages root (CNAME → clawdcursor.com),
+# so anything we drop into docs/app-guides/ is automatically served at the
+# canonical URL the clawdcursor binary defaults to.
+#
+# Triggers:
+#   - Hourly cron — catches PR merges on the guides repo without needing a
+#     cross-repo webhook or PAT.
+#   - workflow_dispatch — manual sync for impatient maintainers.
+#   - repository_dispatch (type: guides-updated) — guides repo's
+#     aggregate-index.yml can fire this for near-instant sync if wired
+#     (one-line addition there + a PAT secret here).
+#
+# What we sync:
+#   - index.json
+#   - every *.json at the source repo's root (excluding package*.json)
+#
+# We commit only on a real diff so the history stays clean.
+
+on:
+  schedule:
+    - cron: '0 * * * *'        # top of every hour
+  workflow_dispatch:
+  repository_dispatch:
+    types: [guides-updated]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-app-guides
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - name: Fetch guides from clawdcursor-guides
+        run: |
+          set -euo pipefail
+          mkdir -p docs/app-guides
+          SOURCE='https://raw.githubusercontent.com/AmrDab/clawdcursor-guides/main'
+
+          # 1) Pull index.json — it lists every guide.
+          echo "Fetching index.json..."
+          curl -fsSL "${SOURCE}/index.json" -o docs/app-guides/index.json
+
+          # 2) Parse the guides map and fetch each <app>.json.
+          APPS=$(node -e "const i=require('./docs/app-guides/index.json'); console.log(Object.keys(i.guides||{}).join(' '))")
+          echo "Apps to mirror: ${APPS}"
+
+          for app in $APPS; do
+            echo "  fetching ${app}.json..."
+            curl -fsSL "${SOURCE}/${app}.json" -o "docs/app-guides/${app}.json"
+          done
+
+          # 3) Drop any locally-mirrored JSON the index no longer lists
+          # (guide deletions upstream should propagate).
+          for f in docs/app-guides/*.json; do
+            name=$(basename "$f" .json)
+            if [ "$name" = "index" ]; then continue; fi
+            case " ${APPS} " in
+              *" ${name} "*) ;;
+              *) echo "  removing stale ${name}.json"; rm -f "$f" ;;
+            esac
+          done
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- docs/app-guides/; then
+            echo "No changes."
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add docs/app-guides/
+          git commit -m "chore(guides): sync docs/app-guides/ from clawdcursor-guides"
+          git push
