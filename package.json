@@ -61,7 +61,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.7.0",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^8.59.2",
