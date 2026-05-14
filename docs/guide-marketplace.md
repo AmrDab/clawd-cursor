@@ -3,7 +3,8 @@
 Status: live. Client implementation shipped in v0.9 Phase 3; the server-side
 repo went live the same release. This doc is the architecture spec.
 
-- **Public URL**: <https://clawdcursor.com/app-guides>
+- **Default client URL**: <https://raw.githubusercontent.com/AmrDab/clawdcursor-guides/main>
+- **Planned public URL**: <https://clawdcursor.com/app-guides>
 - **Source repo**: <https://github.com/AmrDab/clawdcursor-guides>
 - **Submissions**: PRs to the source repo. See its `CONTRIBUTING.md`.
 
@@ -190,7 +191,7 @@ first-principles reasoning, same as for any unknown app.
 ### Environment variables
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `CLAWD_GUIDES_REGISTRY_URL` | `https://clawdcursor.com/app-guides` | Base URL for fetches |
+| `CLAWD_GUIDES_REGISTRY_URL` | `https://raw.githubusercontent.com/AmrDab/clawdcursor-guides/main` | Base URL for fetches |
 | `CLAWD_GUIDES_REGISTRY_OFF` | unset | `1` to disable all remote fetches (bundled-only mode) |
 | `CLAWD_GUIDES_FETCH_TIMEOUT` | `4000` | Fetch timeout in ms |
 | `CLAWD_BUNDLED_GUIDES_DIR` | the build dir | Override bundle path (used by tests) |
@@ -231,8 +232,10 @@ Phase 3 shipped both the client and the server-side repo:
 
 ## What's left for full live operation
 
-The client defaults to `https://clawdcursor.com/app-guides`. That URL
-needs to map to the GitHub repo's raw content. Two options:
+The client currently defaults to GitHub raw content so `clawdcursor guides
+available` works before the production vanity route is live. The planned
+`https://clawdcursor.com/app-guides` URL still needs to map to the GitHub repo's
+raw content. Two options:
 
 ### Option A — Cloudflare / Vercel rewrite (recommended)
 

@@ -27,7 +27,7 @@ You see 6 compound tools: `computer`, `accessibility`, `window`, `system`,
 **MCP HTTP (for any HTTP-capable agent):**
 ```bash
 clawdcursor agent           # full daemon (with autonomous submit_task)
-clawdcursor agent --no-llm  # tool surface only, no built-in brain
+clawdcursor agent --no-llm  # tool surface only; skips built-in brain, scheduler startup, and credential validation
 ```
 JSON-RPC at `POST http://127.0.0.1:3847/mcp` — `tools/list` returns the catalog, `tools/call` invokes a tool. Auth via `Authorization: Bearer <token>` from `~/.clawdcursor/token`. Stateless — no session init handshake required.
 

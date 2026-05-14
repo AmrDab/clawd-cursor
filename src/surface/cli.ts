@@ -58,7 +58,7 @@ import * as path from 'path';
 import { migrateFromLegacyDir, getPackageRoot } from '../paths';
 import { ensureHostAppRunning, stopHostApp } from '../platform/native-helper';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Migrate data from legacy ~/.openclaw/clawdcursor/ to ~/.clawdcursor/
 migrateFromLegacyDir();
@@ -218,16 +218,15 @@ program
 //   GET  /mcp      — MCP SSE channel (auth)
 //   DELETE /mcp    — MCP session terminate (auth)
 //
-// v0.9 cleanup: the explicit `--no-llm` flag is gone. The daemon now
-// auto-detects whether an LLM is configured and adapts:
+// v0.9 daemon mode auto-detects whether an LLM is configured and adapts:
 //   - LLM available → autonomous agent + MCP tool surface (full mode)
 //   - LLM missing   → MCP tool surface only, agent disabled
 //                     (drives clawdcursor from an external host's brain)
 //
-// The valuable thing about the old --no-llm path was never the flag —
-// it was the fact that the preprocessor (pure regex, 0 LLM) could open
-// apps blindingly fast. That preprocessor still lives in core/preprocessor
-// and runs on every task regardless of LLM availability.
+// `--no-llm` is also supported as an explicit force-tools-only mode. That
+// matters for smoke tests, editor hosts, and users with stale credentials:
+// the daemon starts the HTTP MCP surface without validating credentials,
+// creating an Agent, or registering scheduled tasks.
 interface AgentModeOpts {
   port?: string;
   provider?: string;
@@ -239,10 +238,17 @@ interface AgentModeOpts {
   debug?: boolean;
   accept?: boolean;
   noVision?: boolean;
+  noLlm?: boolean;
   skipConsent?: boolean;
 }
 
 async function runAgentMode(opts: AgentModeOpts): Promise<void> {
+  // commander stores negated flags as `{ llm: false }` / `{ vision: false }`.
+  // Keep the internal explicit names so callers/tests can also pass noLlm /
+  // noVision directly.
+  const forceNoLlm = Boolean(opts.noLlm || (opts as any).llm === false);
+  const forceNoVision = Boolean(opts.noVision || (opts as any).vision === false);
+
   // Single-instance guard — uses the legacy `start` lockfile name so
   // existing `clawdcursor stop` sweeps still find it.
   const existingPid = claimPidFile('start');
@@ -287,7 +293,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   // If no AI providers are found we still boot: the MCP tool surface
   // works fine without an LLM (the host's brain drives it).
   const configPath = path.join(getPackageRoot(), '.clawdcursor-config.json');
-  if (!fs.existsSync(configPath)) {
+  if (!forceNoLlm && !fs.existsSync(configPath)) {
     console.log(`${e('🔍', '*')} First run — auto-detecting AI providers...\n`);
     const { quickSetup } = await import('./doctor');
     const pipeline = await quickSetup();
@@ -310,7 +316,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
       provider:    opts.provider,
       port:        opts.port,
       debug:       opts.debug,
-      noVision:    opts.noVision,
+      noVision:    forceNoVision,
     },
   });
 
@@ -337,7 +343,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   // Auto-detect LLM availability: if neither a text nor a vision model is
   // resolvable, the daemon still boots, but in tools-only mode. The MCP
   // surface is fully available; the autonomous-agent path is disabled.
-  const llmAvailable = Boolean(
+  const llmAvailable = !forceNoLlm && Boolean(
     resolved.apiKey || resolved.textApiKey || resolved.visionApiKey
     || (resolved.baseUrl && (resolved.model || resolved.visionModel))
     || (resolved.textBaseUrl && resolved.model)
@@ -588,6 +594,7 @@ program
   .option('--debug', 'Save screenshots to debug/ folder (off by default)')
   .option('--accept', 'Accept desktop control consent non-interactively and start')
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
+  .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .option('--skip-consent', 'Skip consent prompt (requires NODE_ENV=development)')
   .action(async (opts) => {
     await runAgentMode(opts);
@@ -606,6 +613,7 @@ program
   .option('--debug', 'Save screenshots to debug/ folder (off by default)')
   .option('--accept', 'Accept desktop control consent non-interactively and start')
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
+  .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .action(async (opts) => {
     // v0.9 PR7.4 — `start` is now a thin deprecation alias for `agent`.
     // The legacy /task /favorites /execute REST surface was deleted; callers
@@ -1207,7 +1215,7 @@ async function createToolContext() {
 program
   .command('mcp')
   .description('Run as MCP tool server over stdio (for Claude Code, Cursor, Windsurf, Zed)')
-  .option('--compact', 'Expose 6 compound tools instead of 89 granular ones (Anthropic Computer-Use style — recommended for most agents)')
+  .option('--compact', 'Expose 6 compound tools instead of 93 granular ones (Anthropic Computer-Use style — recommended for most agents)')
   .action(async (opts: { compact?: boolean }) => {
     // Single-instance guard (MCP servers can accumulate when editors restart them)
     const existingMcpPid = claimPidFile('mcp');
@@ -1272,7 +1280,7 @@ program
   .option('--skip-consent', 'Skip consent prompt (requires NODE_ENV=development)')
   .action(async (opts) => {
     console.warn(`${e('⚠', '[WARN]')} \`clawdcursor serve\` is deprecated; use \`clawdcursor agent\`. Removed in v0.10.`);
-    await runAgentMode(opts);
+    await runAgentMode({ ...opts, noLlm: true });
   });
 
 program

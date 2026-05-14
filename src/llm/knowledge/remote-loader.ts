@@ -29,7 +29,7 @@
  *
  * Environment knobs (read at every call so tests can mutate them):
  *   CLAWD_GUIDES_REGISTRY_URL  — base URL for fetches.
- *                                 default: https://raw.githubusercontent.com/clawdcursor/clawdcursor-guides/main
+ *                                 default: https://raw.githubusercontent.com/AmrDab/clawdcursor-guides/main
  *   CLAWD_GUIDES_REGISTRY_OFF  — set to "1" / "true" to disable remote
  *                                 fetches entirely (bundled-only mode).
  *   CLAWD_GUIDES_FETCH_TIMEOUT — fetch timeout in ms. default 4000.
@@ -43,7 +43,7 @@ import { lintGuide } from './guide-linter';
 import { getCached, setCached, touchUsage } from './cache';
 import type { AppGuide } from '../../core/pipeline-types';
 
-const DEFAULT_REGISTRY_URL = 'https://clawdcursor.com/app-guides';
+export const DEFAULT_REGISTRY_URL = 'https://raw.githubusercontent.com/AmrDab/clawdcursor-guides/main';
 const DEFAULT_TIMEOUT_MS = 4000;
 // URL layout: `${registryUrl()}/{app}.json` and `${registryUrl()}/index.json`.
 // The flat (no `/guides/` prefix) layout lets the user host this through any
@@ -70,7 +70,6 @@ function fetchTimeoutMs(): number {
  * exercises without the rest of the pipeline. Tests can stub console.warn.
  */
 function warn(event: string, data: Record<string, unknown>): void {
-  // eslint-disable-next-line no-console
   console.warn(`[guide-registry] ${event}`, data);
 }
 

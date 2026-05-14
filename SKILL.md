@@ -80,7 +80,7 @@ metadata:
 >   both palettes - request the compact catalog by filtering `tools/list`
 >   results to the 6 compound names below.
 >
-> Granular mode's 89 tools are kept for back-compat. Compact's 6 tools are ~14× smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
+> Granular mode's 93 tools are kept for back-compat. Compact's 6 tools are much smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
 
 If you connect via MCP with `--compact`, you get a single tool that takes the
 whole task:
@@ -227,8 +227,8 @@ v0.9 collapses everything onto **MCP — one protocol, two transports**. There i
 
 | Mode | Command | Transport | Brain | Tools available |
 |------|---------|-----------|-------|-----------------|
-| `mcp` | `clawdcursor mcp [--compact]` | stdio | **You** (editor host) | 89 granular (default) or 6 compact (`--compact`) |
-| `agent` (no LLM configured) | `clawdcursor agent` | HTTP `/mcp` | **You** (HTTP client) | 89 granular + 6 compact, both via the same `/mcp` endpoint |
+| `mcp` | `clawdcursor mcp [--compact]` | stdio | **You** (editor host) | 93 granular (default) or 6 compact (`--compact`) |
+| `agent --no-llm` or `agent` with no LLM configured | `clawdcursor agent --no-llm` | HTTP `/mcp` | **You** (HTTP client) | 93 granular + 6 compact, both via the same `/mcp` endpoint |
 | `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in LLM pipeline | All of the above PLUS the autonomous `submit_task` MCP tool — hand it a plain-English task |
 
 In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor reasons AND acts — call the `submit_task` MCP tool with a natural-language instruction, then poll `agent_status`.
@@ -253,7 +253,7 @@ The `start` and `serve` verbs from v0.8 still work as deprecation aliases (they 
 }
 ```
 
-**Granular - 89 individual tools (power-user, back-compat, larger prompt budget):**
+**Granular - 93 individual tools (power-user, back-compat, larger prompt budget):**
 ```json
 {
   "mcpServers": {
@@ -476,7 +476,7 @@ Per-OS setup notes:
 | Problem | Fix |
 |---|---|
 | Port 3847 not responding | `clawdcursor agent` - wait 2s - `GET /health` |
-| 401 Unauthorized (mid-session, unexpectedly) | The on-disk token at `~/.clawdcursor/token` was rotated by another clawdcursor process. `clawdcursor stop && clawdcursor agent --no-llm` to start fresh and re-read the token. |
+| 401 Unauthorized (mid-session, unexpectedly) | The on-disk token at `~/.clawdcursor/token` was rotated by another clawdcursor process. `clawdcursor stop && clawdcursor agent --no-llm` to start the HTTP MCP surface fresh without AI setup or scheduled tasks, then re-read the token. |
 | Empty a11y tree on a *native-looking* app | It's probably **Electron or WebView2** - olk (New Outlook), Teams, Discord, Slack, VS Code, Notion, Obsidian all render inside Chromium. Call `system({"action":"detect_webview"})` to confirm + get a relaunch-with-CDP hint. Once relaunched with `--remote-debugging-port=9222`, attach via `browser({"action":"connect"})` and you get the full DOM. |
 | Empty a11y tree on a *truly* custom-canvas app | Real canvas apps (Paint, Figma, games). Escalate to `computer({"action":"screenshot"})` + coord clicks, or `system({"action":"ocr"})` to read visible text with bounds. |
 | "Element not found" on invoke | The element isn't on-screen or has no a11y name. Read the tree first; if sparse, check `system({"action":"detect_webview"})` before falling back to coord click. |

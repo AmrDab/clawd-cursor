@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { fetchGuide, fetchIndex } from '../llm/knowledge/remote-loader';
+import { DEFAULT_REGISTRY_URL, fetchGuide, fetchIndex } from '../llm/knowledge/remote-loader';
 import { clearCache as clearGuideCache, getCached } from '../llm/knowledge/cache';
 import type { AppGuide } from '../core/pipeline-types';
 
@@ -146,6 +146,20 @@ describe('fetchIndex', () => {
     const out = await fetchIndex();
     expect(out).not.toBeNull();
     expect(out!.guides.reddit.upvotes).toBe(5);
+  });
+
+  it('defaults to the live GitHub raw registry', async () => {
+    const idx = {
+      schemaVersion: 1,
+      generatedAt: '2026-01-01T00:00:00Z',
+      guides: { reddit: { version: '1.0.0', trust: 'verified' } },
+    };
+    mockFetchOk(idx);
+    await fetchIndex();
+    expect(fetch).toHaveBeenCalledWith(
+      `${DEFAULT_REGISTRY_URL}/index.json`,
+      expect.objectContaining({ headers: { accept: 'application/json' } }),
+    );
   });
 
   it('returns null on network failure', async () => {

@@ -52,7 +52,7 @@ Sixty seconds from zero to a tool-calling agent on your desktop.
 |---|---|---|
 | AI lives in your editor (Claude Code, Cursor, Windsurf, Zed) | **`clawdcursor mcp`** | stdio MCP server. Editor spawns it on demand. No daemon, no port. |
 | You're building an agent that runs unattended | **`clawdcursor agent`** | HTTP MCP daemon on `127.0.0.1:3847`. Has its own LLM brain optionally configured via `doctor`. |
-| Your agent has its own brain — you just want the tools as an HTTP endpoint | **`clawdcursor agent --no-llm`** | Same daemon, no built-in pipeline. Pure tool surface. |
+| Your agent has its own brain — you just want the tools as an HTTP endpoint | **`clawdcursor agent --no-llm`** | Same daemon, no built-in pipeline, no scheduler startup, no credential validation. Pure tool surface. |
 
 **Windows (PowerShell):**
 
@@ -187,7 +187,7 @@ Anthropic `computer_20250124`-style: one tool per capability, an `action` enum f
 | `browser` | `connect`, `page_context`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
 | `task` | `{instruction: string}` &mdash; hand off the whole task to the pipeline. No `action` enum. |
 
-### Granular &mdash; 89 individual tools
+### Granular &mdash; 93 individual tools
 
 One schema per verb. Use this when your runtime requires every primitive as a top-level tool. The full catalog is visible through MCP `tools/list` on either transport.
 
@@ -208,7 +208,7 @@ task({ instruction: "open Notepad and type hello" }) // full pipeline
 
 For unfamiliar apps, the agent reasons from screenshots and the a11y tree &mdash; slow but always works. For popular apps, **community-curated guides** ship the keyboard shortcuts, workflow patterns, layout cues, and failure modes the agent would otherwise have to discover by failing first. Loading a guide for an app it knows speeds operation 5&ndash;10&times;.
 
-- **Public registry: <https://clawdcursor.com/app-guides>**
+- **Public registry fallback: <https://github.com/AmrDab/clawdcursor-guides>**
 - **Source repo: <https://github.com/AmrDab/clawdcursor-guides>** &mdash; community PRs welcome
 - **Verified seed guides:** discord, excel, figma, gmail, mspaint, olk (new Outlook), outlook, slack, spotify, youtube
 - **Bundled core (offline fallback):** msedge, notepad
@@ -274,7 +274,7 @@ Five directories. Everything else is a leaf module.
 | Directory | What lives here |
 |---|---|
 | `src/core/` | Pipeline orchestrator, agent loop, router, preprocessor, sense (a11y/snapshot/fingerprint), classify, decompose, skills cache, safety gate, ground-truth verifier, Reflector. |
-| `src/tools/` | The 89 granular tools + 6 compound aggregators, playbooks (`compose-send`, `find-replace`), tool registry, dispatch. |
+| `src/tools/` | The 93 granular tools + 6 compound aggregators, playbooks (`compose-send`, `find-replace`), tool registry, dispatch. |
 | `src/platform/` | `PlatformAdapter` interface + Windows / macOS / Linux / Wayland implementations, OCR engine, CDP driver, URI handler. |
 | `src/llm/` | Provider clients (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), credentials, model config, guide loader. |
 | `src/surface/` | CLI (`clawdcursor`), MCP server (stdio + HTTP), dashboard, doctor, onboarding, readiness probes. |
@@ -319,7 +319,7 @@ clawdcursor status          Readiness check (consent, permissions, AI config)
 # Run
 clawdcursor mcp             MCP stdio server — primary transport for editor hosts
 clawdcursor agent           Daemon: HTTP MCP at /mcp on :3847, optional built-in LLM
-clawdcursor agent --no-llm  Daemon, tool surface only (no built-in brain)
+clawdcursor agent --no-llm  Daemon, tool surface only (no built-in brain/scheduler)
 clawdcursor stop            Stop every running mode
 clawdcursor uninstall       Remove all clawdcursor config and data
 
@@ -339,7 +339,7 @@ clawdcursor task <t>        Send a task to the running agent
 
 Options:
   --port <port>          Default: 3847
-  --compact              MCP only: expose 6 compound tools instead of 89 granular
+  --compact              MCP only: expose 6 compound tools instead of 93 granular
   --provider <name>      `agent` only: anthropic | openai | gemini | ollama | ...
   --accept               `agent` and `consent` only: skip the consent prompt
 ```

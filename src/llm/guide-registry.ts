@@ -29,7 +29,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  fetchGuide, fetchIndex, type RegistryGuideMeta,
+  DEFAULT_REGISTRY_URL, fetchGuide, fetchIndex, type RegistryGuideMeta,
 } from './knowledge/remote-loader';
 import {
   getCached, listCached, evict, clearCache as clearGuideCache, CACHE_INTERNALS,
@@ -278,7 +278,7 @@ function submitInstructions(file?: string): void {
    2. Add your file as ${app}.json at the repo root
    3. Open a Pull Request — CI re-runs lint + schema checks
    4. Once merged, every clawdcursor install will fetch it on demand
-      from https://clawdcursor.com/app-guides/${app}.json
+      from ${DEFAULT_REGISTRY_URL}/${app}.json
 
    Trust levels (set by reviewers via PR label):
      verified     — curated by maintainers, fetched by default
