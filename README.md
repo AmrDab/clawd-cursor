@@ -110,36 +110,73 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 ## How It Thinks
 
-Every tool call &mdash; whether it arrives over stdio MCP, HTTP MCP, or the built-in autonomous loop &mdash; flows through the same decision layer. The pipeline picks the cheapest rung that works and only escalates when the verifier disagrees with the planner's claim of success.
+clawdcursor exposes **two pipelines** that share one tool surface, one safety chokepoint, and one ground-truth verifier. **Where the brain lives** decides which one your AI uses. Both can run side-by-side &mdash; the daemon and editor-spawned stdio child are independent processes.
+
+| Brain lives... | Pipeline | Command | What you call |
+|---|---|---|---|
+| In your editor (Claude Code, Cursor, Windsurf, Codex, Zed) | **Pipeline 2** | `clawdcursor mcp` | Each tool individually, via stdio MCP |
+| In a headless agent with its own LLM (OpenClaw, Claude Agent SDK, your own loop) | **Pipeline 2** | `clawdcursor agent --no-llm` | Same, over HTTP MCP |
+| Inside clawdcursor itself (scheduled tasks, dashboard, "submit a task and walk away") | **Pipeline 1** | `clawdcursor agent` + `doctor`-configured LLM | `submit_task` (or `scheduled_task_create`) |
+| Hybrid &mdash; external brain that delegates when stuck | **Both** | `clawdcursor agent` + your client | Direct tools normally; call `task({instruction:...})` to hand off a subtask to Pipeline 1 |
+
+### Pipeline 1 &mdash; Autonomous: clawdcursor decides
+
+You hand off a task in plain English (`submit_task`, the web dashboard at `:3847/`, or a `scheduled_task_create` cron tick). clawdcursor's preprocessor classifies it, loads any matching app guide from the marketplace, picks the cheapest rung that fits, and only escalates when the verifier disagrees with the planner's claim of success.
 
 ```mermaid
 flowchart LR
-    user["User task"] --> pre["Preprocessor<br/>(strategy + subtasks)"]
-    pre --> router["Router<br/>(regex shortcuts, zero LLM)"]
-    router -- match --> tool["safety.evaluate()<br/>→ tool"]
-    router -- miss --> blind["Blind<br/>(a11y tree only)"]
-    blind --> tool
-    blind -- sparse a11y / stagnation --> hybrid["Hybrid<br/>(a11y + screenshot on demand)"]
-    hybrid --> tool
-    hybrid -- still stuck --> vision["Vision<br/>(screenshot every turn)"]
-    vision --> tool
-    tool --> verifier{"Ground-truth<br/>verifier"}
+    user["Task source<br/>submit_task /<br/>dashboard /<br/>scheduled cron"] --> pre
+
+    subgraph brain["Built-in agent brain"]
+        direction LR
+        pre["Preprocessor<br/>(strategy + subtasks +<br/>loadGuide if appKey)"] --> router["Router<br/>(regex shortcuts<br/>zero LLM)"]
+        router -- match --> shortcut["Deterministic<br/>shortcut"]
+        router -- miss --> playbook["Playbook<br/>(canned sequences:<br/>compose-send,<br/>find-replace)"]
+        playbook -- miss --> blind["Blind<br/>(a11y tree only)"]
+        blind -- sparse / stuck --> hybrid["Hybrid<br/>(a11y + screenshot<br/>on demand)"]
+        hybrid -- still stuck --> vision["Vision<br/>(screenshot every turn)"]
+    end
+
+    subgraph exec["Shared execution boundary"]
+        direction LR
+        safety["safety.evaluate()<br/>(allow / confirm / block)"] --> tools["Tool registry<br/>compact or granular"]
+    end
+
+    subgraph desktop["Real desktop"]
+        direction LR
+        adapter["PlatformAdapter<br/>(Windows / macOS / Linux)"] --> observed["Observed state<br/>window + a11y + OCR + pixels"]
+    end
+
+    shortcut --> safety
+    playbook --> safety
+    blind --> safety
+    hybrid --> safety
+    vision --> safety
+    tools --> adapter
+    observed --> verifier{"Ground-truth<br/>verifier"}
     verifier -- pass --> done["done"]
     verifier -- fail --> reflector["Reflector<br/>(structured cause + suggested strategy)"]
-    reflector -. feedback .-> pre
-    reflector -. hint .-> blind
-    reflector -. hint .-> hybrid
-    reflector -. hint .-> vision
+    reflector -. plan feedback .-> pre
+    reflector -. rung override .-> blind
+    reflector -. rung override .-> hybrid
+    reflector -. rung override .-> vision
 
-    classDef rung fill:#0ea5e9,stroke:#0369a1,color:#fff;
-    classDef gate fill:#a855f7,stroke:#6b21a8,color:#fff;
-    classDef refl fill:#eab308,stroke:#854d0e,color:#000;
-    class router,blind,hybrid,vision rung;
-    class tool,verifier gate;
+    classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a;
+    classDef agent fill:#dbeafe,stroke:#2563eb,color:#0f172a;
+    classDef gate fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
+    classDef desktopNode fill:#dcfce7,stroke:#16a34a,color:#0f172a;
+    classDef refl fill:#fef3c7,stroke:#d97706,color:#0f172a;
+
+    class user,done input;
+    class pre,router,shortcut,playbook,blind,hybrid,vision agent;
+    class safety,tools,verifier gate;
+    class adapter,observed desktopNode;
     class reflector refl;
 ```
 
 **Single safety chokepoint.** Every tool call &mdash; direct or autonomous &mdash; routes through `safety.evaluate()`. The agent cannot bypass this path; it is the only way tools execute.
+
+**Guides wired into the planner.** When `detectApp(activeWindowTitle)` returns an app key, the preprocessor calls `loadGuide(app)` and folds the resulting `promptFragment` (shortcuts + workflows + layout cues + tips) into the agent's system prompt **before** rung selection. That's why Pipeline 1 "knows" Mail.app's compose Tab-order or YouTube's keyboard shortcuts &mdash; the marketplace is wired into the planner, not into the tools.
 
 **Ground-truth verification.** When the agent claims a task is done, six independent signals are checked against the post-task screen: pixel diff, window-state change, focus change, OCR delta, task-type assertions (`send_email`, `navigate_url`, `open_app`, &hellip;), and anti-pattern detection (error dialogs, auth failures, "draft saved"). Weighted voting with hard-fail rules. No LLM self-report.
 
@@ -149,61 +186,103 @@ flowchart LR
 
 ---
 
-## How An External Agent Drives It
+### Pipeline 2 &mdash; Direct tools: your AI decides
 
-The autonomous loop above is *one* way to use clawdcursor &mdash; you submit a task, the daemon's LLM picks rungs for you. The other way is what every editor host (Claude Code, Cursor, Windsurf, Zed) and headless agent (OpenClaw, Claude Agent SDK, your own loop) actually does: connect over MCP and drive the 6 compact tools directly. The same planning context the autonomous loop gets for free is exposed to those external brains through four read-only introspection tools.
+Every editor host (Claude Code, Cursor, Windsurf, Codex, Zed) and every headless agent with its own brain (OpenClaw, Claude Agent SDK, your own loop) uses this path. Your LLM picks the calls; clawdcursor supplies read-only context, safe actuation, and fresh observations from the real desktop. The same planning context Pipeline 1 gets for free is exposed to those external brains through four read-only introspection tools (`system.classify_task`, `system.app_guide`, `system.detect_app`, `system.system_prompt`).
 
 ```mermaid
 flowchart LR
-    task["Your task"] --> intro["system.classify_task<br/>(+ system.app_guide<br/>if appKey returned)"]
-    intro --> route{Strategy}
+    subgraph agent["External agent / editor host"]
+        direction TB
+        task["User task"] --> loop["Your LLM loop<br/>(plan + choose tools)"]
+        verify{"Your verifier<br/>(did the desktop match the goal?)"}
+        verify -. fail + new state .-> loop
+    end
 
-    route -- router       --> det["window.open_*<br/>system.shortcuts_run<br/>(zero-LLM shortcuts)"]
-    route -- playbook     --> play["computer + accessibility<br/>keystroke sequence<br/>(compose-send, find-replace)"]
-    route -- blind/hybrid --> sense["accessibility.read_tree<br/>(structured snapshot)"]
-    route -- vision       --> vis
+    subgraph mcp["MCP transport<br/>(stdio or HTTP)"]
+        direction TB
+        context["Read-only context<br/>system_prompt<br/>detect_app<br/>classify_task<br/>app_guide"]
+        route{"Cheapest viable path"}
+        action["Action request<br/>one of 6 compact tools"]
+    end
 
-    sense -- sparse        --> wv["system.detect_webview"]
-    wv -- electron / webview2 --> cdp["browser.* via CDP<br/>(real DOM, not a11y stub)"]
-    wv -- canvas / no a11y    --> vis["computer.screenshot<br/>+ YOUR vision LLM<br/>+ computer.click at coords"]
-    sense -- ok            --> act["accessibility.invoke /<br/>set_value / focus / wait_for"]
+    subgraph server["clawdcursor local server"]
+        direction TB
+        safety["safety.evaluate()<br/>allow / confirm / block"]
+        confirm["Human confirmation<br/>(sensitive actions)"]
+        tools["Tool router<br/>computer · accessibility<br/>window · system · browser"]
+        observe["Observation tools<br/>read_tree · OCR<br/>screenshot · CDP DOM"]
+        webview["WebView bridge<br/>detect_webview<br/>relaunch_with_cdp<br/>browser.*"]
+        blocked["blocked"]
+    end
 
-    det  --> verify
-    play --> verify
-    act  --> verify
-    cdp  --> verify
-    vis  --> verify
+    subgraph desktop["Real desktop"]
+        direction TB
+        app["Native app<br/>browser<br/>canvas surface"]
+    end
 
-    verify{"Re-read window<br/>+ a11y + OCR"} -- pass --> done["done"]
-    verify -. fail .-> intro
+    loop --> context
+    context -. prompt fragments + strategy .-> loop
+    context --> route
+    loop --> route
 
-    classDef intro     fill:#eab308,stroke:#854d0e,color:#000;
-    classDef rung      fill:#0ea5e9,stroke:#0369a1,color:#fff;
-    classDef gate      fill:#a855f7,stroke:#6b21a8,color:#fff;
-    classDef expensive fill:#f97316,stroke:#9a3412,color:#000;
+    route -- deterministic shortcut --> action
+    route -- a11y first --> action
+    route -- webview / Electron --> webview
+    route -- canvas / visual only --> action
+    route -. delegate subtask .-> handoff["task({instruction:...})<br/>delegates to Pipeline 1<br/>(daemon's LLM only)"]
 
-    class intro,wv intro;
-    class det,play,sense,act,cdp rung;
-    class verify gate;
-    class vis expensive;
+    action --> safety
+    webview --> safety
+    handoff --> safety
+    safety -- allowed --> tools
+    safety -- needs user --> confirm --> tools
+    safety -- denied --> blocked
+
+    tools --> app
+    app --> observe
+    observe -. fresh state .-> loop
+    observe --> verify
+    verify -- pass --> done["done"]
+
+    classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a;
+    classDef agentNode fill:#dbeafe,stroke:#2563eb,color:#0f172a;
+    classDef contextNode fill:#fef3c7,stroke:#d97706,color:#0f172a;
+    classDef gate fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
+    classDef desktopNode fill:#dcfce7,stroke:#16a34a,color:#0f172a;
+    classDef expensive fill:#ffedd5,stroke:#ea580c,color:#0f172a;
+    classDef handoffNode fill:#d1fae5,stroke:#047857,color:#0f172a;
+    classDef stop fill:#fee2e2,stroke:#dc2626,color:#0f172a;
+
+    class task,done input;
+    class loop,verify agentNode;
+    class context,route contextNode;
+    class safety,confirm,tools gate;
+    class observe,app desktopNode;
+    class action,webview expensive;
+    class handoff handoffNode;
+    class blocked stop;
 ```
 
 **The four phases:**
 
-1. **Introspect** &mdash; yellow. Call `system({"action":"classify_task","task":"…","activeWindowTitle":"…"})` on turn 1. Zero cost, zero side effects. Returns strategy + decomposition + appKey + capability + playbook match. If an `appKey` came back, follow with `system({"action":"app_guide","app":appKey})` and paste the returned `promptFragment` into your own LLM's system prompt. That's how you inherit clawdcursor's app expertise without running its autonomous loop.
+1. **Load context** &mdash; yellow. Call `system({"action":"system_prompt"})` once if you want clawdcursor's operating stance, then call `system({"action":"detect_app","urlOrTitle":"..."})` and `system({"action":"classify_task","task":"...","activeWindowTitle":"..."})` on turn 1. If an `appKey` comes back, follow with `system({"action":"app_guide","app":appKey})` and paste the returned `promptFragment` into your own LLM's system prompt. That's how you inherit clawdcursor's app expertise without running its autonomous loop.
 
-2. **Act on the picked rung** &mdash; blue:
+2. **Pick the cheapest viable path** &mdash; yellow to orange:
    - `router` &rarr; deterministic shortcuts. `window.open_app`, `window.open_url`, `system.shortcuts_run`. No LLM call needed.
    - `playbook` &rarr; canned keystroke sequence (compose-send, find-replace) via `computer.key` + `accessibility.invoke`.
    - `blind` / `hybrid` &rarr; `accessibility.read_tree` first, then `accessibility.invoke` / `set_value` / `focus` on named targets.
 
-3. **Escalate when text-mode fails** &mdash; orange = expensive:
-   - Sparse a11y tree &rarr; `system.detect_webview`. If Electron / WebView2, jump to `browser.*` for real DOM access via CDP.
+3. **Execute through the shared safety gate** &mdash; purple. Every action call goes through `safety.evaluate()` before it touches the desktop. Allowed calls run immediately, sensitive calls ask for human confirmation, and blocked calls stop there. This is true for external agents and the built-in autonomous loop.
+
+4. **Escalate and verify from fresh observations** &mdash; green/orange:
+   - Sparse a11y tree &rarr; `system.detect_webview`. If Electron / WebView2, use `system.relaunch_with_cdp` when needed, then jump to `browser.*` for real DOM access via CDP.
    - Canvas-only apps (Paint, Figma, games) or `detect_webview` returns nothing &rarr; `computer.screenshot` + YOUR vision LLM + `computer.click` at coords. T4 cost; last resort.
+   - After every action, re-read the active window title + a11y tree + OCR, and add screenshot/CDP DOM only when the cheaper signals are not enough. If the result doesn't match expectations, loop back with the new state. If it does, emit `done`.
 
-4. **Verify** &mdash; purple. After every action, re-read the active window title + a11y tree + OCR. If the result doesn't match expectations, loop back to step 1 (re-classify with the new state). If it does, emit `done`.
+**Hand-off to Pipeline 1** &mdash; the green node. When the daemon has an LLM configured, your external brain can delegate at any point by calling `task({"instruction":"…"})`. clawdcursor's preprocessor classifies the subtask, runs the autonomous rung ladder, verifies the result, and reports back. Useful for app-specific work you don't want to burn your own LLM context on (e.g. *"open Outlook and reply to Sarah's latest about budget"*). Pipeline 1's verifier still gates the success report &mdash; your brain receives `success: true` only after ground-truth checks pass.
 
-**Hard guarantee.** Every tool call &mdash; whether the autonomous loop dispatched it or your external brain did &mdash; flows through the same `safety.evaluate()` chokepoint. Sensitive actions (sends, deletes, blocked keyboard combos) hit confirm/block exactly the same way on both paths.
+**Hard guarantee.** Every tool call &mdash; whether Pipeline 1's preprocessor picked it, your external brain picked it, or it came in through a `task({...})` hand-off &mdash; flows through the same `safety.evaluate()` chokepoint. Sensitive actions (sends, deletes, blocked keyboard combos) hit confirm/block exactly the same way on every path.
 
 ---
 
