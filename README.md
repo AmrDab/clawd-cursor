@@ -149,6 +149,64 @@ flowchart LR
 
 ---
 
+## How An External Agent Drives It
+
+The autonomous loop above is *one* way to use clawdcursor &mdash; you submit a task, the daemon's LLM picks rungs for you. The other way is what every editor host (Claude Code, Cursor, Windsurf, Zed) and headless agent (OpenClaw, Claude Agent SDK, your own loop) actually does: connect over MCP and drive the 6 compact tools directly. The same planning context the autonomous loop gets for free is exposed to those external brains through four read-only introspection tools.
+
+```mermaid
+flowchart LR
+    task["Your task"] --> intro["system.classify_task<br/>(+ system.app_guide<br/>if appKey returned)"]
+    intro --> route{Strategy}
+
+    route -- router       --> det["window.open_*<br/>system.shortcuts_run<br/>(zero-LLM shortcuts)"]
+    route -- playbook     --> play["computer + accessibility<br/>keystroke sequence<br/>(compose-send, find-replace)"]
+    route -- blind/hybrid --> sense["accessibility.read_tree<br/>(structured snapshot)"]
+    route -- vision       --> vis
+
+    sense -- sparse        --> wv["system.detect_webview"]
+    wv -- electron / webview2 --> cdp["browser.* via CDP<br/>(real DOM, not a11y stub)"]
+    wv -- canvas / no a11y    --> vis["computer.screenshot<br/>+ YOUR vision LLM<br/>+ computer.click at coords"]
+    sense -- ok            --> act["accessibility.invoke /<br/>set_value / focus / wait_for"]
+
+    det  --> verify
+    play --> verify
+    act  --> verify
+    cdp  --> verify
+    vis  --> verify
+
+    verify{"Re-read window<br/>+ a11y + OCR"} -- pass --> done["done"]
+    verify -. fail .-> intro
+
+    classDef intro     fill:#eab308,stroke:#854d0e,color:#000;
+    classDef rung      fill:#0ea5e9,stroke:#0369a1,color:#fff;
+    classDef gate      fill:#a855f7,stroke:#6b21a8,color:#fff;
+    classDef expensive fill:#f97316,stroke:#9a3412,color:#000;
+
+    class intro,wv intro;
+    class det,play,sense,act,cdp rung;
+    class verify gate;
+    class vis expensive;
+```
+
+**The four phases:**
+
+1. **Introspect** &mdash; yellow. Call `system({"action":"classify_task","task":"…","activeWindowTitle":"…"})` on turn 1. Zero cost, zero side effects. Returns strategy + decomposition + appKey + capability + playbook match. If an `appKey` came back, follow with `system({"action":"app_guide","app":appKey})` and paste the returned `promptFragment` into your own LLM's system prompt. That's how you inherit clawdcursor's app expertise without running its autonomous loop.
+
+2. **Act on the picked rung** &mdash; blue:
+   - `router` &rarr; deterministic shortcuts. `window.open_app`, `window.open_url`, `system.shortcuts_run`. No LLM call needed.
+   - `playbook` &rarr; canned keystroke sequence (compose-send, find-replace) via `computer.key` + `accessibility.invoke`.
+   - `blind` / `hybrid` &rarr; `accessibility.read_tree` first, then `accessibility.invoke` / `set_value` / `focus` on named targets.
+
+3. **Escalate when text-mode fails** &mdash; orange = expensive:
+   - Sparse a11y tree &rarr; `system.detect_webview`. If Electron / WebView2, jump to `browser.*` for real DOM access via CDP.
+   - Canvas-only apps (Paint, Figma, games) or `detect_webview` returns nothing &rarr; `computer.screenshot` + YOUR vision LLM + `computer.click` at coords. T4 cost; last resort.
+
+4. **Verify** &mdash; purple. After every action, re-read the active window title + a11y tree + OCR. If the result doesn't match expectations, loop back to step 1 (re-classify with the new state). If it does, emit `done`.
+
+**Hard guarantee.** Every tool call &mdash; whether the autonomous loop dispatched it or your external brain did &mdash; flows through the same `safety.evaluate()` chokepoint. Sensitive actions (sends, deletes, blocked keyboard combos) hit confirm/block exactly the same way on both paths.
+
+---
+
 ## Transports
 
 One protocol &mdash; **MCP** &mdash; two transports. Same catalog, same JSON-RPC envelope.

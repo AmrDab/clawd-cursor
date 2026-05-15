@@ -45,14 +45,63 @@
     ── TOOL SURFACE ────────────────────────────────────────────────────────────
     Compact (default-recommended): 6 compound tools (computer, accessibility,
     window, system, browser, task) — ~1500 tokens of catalog.
-    Granular: 89 individual tools — one schema per primitive (back-compat).
+    Granular: 97 individual tools — one schema per primitive (back-compat).
+
+    Compact actions per compound (call as `{compound}({action, ...args})`):
+      computer       screenshot, click, double_click, right_click, triple_click,
+                     hover, scroll, scroll_horizontal, drag, drag_path, type,
+                     key, wait
+      accessibility  read_tree, find, get_element, focused, invoke, focus,
+                     set_value, get_value, expand, collapse, toggle, select,
+                     state, list_children, wait_for
+      window         list, active, focus, maximize, minimize, restore, close,
+                     resize, list_displays, screen_size, open_app, open_file,
+                     open_url, switch_tab, navigate
+      system         clipboard_read, clipboard_write, system_time, ocr, undo,
+                     shortcuts_list, shortcuts_run, delegate, detect_webview,
+                     relaunch_with_cdp, app_guide, detect_app, classify_task,
+                     system_prompt
+      browser        connect, page_context, read_text, click, type,
+                     select_option, evaluate, wait_for, list_tabs, switch_tab,
+                     scroll
+      task           {instruction: string} — daemon-mode only, autonomous loop
+
+    Pipeline-introspection tools (use these from external brains BEFORE acting):
+      system.classify_task   — preprocessor decision (strategy, subtasks, app,
+                                capability, playbook). Always call on turn 1.
+      system.app_guide       — full guide + prompt fragment for the active app
+      system.detect_app      — URL/window-title → canonical app key
+      system.system_prompt   — clawdcursor's agent prompt to match its stance
 
     ── GUIDES MARKETPLACE ──────────────────────────────────────────────────────
     Public registry at https://clawdcursor.com/app-guides — community-curated
     keyboard shortcuts + workflows for popular apps (gmail, outlook, slack,
     youtube, figma, discord, excel, mspaint, olk, spotify). PR-based
     submissions at github.com/AmrDab/clawdcursor-guides. Fetched on demand,
-    cached locally. Manage with `clawdcursor guides list / install / submit`.
+    cached locally.
+
+    Full CLI surface (humans use these; AIs use MCP):
+      Install + setup
+        clawdcursor consent          one-time desktop-control authorization
+        clawdcursor grant            macOS Accessibility + Screen Recording
+        clawdcursor doctor           verify permissions, configure AI provider
+        clawdcursor status           readiness check (consent, perms, AI cfg)
+      Run
+        clawdcursor mcp [--compact]  stdio MCP server for editor hosts
+        clawdcursor agent            HTTP MCP daemon at :3847/mcp + optional LLM
+        clawdcursor agent --no-llm   tool surface only — BYO brain
+        clawdcursor stop             stop every running mode
+        clawdcursor uninstall        remove all clawdcursor config + data
+      Guides cache management
+        clawdcursor guides list                  what's cached + ratings
+        clawdcursor guides info <app>            cache metadata for one app
+        clawdcursor guides available             browse the public registry
+        clawdcursor guides install <app>         pre-warm cache (--all for prep)
+        clawdcursor guides refresh <app>         force re-fetch
+        clawdcursor guides remove <app>          evict from cache
+        clawdcursor guides clean                 wipe cache
+        clawdcursor guides lint <file.json>      validate a local guide
+        clawdcursor guides submit <file.json>    lint + print PR instructions
 
     ── PLATFORMS ───────────────────────────────────────────────────────────────
     Windows 10/11 (x64 + ARM64), macOS 12+ (Intel + Apple Silicon),
