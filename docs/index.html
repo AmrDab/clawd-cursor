@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawd Cursor v0.9.4 — a cursor and a keyboard for any AI agent · open source (MIT)</title>
-  <meta name="description" content="Clawd Cursor v0.9.4 — give any tool-calling AI a real desktop. Open source (MIT). 97 MCP tools or 6 compact compounds, MCP stdio + HTTP, scheduled-task dashboard, pipeline introspection, Windows + macOS + Linux. Guides marketplace at clawdcursor.com/app-guides.">
+  <title>Clawd Cursor v0.9.4 — the local MCP server for safe desktop control</title>
+  <meta name="description" content="Clawd Cursor v0.9.4 — the local MCP server that gives any agent safe desktop control. 6 compact compound tools (computer, accessibility, window, system, browser, task), MCP stdio + HTTP, single safety.evaluate() chokepoint, no telemetry, Windows + macOS + Linux.">
   <meta property="og:title" content="Clawd Cursor v0.9.4">
-  <meta property="og:description" content="A cursor and a keyboard for any AI agent on a real desktop. Open source (MIT). Any model. Any app. One MCP entry. Local-only. v0.9: MCP-only protocol, Reflector feedback, guides marketplace.">
+  <meta property="og:description" content="The local MCP server that gives any agent safe desktop control. Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry.">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://clawdcursor.com/">
@@ -15,9 +15,28 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
-    AGENT-READABLE SUMMARY
-    clawdcursor: a fallback skill that gives any AI agent control of a real
-    desktop when no API/CLI/file-edit/existing browser-automation path exists.
+    AGENT-READABLE SUMMARY (v0.9.4)
+    clawdcursor: the local MCP server that gives any agent safe desktop control.
+
+    ── WHAT IT IS ──────────────────────────────────────────────────────────────
+    A local MCP server. Install once. Any tool-calling agent connects via MCP
+    and gets safe control of the real desktop — clicks, types, reads the screen,
+    opens apps, drives any GUI. No cloud, no telemetry by default. Server binds
+    to 127.0.0.1. Bearer-token auth on every HTTP request.
+
+    ── TOOL SURFACE (PUBLIC) ────────────────────────────────────────────────────
+    6 compact compound tools — ~1500 tokens of catalog. RECOMMENDED.
+      computer      — mouse, keyboard, screenshot (raw I/O)
+      accessibility — drive UI by element name, not pixel
+      window        — launch, focus, resize apps
+      system        — clipboard, OCR, shortcuts, pipeline introspection
+      browser       — Chrome DevTools Protocol for Electron/WebView2 apps
+      task          — hand off a full task to the built-in autonomous loop
+
+    ── COMPATIBILITY / DEBUGGING ────────────────────────────────────────────────
+    97 granular tools (one schema per verb) available via --granular flag or
+    `tools/list` on either transport. Use when your runtime requires every
+    primitive as a top-level MCP tool, or for direct debugging.
 
     ── INSTALL ─────────────────────────────────────────────────────────────────
     Windows (PowerShell):  powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
@@ -43,10 +62,10 @@
                           brain). Use when your agent has its own brain and
                           just wants HTTP tools.
 
-    ── TOOL SURFACE ────────────────────────────────────────────────────────────
-    Compact (default-recommended): 6 compound tools (computer, accessibility,
-    window, system, browser, task) — ~1500 tokens of catalog.
-    Granular: 97 individual tools — one schema per primitive (back-compat).
+    ── SAFETY ──────────────────────────────────────────────────────────────────
+    Single safety.evaluate() chokepoint — every tool call routes through it
+    regardless of transport or pipeline. Sensitive actions auto-elevate to
+    Confirm. Bearer token required on HTTP. Local-only by default.
 
     ── GUIDES MARKETPLACE ──────────────────────────────────────────────────────
     Public registry at https://clawdcursor.com/app-guides — community-curated
@@ -386,9 +405,9 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v0.9.4 — latest stable · open source (MIT)</div>
-    <h1>A cursor and a keyboard<br><span class="gr">for any AI agent</span></h1>
-    <p>Any model. Any app. One MCP entry. Local-only. Open source &mdash; <a href="https://github.com/AmrDab/clawdcursor">MIT on GitHub</a>. v0.9: MCP-only protocol, Reflector feedback, a public guides marketplace, 97 tools or 6 compact compounds.</p>
+    <div class="hero-badge"><div class="pulse"></div> v0.9.4 — latest stable</div>
+    <h1>The local MCP server that gives<br><span class="gr">any agent safe desktop control</span></h1>
+    <p>Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry. v0.9: MCP-only protocol, Reflector feedback, guides marketplace.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -404,8 +423,8 @@
 
   <!-- Stats -->
   <div class="stats">
-    <div class="stat"><div class="stat-val">97</div><div class="stat-lbl">Granular Tools</div></div>
-    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Compact Compounds</div></div>
+    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Compact Tools (public surface)</div></div>
+    <div class="stat"><div class="stat-val">97</div><div class="stat-lbl">Granular Tools (compat / debug)</div></div>
     <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Operating Systems</div></div>
   </div>
 
@@ -454,7 +473,7 @@
   }
 }</code></pre>
         <div class="mode-stats">
-          <div><div class="mode-stat-val">6 / 97</div><div class="mode-stat-lbl">Compact / Granular</div></div>
+          <div><div class="mode-stat-val">6 / 97</div><div class="mode-stat-lbl">Compact / Granular tools</div></div>
           <div><div class="mode-stat-val">stdio</div><div class="mode-stat-lbl">Transport</div></div>
         </div>
       </div>
@@ -480,7 +499,7 @@
           <li>Stateless — no session init needed</li>
         </ol>
         <div class="mode-stats">
-          <div><div class="mode-stat-val">97</div><div class="mode-stat-lbl">Granular tools</div></div>
+          <div><div class="mode-stat-val">97</div><div class="mode-stat-lbl">Granular tools (compat)</div></div>
           <div><div class="mode-stat-val">any</div><div class="mode-stat-lbl">HTTP client</div></div>
         </div>
       </div>
@@ -624,8 +643,8 @@ clawdcursor guides submit my-app.json</code></pre>
     <details class="cli-details">
       <summary class="cli-summary">
         <span class="sect-label" style="margin-bottom:0;">Tools</span>
-        <span class="cli-summary-title">97 desktop tools <span class="cli-summary-chev" aria-hidden="true">›</span></span>
-        <span class="cli-summary-sub">6 compact compounds covering every primitive. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. Use the compact form unless your runtime needs every verb as a top-level schema.</span>
+        <span class="cli-summary-title">6 compact tools + 97 granular <span class="cli-summary-chev" aria-hidden="true">›</span></span>
+        <span class="cli-summary-sub">The 6 compact compounds are the recommended public surface. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. The 97 granular tools (one schema per verb) are listed below for compatibility and debugging — use them when your runtime requires every primitive as a top-level MCP tool.</span>
       </summary>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-top:18px;overflow:hidden;">
@@ -673,9 +692,10 @@ clawdcursor guides submit my-app.json</code></pre>
       </div>
 
       <p style="color:var(--text3);font-size:0.78rem;margin-top:14px;line-height:1.6;">
-        Compact form: <code style="font-size:0.9em;color:var(--accent2);">computer({ "action": "key", "combo": "mod+s" })</code>.
-        Granular form (one tool per verb): <code style="font-size:0.9em;color:var(--accent2);">key_press({ "key": "mod+s" })</code>.
+        <strong style="color:var(--text2);">Compact form (recommended):</strong> <code style="font-size:0.9em;color:var(--accent2);">computer({ "action": "key", "combo": "mod+s" })</code> &mdash; ~1,500 tokens of catalog.
+        <strong style="color:var(--text2);">Granular form (compat / debug):</strong> <code style="font-size:0.9em;color:var(--accent2);">key_press({ "key": "mod+s" })</code> &mdash; 97 individual tools, one schema per verb.
         Both produce identical effects through the same <code>safety.evaluate()</code> chokepoint.
+        Pass <code style="color:var(--accent2);">--granular</code> (instead of <code style="color:var(--accent2);">--compact</code>) to expose the granular surface over MCP.
         See <a href="https://github.com/AmrDab/clawdcursor/blob/main/schema.snapshot.json" target="_blank" rel="noopener" style="color:var(--accent2);">schema.snapshot.json</a> for every parameter.
       </p>
     </details>
@@ -756,8 +776,8 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <!-- CTA -->
 <div class="wrap">
   <div class="cta">
-    <h2>Give your AI a body.</h2>
-    <p>Open source. Any model. Localhost only.</p>
+    <h2>Give your agent safe desktop control.</h2>
+    <p>Open source. Any model. Localhost only. No telemetry.</p>
     <a href="https://github.com/AmrDab/clawdcursor" class="btn-p">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
       Star on GitHub
