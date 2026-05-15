@@ -1383,4 +1383,19 @@ program
     await guidesCommand(allArgs);
   });
 
+// ── Editor setup ────────────────────────────────────────────────────────────
+// `clawdcursor setup <editor>` writes the MCP server block to the editor's
+// config file idempotently. Saves users from hand-editing JSON/TOML.
+// Implementation lives in ./setup.ts so the CLI stays slim.
+program
+  .command('setup [editor]')
+  .description('Install clawdcursor as an MCP server for an editor (claude, claude-code, cursor, windsurf, codex)')
+  .option('--print', 'Print the resulting config to stdout instead of writing')
+  .option('--path <path>', 'Override the target config file (escape hatch)')
+  .option('--list', 'List supported editors and their default config paths')
+  .action(async (editor: string | undefined, opts: { print?: boolean; path?: string; list?: boolean }) => {
+    const { runSetup } = await import('./setup');
+    await runSetup(editor ?? '', opts);
+  });
+
 program.parse();

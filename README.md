@@ -90,6 +90,20 @@ Wire it into Claude Code, Cursor, Windsurf, or Zed:
 }
 ```
 
+Or skip the hand-edit and let clawdcursor do it for you:
+
+```bash
+clawdcursor setup cursor          # Cursor → ~/.cursor/mcp.json
+clawdcursor setup claude          # Claude Desktop → claude_desktop_config.json
+clawdcursor setup claude-code     # Claude Code CLI → shells out to `claude mcp add`
+clawdcursor setup windsurf        # Windsurf → ~/.codeium/windsurf/mcp_config.json
+clawdcursor setup codex           # OpenAI Codex CLI → ~/.codex/config.toml
+clawdcursor setup cursor --print  # Dry-run: print the resulting config to stdout
+clawdcursor setup --list          # Show all supported editors and their paths
+```
+
+The write is idempotent &mdash; running it twice is fine, and other MCP servers / settings in the file are preserved. Existing files are backed up to `<file>.bak` before write.
+
 That's it. Ask your agent to *"open Outlook and reply to the latest email from Sarah"* and watch it run.
 
 > **macOS:** run `clawdcursor grant` to walk through Accessibility + Screen Recording permissions.
@@ -315,6 +329,8 @@ clawdcursor consent         Manage desktop-control consent (--accept / --revoke 
 clawdcursor grant           Grant macOS permissions (interactive, macOS only)
 clawdcursor doctor          Verify permissions, configure AI provider + models
 clawdcursor status          Readiness check (consent, permissions, AI config)
+clawdcursor setup <editor>  Register clawdcursor as an MCP server with an editor
+                            (claude, claude-code, cursor, windsurf, codex; --print for dry-run)
 
 # Run
 clawdcursor mcp             MCP stdio server — primary transport for editor hosts
