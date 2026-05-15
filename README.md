@@ -17,6 +17,7 @@
   <a href="https://github.com/AmrDab/clawdcursor/actions/workflows/cross-platform.yml"><img src="https://img.shields.io/github/actions/workflow/status/AmrDab/clawdcursor/cross-platform.yml?branch=main&label=tests" alt="Tests"></a>
   <a href="https://github.com/AmrDab/clawdcursor/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/AmrDab/clawdcursor/codeql.yml?branch=main&label=codeql" alt="CodeQL"></a>
   <a href="https://discord.gg/hW29nrEZ8G"><img src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+[![SafeSkill 20/100](https://img.shields.io/badge/SafeSkill-20%2F100_Blocked-red)](https://safeskill.dev/scan/amrdab-clawdcursor)
 </p>
 
 <p align="center">
