@@ -124,42 +124,30 @@ clawdcursor exposes **two pipelines** that share one tool surface, one safety ch
 You hand off a task in plain English (`submit_task`, the web dashboard at `:3847/`, or a `scheduled_task_create` cron tick). clawdcursor's preprocessor classifies it, loads any matching app guide from the marketplace, picks the cheapest rung that fits, and only escalates when the verifier disagrees with the planner's claim of success.
 
 ```mermaid
-flowchart LR
-    user["Task source<br/>submit_task /<br/>dashboard /<br/>scheduled cron"] --> pre
+flowchart TB
+    user["Task source<br/>submit_task · dashboard · scheduled cron"] --> pre["Preprocessor<br/>strategy + subtasks + app guide"]
+    pre --> router["Router<br/>regex shortcuts, zero LLM"]
+    router --> pick{"Cheapest rung<br/>that can work"}
 
-    subgraph brain["Built-in agent brain"]
-        direction LR
-        pre["Preprocessor<br/>(strategy + subtasks +<br/>loadGuide if appKey)"] --> router["Router<br/>(regex shortcuts<br/>zero LLM)"]
-        router -- match --> shortcut["Deterministic<br/>shortcut"]
-        router -- miss --> playbook["Playbook<br/>(canned sequences:<br/>compose-send,<br/>find-replace)"]
-        playbook -- miss --> blind["Blind<br/>(a11y tree only)"]
-        blind -- sparse / stuck --> hybrid["Hybrid<br/>(a11y + screenshot<br/>on demand)"]
-        hybrid -- still stuck --> vision["Vision<br/>(screenshot every turn)"]
-    end
-
-    subgraph exec["Shared execution boundary"]
-        direction LR
-        safety["safety.evaluate()<br/>(allow / confirm / block)"] --> tools["Tool registry<br/>compact or granular"]
-    end
-
-    subgraph desktop["Real desktop"]
-        direction LR
-        adapter["PlatformAdapter<br/>(Windows / macOS / Linux)"] --> observed["Observed state<br/>window + a11y + OCR + pixels"]
-    end
+    pick -- shortcut --> shortcut["Deterministic shortcut<br/>open app · navigate · hotkey"]
+    pick -- playbook --> playbook["Playbook<br/>compose-send · find-replace"]
+    pick -- text UI --> blind["Blind rung<br/>a11y tree only"]
+    pick -- sparse / stuck --> hybrid["Hybrid rung<br/>a11y + screenshot on demand"]
+    pick -- visual only --> vision["Vision rung<br/>screenshot every turn"]
 
     shortcut --> safety
     playbook --> safety
     blind --> safety
     hybrid --> safety
     vision --> safety
-    tools --> adapter
-    observed --> verifier{"Ground-truth<br/>verifier"}
+
+    safety["Shared safety gate<br/>allow / confirm / block"] --> tools["Tool registry<br/>compact or granular"]
+    tools --> adapter["PlatformAdapter<br/>Windows / macOS / Linux"]
+    adapter --> observed["Observed state<br/>window + a11y + OCR + pixels"]
+    observed --> verifier{"Ground-truth verifier"}
     verifier -- pass --> done["done"]
-    verifier -- fail --> reflector["Reflector<br/>(structured cause + suggested strategy)"]
-    reflector -. plan feedback .-> pre
-    reflector -. rung override .-> blind
-    reflector -. rung override .-> hybrid
-    reflector -. rung override .-> vision
+    verifier -- fail --> reflector["Reflector<br/>cause + next strategy"]
+    reflector --> retry["retry with<br/>better context"]
 
     classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a;
     classDef agent fill:#dbeafe,stroke:#2563eb,color:#0f172a;
@@ -167,8 +155,8 @@ flowchart LR
     classDef desktopNode fill:#dcfce7,stroke:#16a34a,color:#0f172a;
     classDef refl fill:#fef3c7,stroke:#d97706,color:#0f172a;
 
-    class user,done input;
-    class pre,router,shortcut,playbook,blind,hybrid,vision agent;
+    class user,done,retry input;
+    class pre,router,pick,shortcut,playbook,blind,hybrid,vision agent;
     class safety,tools,verifier gate;
     class adapter,observed desktopNode;
     class reflector refl;
@@ -191,59 +179,34 @@ flowchart LR
 Every editor host (Claude Code, Cursor, Windsurf, Codex, Zed) and every headless agent with its own brain (OpenClaw, Claude Agent SDK, your own loop) uses this path. Your LLM picks the calls; clawdcursor supplies read-only context, safe actuation, and fresh observations from the real desktop. The same planning context Pipeline 1 gets for free is exposed to those external brains through four read-only introspection tools (`system.classify_task`, `system.app_guide`, `system.detect_app`, `system.system_prompt`).
 
 ```mermaid
-flowchart LR
-    subgraph agent["External agent / editor host"]
-        direction TB
-        task["User task"] --> loop["Your LLM loop<br/>(plan + choose tools)"]
-        verify{"Your verifier<br/>(did the desktop match the goal?)"}
-        verify -. fail + new state .-> loop
-    end
+flowchart TB
+    task["User task"] --> loop["External agent LLM loop<br/>plans, chooses tools, verifies"]
+    loop --> context["MCP read-only context<br/>system_prompt · detect_app<br/>classify_task · app_guide"]
+    context --> route{"Cheapest viable path"}
 
-    subgraph mcp["MCP transport<br/>(stdio or HTTP)"]
-        direction TB
-        context["Read-only context<br/>system_prompt<br/>detect_app<br/>classify_task<br/>app_guide"]
-        route{"Cheapest viable path"}
-        action["Action request<br/>one of 6 compact tools"]
-    end
+    route -- deterministic --> shortcut["Deterministic path<br/>window.open_*<br/>system.shortcuts_run"]
+    route -- a11y first --> a11y["A11y path<br/>read_tree<br/>invoke · set_value · focus"]
+    route -- webview / Electron --> webview["WebView bridge<br/>detect_webview<br/>relaunch_with_cdp<br/>browser.*"]
+    route -- canvas / visual only --> vision["Vision fallback<br/>screenshot + external vision LLM<br/>coords back to computer"]
+    route -- delegate subtask --> handoff["task({instruction:...})<br/>hand off to Pipeline 1"]
 
-    subgraph server["clawdcursor local server"]
-        direction TB
-        safety["safety.evaluate()<br/>allow / confirm / block"]
-        confirm["Human confirmation<br/>(sensitive actions)"]
-        tools["Tool router<br/>computer · accessibility<br/>window · system · browser"]
-        observe["Observation tools<br/>read_tree · OCR<br/>screenshot · CDP DOM"]
-        webview["WebView bridge<br/>detect_webview<br/>relaunch_with_cdp<br/>browser.*"]
-        blocked["blocked"]
-    end
-
-    subgraph desktop["Real desktop"]
-        direction TB
-        app["Native app<br/>browser<br/>canvas surface"]
-    end
-
-    loop --> context
-    context -. prompt fragments + strategy .-> loop
-    context --> route
-    loop --> route
-
-    route -- deterministic shortcut --> action
-    route -- a11y first --> action
-    route -- webview / Electron --> webview
-    route -- canvas / visual only --> action
-    route -. delegate subtask .-> handoff["task({instruction:...})<br/>delegates to Pipeline 1<br/>(daemon's LLM only)"]
-
-    action --> safety
+    shortcut --> safety
+    a11y --> safety
     webview --> safety
-    handoff --> safety
-    safety -- allowed --> tools
-    safety -- needs user --> confirm --> tools
-    safety -- denied --> blocked
+    vision --> safety
+    handoff --> p1["Pipeline 1 autonomous loop<br/>(daemon LLM only)"]
+    p1 --> safety
 
-    tools --> app
-    app --> observe
-    observe -. fresh state .-> loop
-    observe --> verify
+    safety["Shared safety gate<br/>allow / confirm / block"] -- allowed --> tools["clawdcursor tool router"]
+    safety -- needs user --> confirm["Human confirmation"] --> tools
+    safety -- denied --> blocked["blocked"]
+
+    tools --> desktop["Real desktop<br/>native app · browser · canvas"]
+    desktop --> observe["Fresh observation<br/>a11y tree · OCR<br/>screenshot · CDP DOM"]
+    observe --> verify{"Does state match goal?"}
+
     verify -- pass --> done["done"]
+    verify -- fail --> retry["retry with new state"]
 
     classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a;
     classDef agentNode fill:#dbeafe,stroke:#2563eb,color:#0f172a;
@@ -254,13 +217,13 @@ flowchart LR
     classDef handoffNode fill:#d1fae5,stroke:#047857,color:#0f172a;
     classDef stop fill:#fee2e2,stroke:#dc2626,color:#0f172a;
 
-    class task,done input;
+    class task,done,retry input;
     class loop,verify agentNode;
     class context,route contextNode;
     class safety,confirm,tools gate;
-    class observe,app desktopNode;
-    class action,webview expensive;
-    class handoff handoffNode;
+    class desktop,observe desktopNode;
+    class shortcut,a11y,webview,vision expensive;
+    class handoff,p1 handoffNode;
     class blocked stop;
 ```
 
