@@ -85,7 +85,7 @@
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^10.3.0",
     "supertest": "^7.2.2",
-    "tsx": "^4.7.0",
+    "tsx": "^4.22.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
