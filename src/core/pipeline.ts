@@ -445,11 +445,27 @@ export class Pipeline {
           // structured chain telemetry. OS/model/app-agnostic.
           const reason = subResult.failureReason;
           const verifierConfidence = subResult.verifierConfidence ?? 0;
+          // Route the hard-abort decision off the STRUCTURED category, not
+          // the stringly-typed reason. Before this change the gate matched
+          // `reason === 'aborted'` for user-cancel — but a rung-internal
+          // LLM-call timeout (e.g. `AbortSignal.timeout(45s)` firing inside
+          // `callLLMWithTools`) surfaces with an AbortError whose downstream
+          // labels can blur with the user-cancel label. Routing off the
+          // category collapses that ambiguity: `user_abort` is the only
+          // abort-class category that maps from `failureReason: 'aborted'`,
+          // and `rung_llm_error` (timeouts, transport, 5xx) explicitly
+          // does NOT hard-abort — it lets the ladder climb to vision.
+          //
+          // Fall back to the legacy mapping if a rung wrapper forgot to
+          // set `failureCategory` (older custom verifiers / extension points
+          // may not have been updated). The explicit field wins when both
+          // are present.
+          const category = subResult.failureCategory ?? categorizeFailureReason(reason);
           const isHardAbort =
-            reason === 'aborted'
-            || reason === 'error'
-            || reason === 'anti_pattern'
-            || (reason === 'verifier_rejected' && verifierConfidence >= 0.8);
+            category === 'user_abort'
+            || category === 'infra_error'
+            || category === 'anti_pattern'
+            || (category === 'verifier_rejected' && verifierConfidence >= 0.8);
 
           if (!isHardAbort) {
             log.warn('pipeline.subtask.soft_fail_continue', {
@@ -463,18 +479,23 @@ export class Pipeline {
             });
             subtaskSoftFails += 1;
             // Distinguish agent-side soft-fails (the agent itself gave up
-            // or ran out of turns / stagnated) from verifier-doubt soft-fails
-            // (agent claimed `done` but verifier wasn't certain).
+            // or ran out of turns / stagnated, OR every rung's LLM call
+            // failed) from verifier-doubt soft-fails (agent claimed `done`
+            // but verifier wasn't certain).
             // Aggregate `success` reflects whether the agent's work was
             // completed end-to-end; verifier doubt at low confidence doesn't
             // demote success since the previous design rationale ("agent
             // reports, caller decides") was specifically aimed at idempotent
             // no-op rejections like "create new canvas" after "open Paint".
-            const isAgentSideFailure =
-              reason === 'max_turns' || reason === 'stagnation' ||
-              reason === 'give_up' || reason === 'cannot_read' ||
-              reason === 'no_text_model' || reason === 'vision_disabled' ||
-              reason === 'router_miss' || reason === 'no_llm' || reason === 'no_ladder';
+            //
+            // Route off `failureCategory` instead of re-matching strings.
+            // Anything that isn't `verifier_rejected` (verifier-doubt) counts
+            // as an agent-side fail for aggregate accounting — including
+            // `rung_llm_error`, which previously fell through the
+            // string-match list and let a chain of pure LLM timeouts report
+            // a phantom `success: true`.
+            const subCategory = subResult.failureCategory ?? categorizeFailureReason(reason);
+            const isAgentSideFailure = subCategory !== 'verifier_rejected';
             if (isAgentSideFailure) subtaskAgentFails += 1;
             // Don't update lastText with a failure message — the next
             // subtask should see "what came before" as the agent's claim.
@@ -580,6 +601,7 @@ export class Pipeline {
     let last: StrategyResult = {
       success: false, path: 'text-agent',
       text: 'no strategies tried', failureReason: 'no_ladder',
+      failureCategory: 'config_missing',
     };
     let rungsTried = 0;
     /** Last structured feedback from the verifier — carried into the next rung's agent call. */
@@ -590,7 +612,14 @@ export class Pipeline {
 
     for (let ladderIdx = 0; ladderIdx < ladder.length; ladderIdx++) {
       if (env.isAborted()) {
-        return { success: false, path: last.path, text: 'aborted', failureReason: 'aborted' };
+        // True user abort — the AbortController fed from the host (CLI,
+        // MCP, scheduler) flipped. Distinct from a rung-internal LLM
+        // timeout, which would have already surfaced as `rung_llm_error`
+        // via the agent's catch in agent-loop/agent.ts.
+        return {
+          success: false, path: last.path, text: 'aborted',
+          failureReason: 'aborted', failureCategory: 'user_abort',
+        };
       }
       if (rungsTried >= this.maxEscalations) break;
 
@@ -682,6 +711,7 @@ export class Pipeline {
           // Demote this rung to a failure so the ladder climbs.
           attempt.success = false;
           attempt.failureReason = 'verifier_rejected';
+          attempt.failureCategory = 'verifier_rejected';
           attempt.verifierConfidence = verdict.confidence;
           attempt.text = `${attempt.text} (verifier rejected: ${verdict.reason})`;
           last = attempt;
@@ -892,6 +922,7 @@ export class Pipeline {
       text: r.description ?? 'router miss',
       path: 'router',
       failureReason: 'router_miss',
+      failureCategory: 'config_missing',
     };
   }
 
@@ -919,7 +950,7 @@ export class Pipeline {
   ): Promise<StrategyResult> {
     const name = decision.hints.playbookName;
     if (!name) {
-      return { success: false, text: 'playbook: no name in hints', path: 'playbook', failureReason: 'playbook_miss' };
+      return { success: false, text: 'playbook: no name in hints', path: 'playbook', failureReason: 'playbook_miss', failureCategory: 'config_missing' };
     }
 
     if (name === 'compose-send') {
@@ -928,7 +959,7 @@ export class Pipeline {
 
     const playbook = PLAYBOOKS[name];
     if (!playbook) {
-      return { success: false, text: `playbook: unknown name "${name}"`, path: 'playbook', failureReason: 'playbook_miss' };
+      return { success: false, text: `playbook: unknown name "${name}"`, path: 'playbook', failureReason: 'playbook_miss', failureCategory: 'config_missing' };
     }
     try {
       const result = await playbook({ adapter: this.deps.adapter, input: {} });
@@ -938,11 +969,12 @@ export class Pipeline {
         text: result.text,
         path: 'playbook',
         failureReason: result.success ? undefined : 'playbook_miss',
+        failureCategory: result.success ? undefined : 'config_missing',
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       env.log.warn('pipeline.playbook.threw', { name, error: msg });
-      return { success: false, text: `playbook "${name}" threw: ${msg}`, path: 'playbook', failureReason: 'playbook_miss' };
+      return { success: false, text: `playbook "${name}" threw: ${msg}`, path: 'playbook', failureReason: 'playbook_miss', failureCategory: 'config_missing' };
     }
   }
 
@@ -968,7 +1000,7 @@ export class Pipeline {
     const fields = extractComposeFields(task);
     if (!fields.recipient) {
       env.log.info('pipeline.playbook.compose_send.no_recipient', { task });
-      return { success: false, text: 'compose-send: could not extract recipient email from task', path: 'playbook', failureReason: 'playbook_miss' };
+      return { success: false, text: 'compose-send: could not extract recipient email from task', path: 'playbook', failureReason: 'playbook_miss', failureCategory: 'config_missing' };
     }
 
     // Strategy 1: mailto: URI — pre-fill everything in one shot.
@@ -1015,11 +1047,12 @@ export class Pipeline {
         text: result.text,
         path: 'playbook',
         failureReason: result.success ? undefined : 'playbook_miss',
+        failureCategory: result.success ? undefined : 'config_missing',
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       env.log.warn('pipeline.playbook.compose_send.in_app_threw', { error: msg });
-      return { success: false, text: `compose-send (in-app): ${msg}`, path: 'playbook', failureReason: 'playbook_miss' };
+      return { success: false, text: `compose-send (in-app): ${msg}`, path: 'playbook', failureReason: 'playbook_miss', failureCategory: 'config_missing' };
     }
   }
 
@@ -1051,6 +1084,7 @@ export class Pipeline {
         text: 'Vision disabled (--no-vision / OPENCLAW_DISABLE_VISION=1).',
         path,
         failureReason: 'vision_disabled',
+        failureCategory: 'config_missing',
       };
     }
     if (mode === 'blind' && !this.deps.llm.text) {
@@ -1059,6 +1093,7 @@ export class Pipeline {
         text: 'No text model configured. Run `clawdcursor doctor` to set AI_TEXT_MODEL.',
         path,
         failureReason: 'no_text_model',
+        failureCategory: 'config_missing',
       };
     }
     if ((mode === 'vision' || mode === 'hybrid') && !this.deps.llm.vision && !this.deps.llm.text) {
@@ -1067,6 +1102,7 @@ export class Pipeline {
         text: 'No vision or text model configured. Run `clawdcursor doctor`.',
         path,
         failureReason: 'no_llm',
+        failureCategory: 'config_missing',
       };
     }
 
@@ -1115,6 +1151,16 @@ export class Pipeline {
 
     // Map exit → failureReason so the escalator can make intelligent
     // decisions. `cannot_read` in blind mode should escalate cleanly.
+    //
+    // The `aborted` exit comes ONLY from the agent's user-abort gate
+    // (`isAborted()` returning true at the top of a turn). A rung-internal
+    // LLM-call timeout — e.g. `AbortSignal.timeout` firing inside the
+    // fetch in `callLLMWithTools` — surfaces as `exit: 'llm_error'`
+    // because the agent's `try/catch` around the LLM call converts the
+    // AbortError into the `llm_error` exit. That distinction is exactly
+    // what the chain-abort gate relies on via `failureCategory` below:
+    // `aborted` → `user_abort` → hard-abort the chain; everything else →
+    // soft-fail and let the ladder climb.
     const failureReason = agentResult.exit === 'cannot_read' ? 'cannot_read'
       : agentResult.exit === 'give_up' ? 'give_up'
       : agentResult.exit === 'max_turns' ? 'max_turns'
@@ -1123,7 +1169,13 @@ export class Pipeline {
       : agentResult.exit === 'aborted' ? 'aborted'
       : 'agent_failed';
 
-    return { success: false, text: agentResult.text, path, failureReason };
+    return {
+      success: false,
+      text: agentResult.text,
+      path,
+      failureReason,
+      failureCategory: categorizeFailureReason(failureReason),
+    };
   }
 
   // ─── Helpers ────────────────────────────────────────────────────
@@ -1181,6 +1233,17 @@ interface StrategyResult {
   text: string;
   path: PipelineTaskResult['path'];
   failureReason?: string;
+  /**
+   * Structured failure category, decoupled from the stringly-typed
+   * `failureReason` label. Set on every non-success StrategyResult so the
+   * chain-abort gate can decide hard-abort vs soft-fail without re-parsing
+   * `failureReason`. See `RungFailureCategory` for the taxonomy.
+   *
+   * NOTE: `failureReason` is intentionally preserved as the human-readable
+   * label for telemetry and existing log consumers. The category is the
+   * load-bearing field for control flow; the reason is for humans.
+   */
+  failureCategory?: RungFailureCategory;
   /** Verifier confidence (0..1) when failureReason === 'verifier_rejected'.
    *  Used by the chain-abort policy to distinguish "verifier strongly says no"
    *  (high confidence) from "verifier couldn't tell" (low confidence). The
@@ -1188,6 +1251,109 @@ interface StrategyResult {
    *  idempotent no-op (e.g. "create new canvas in Paint" when Paint just
    *  opened with a blank canvas → zero pixel-change → low confidence). */
   verifierConfidence?: number;
+}
+
+/**
+ * Structured failure category for a rung result. Replaces stringly-typed
+ * dispatch on `failureReason` for the chain-abort gate and ladder loop.
+ *
+ * The original bug: when the hybrid rung threw an LLM-call timeout
+ * (`AbortSignal.timeout` → `AbortError: operation aborted due to timeout`),
+ * the agent surfaced exit='llm_error' and `failureReason: 'llm_error'`,
+ * BUT the chain-abort gate fired on `failureReason === 'aborted'` (intended
+ * for user-initiated cancellation) — and downstream code paths that
+ * forwarded the underlying AbortError's `name === 'AbortError'` ended up
+ * collapsing the ladder before the vision rung was tried, even though
+ * vision was configured. This category typing makes the user-abort vs
+ * rung-internal-failure distinction explicit so no future caller can
+ * conflate the two by guessing at the label.
+ *
+ * Categories — and how the gate must treat each:
+ *   • `user_abort`         hard-abort the chain. The user (or the host that
+ *                          owns the AbortController fed to the pipeline)
+ *                          asked the run to stop; honour that.
+ *   • `rung_llm_error`     escalate to the next ladder rung. LLM transport,
+ *                          timeout, 5xx, parse error — none of those are a
+ *                          signal that the TASK itself can't be done; they
+ *                          mean THIS rung's LLM call didn't return useful
+ *                          output. The whole point of having a ladder of
+ *                          three rungs with different models / perception
+ *                          modes is to climb past exactly this failure.
+ *   • `agent_gave_up`      escalate to the next ladder rung. The agent
+ *                          itself decided to stop (max_turns, stagnation,
+ *                          give_up, cannot_read). The aggregate-success
+ *                          accounting at the chain level still demotes the
+ *                          subtask, but it doesn't collapse the ladder.
+ *   • `verifier_rejected`  escalate to the next ladder rung; at the chain
+ *                          level, only abort when the verifier's confidence
+ *                          is ≥ 0.8 (the existing v0.9 threshold; preserved
+ *                          unchanged for backward compat).
+ *   • `config_missing`     soft-fail. Missing model / vision disabled /
+ *                          router miss / playbook miss / no_ladder /
+ *                          no_text_model / no_llm — not a runtime fault,
+ *                          just a not-applicable rung. The ladder either
+ *                          climbs to the next rung or runs out.
+ *   • `anti_pattern`       hard-abort. The agent / verifier detected an
+ *                          explicit failure signal on screen (error modal,
+ *                          "send failed", auth dialog) — climbing the
+ *                          ladder won't help.
+ *   • `infra_error`        hard-abort. Pipeline machinery itself threw
+ *                          (uncaught exception leaked out of a rung wrapper);
+ *                          we can't keep climbing on a structurally broken
+ *                          state.
+ */
+export type RungFailureCategory =
+  | 'user_abort'
+  | 'rung_llm_error'
+  | 'agent_gave_up'
+  | 'verifier_rejected'
+  | 'config_missing'
+  | 'anti_pattern'
+  | 'infra_error';
+
+/**
+ * Map a legacy `failureReason` string to a structured category. This is
+ * the single source of truth — every rung wrapper and every chain-abort
+ * decision routes through here, so any new failure-reason string needs
+ * exactly one update: add its mapping below, and the chain-abort policy
+ * picks up the new case via the category it maps to.
+ *
+ * The mapping is intentionally exhaustive over the union of reasons
+ * currently emitted by `runUnifiedAgent`, `runRouter`, `runPlaybook`,
+ * `runOneSubtask`'s ladder-exhaustion path, and the verifier demotion in
+ * `runOneSubtask`. Unknown strings fall through to `'infra_error'` —
+ * conservative, because an unrecognised failure-reason is usually a sign
+ * something further up the call stack threw and the rung wrapper masked
+ * the categorisation.
+ */
+export function categorizeFailureReason(reason: string | undefined): RungFailureCategory {
+  switch (reason) {
+    case 'aborted':
+      return 'user_abort';
+    case 'anti_pattern':
+      return 'anti_pattern';
+    case 'error':
+      return 'infra_error';
+    case 'llm_error':
+    case 'parse_error':
+      return 'rung_llm_error';
+    case 'max_turns':
+    case 'stagnation':
+    case 'give_up':
+    case 'cannot_read':
+      return 'agent_gave_up';
+    case 'verifier_rejected':
+      return 'verifier_rejected';
+    case 'no_text_model':
+    case 'no_llm':
+    case 'vision_disabled':
+    case 'router_miss':
+    case 'playbook_miss':
+    case 'no_ladder':
+      return 'config_missing';
+    default:
+      return 'infra_error';
+  }
 }
 
 export type { TaskResult } from './pipeline-types';
