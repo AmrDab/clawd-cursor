@@ -254,22 +254,95 @@ export function getSmartTools(): ToolDefinition[] {
             const engine = getOcr();
             if (!engine.isAvailable()) return null;
             const result = await engine.recognizeScreen();
-            const targetLower = target.toLowerCase();
 
             // Pick best OCR candidate from a (possibly filtered) subset.
-            // Returns null when no candidate clears the 0.3 score threshold.
+            // Builds n-grams from adjacent same-line tokens so a multi-word
+            // target like "begin exam" matches the actual button (whose OCR
+            // output is two adjacent tokens "begin" + "exam") rather than the
+            // first stray occurrence of one of those words in unrelated
+            // instructional text. Returns null if no candidate clears 0.5.
+            const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            const targetNorm = norm(target);
+            const targetWords = targetNorm.split(' ').filter(Boolean);
+            const targetWordSet = new Set(targetWords);
+
             const pickBest = (cands: typeof result.elements) => {
-              let best: typeof cands[number] | null = null;
-              let bestScore = 0;
+              // Group by OCR line index; sort each line left-to-right
+              const lineMap = new Map<number, typeof cands>();
               for (const el of cands) {
-                const elText = el.text.toLowerCase();
-                if (elText === targetLower) { best = el; bestScore = 1; break; }
-                if (elText.includes(targetLower) || targetLower.includes(elText)) {
-                  const score = Math.min(elText.length, targetLower.length) / Math.max(elText.length, targetLower.length);
-                  if (score > bestScore) { best = el; bestScore = score; }
+                if (!el.text) continue;
+                const arr = lineMap.get(el.line) ?? [] as typeof cands;
+                arr.push(el);
+                lineMap.set(el.line, arr);
+              }
+
+              let bestMatch: typeof cands[number] | null = null;
+              let bestScore = 0;
+
+              const scorePhrase = (phrase: string, tokenCount: number) => {
+                if (!phrase) return 0;
+                if (phrase === targetNorm) return 1.0;
+                let raw = 0;
+                if (phrase.includes(targetNorm) || targetNorm.includes(phrase)) {
+                  raw = Math.min(phrase.length, targetNorm.length) / Math.max(phrase.length, targetNorm.length) * 0.9;
+                } else {
+                  // Token-overlap fallback (handles transposed / partial matches)
+                  const phraseWords = phrase.split(' ').filter(Boolean);
+                  if (!phraseWords.length) return 0;
+                  const overlap = phraseWords.filter(w => targetWordSet.has(w)).length;
+                  const cov = overlap / targetWords.length;
+                  if (cov >= 1) raw = 0.85;
+                  else if (cov >= 0.5) raw = 0.5 * cov;
+                  else return 0;
+                }
+                // Penalize a SINGLE token claiming to match a MULTI-WORD target
+                // (the exact failure mode that mis-clicked "begin" in instruction
+                // text instead of the actual "begin exam" button).
+                if (targetWords.length > 1 && tokenCount === 1 && raw < 0.95) raw *= 0.55;
+                return raw;
+              };
+
+              const recordCandidate = (span: typeof cands, score: number) => {
+                if (score <= bestScore) return;
+                bestScore = score;
+                // Synthesize a virtual element covering the full n-gram bounds
+                // so the click lands at its visual centroid, not the first token.
+                const minX = Math.min(...span.map(t => t.x));
+                const minY = Math.min(...span.map(t => t.y));
+                const maxX = Math.max(...span.map(t => t.x + t.width));
+                const maxY = Math.max(...span.map(t => t.y + t.height));
+                const head = span[0];
+                bestMatch = {
+                  ...head,
+                  text: span.map(t => t.text).join(' '),
+                  x: minX,
+                  y: minY,
+                  width: maxX - minX,
+                  height: maxY - minY,
+                  confidence: span.reduce((a, t) => a + (t.confidence ?? 0), 0) / span.length,
+                };
+              };
+
+              const MAX_N = Math.min(8, targetWords.length + 2);
+              for (const lineToks of lineMap.values()) {
+                const sorted = [...lineToks].sort((a, b) => a.x - b.x);
+                for (let i = 0; i < sorted.length; i++) {
+                  for (let n = 1; n <= MAX_N && i + n <= sorted.length; n++) {
+                    const span = sorted.slice(i, i + n);
+                    // Reject spans with a big horizontal gap (different visual chunks)
+                    let contiguous = true;
+                    for (let k = 1; k < span.length; k++) {
+                      const gap = span[k].x - (span[k - 1].x + span[k - 1].width);
+                      if (gap > Math.max(span[k - 1].height * 1.5, 30)) { contiguous = false; break; }
+                    }
+                    if (!contiguous) continue;
+                    const phrase = norm(span.map(t => t.text).join(' '));
+                    const score = scorePhrase(phrase, span.length);
+                    if (score > bestScore) recordCandidate(span, score);
+                  }
                 }
               }
-              return best && bestScore > 0.3 ? { match: best, score: bestScore } : null;
+              return bestMatch && bestScore >= 0.4 ? { match: bestMatch, score: bestScore } : null;
             };
 
             // Prefer matches inside the focused window's bounds — full-screen OCR can

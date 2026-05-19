@@ -197,6 +197,41 @@ describe('Smart Tools', () => {
       expect(result.text).toContain('Submit');
     });
 
+    it('multi-word target prefers an adjacent n-gram match over a stray single token (BUG-B)', async () => {
+      // Reproduces the exam-page failure: the word "begin" appears alone in
+      // instructional text, and "begin" + "exam" appear as two adjacent OCR
+      // tokens forming the actual button. The old length-ratio ranker took
+      // the stray "begin" (5/10 = 0.5) and silently mis-clicked. The n-gram
+      // ranker must score the merged "begin exam" at 1.0 and win.
+      const { OcrEngine } = await import('../platform/ocr-engine');
+      const origRecognize = (OcrEngine.prototype as any).recognizeScreen;
+      (OcrEngine.prototype as any).recognizeScreen = async () => ({
+        elements: [
+          // Stray "begin" in instruction text — wrong target
+          { text: 'begin', x: 901, y: 415, width: 37, height: 14, line: 84, confidence: 0.9 },
+          // The real button — two adjacent tokens on the same line
+          { text: 'begin', x: 602, y: 877, width: 36, height: 13, line: 135, confidence: 0.95 },
+          { text: 'exam',  x: 647, y: 880, width: 30, height:  7, line: 135, confidence: 0.95 },
+        ],
+        fullText: 'begin begin exam',
+        durationMs: 100,
+      });
+      try {
+        mockInvokeElement.mockResolvedValue({ success: false });
+        const ctx = createCtx();
+        const result = await smartClick.handler({ target: 'begin exam' }, ctx);
+        expect(result.isError).toBeUndefined();
+        // Must click the n-gram's centroid, NOT the stray token at y≈422
+        const m = result.text.match(/at (\d+),(\d+)/);
+        expect(m).toBeTruthy();
+        const clickY = Number(m![2]);
+        expect(clickY).toBeGreaterThan(800);
+        expect(clickY).toBeLessThan(900);
+      } finally {
+        (OcrEngine.prototype as any).recognizeScreen = origRecognize;
+      }
+    });
+
     // ── Issue #101: structured failure payloads ──
 
     it('successful click still returns plain human-readable text (not JSON)', async () => {
