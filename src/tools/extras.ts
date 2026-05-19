@@ -510,14 +510,17 @@ export function getExtraTools(): ToolDefinition[] {
       name: 'open_url',
       description:
         'Open a URL in the OS default browser. Non-browser-agnostic counterpart to navigate_browser. ' +
-        'Tier 2 (mutation): triggers network egress to an arbitrary destination and may launch ' +
-        'the registered HTTP handler (which can be any app, not strictly a browser).',
+        'Tier 1 (input): triggers network egress and may launch the registered HTTP handler ' +
+        '(which can be any app, not strictly a browser). Downgraded from tier 2 in 0.9.4 ' +
+        '(issue #101 bug 3) because an agent host can always reach the same primitive via ' +
+        'Bash (`open <url>` on macOS, `xdg-open` on Linux, `start <url>` on Windows) — the ' +
+        'tier-2 gate added friction without preventing the action. URL must start with http(s)://.',
       parameters: {
         url: { type: 'string', description: 'https:// or http:// URL', required: true },
       },
       category: 'orchestration',
       compactGroup: 'window',
-      safetyTier: 2,
+      safetyTier: 1,
       handler: async ({ url }, ctx) => {
         await ctx.ensureInitialized();
         if (!ctx.platform) return needPlatform('open_url');

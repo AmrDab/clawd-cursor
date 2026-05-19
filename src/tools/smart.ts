@@ -200,13 +200,43 @@ export function getSmartTools(): ToolDefinition[] {
         const timeoutMs = (params.timeout as number) || 10000; // default 10s, was 5s
         const attempted: string[] = [];
 
-        // Wrap entire smart_click in a timeout to prevent hanging in serve mode
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`smart_click timed out after ${timeoutMs}ms searching for "${target}"`)), timeoutMs)
-        );
+        // Deadline-aware budget. Each fallback checks `remaining()` BEFORE
+        // starting an expensive operation. If <500ms remain we skip and
+        // record a `deadline_exceeded_before_*` entry so the outer wall-clock
+        // timeout never fires mid-fallback and discards diagnostic state.
+        // See issue #101: bare `Promise.race` swallowed the inner work's
+        // candidates[] / attempted[] arrays whenever it lost the race.
+        const startedAt = Date.now();
+        const deadline = startedAt + timeoutMs;
+        const remaining = () => Math.max(0, deadline - Date.now());
+        const MIN_BUDGET_MS = 500;
 
-        try {
-        return await Promise.race([timeoutPromise, (async () => {
+        // Structured candidate evidence — populated as each subsystem reports
+        // what it saw (e.g. OCR matched the text but the click didn't take).
+        // Surfaces in the JSON failure payload so callers can debug WHY a
+        // click missed, not just THAT it missed.
+        type Candidate = {
+          source: 'ocr' | 'a11y' | 'cdp';
+          text: string;
+          bounds: { x: number; y: number; w: number; h: number };
+          confidence: number | null;
+        };
+        const candidates: Candidate[] = [];
+
+        const buildFailure = (
+          error: 'no_clickable_target' | 'deadline_exceeded',
+          reason: string,
+        ) => {
+          const payload = {
+            error,
+            reason,
+            target,
+            candidates,
+            tried: attempted,
+            elapsedMs: Date.now() - startedAt,
+          };
+          return { text: JSON.stringify(payload), isError: true };
+        };
 
         // Detect active window and check traits
         const activeWin = await ctx.a11y.getActiveWindow().catch(() => null);
@@ -218,7 +248,8 @@ export function getSmartTools(): ToolDefinition[] {
         // OCR finds text coordinates, a11y tries invoke — whoever succeeds first wins.
 
         // Start OCR scan
-        const ocrPromise = (async (): Promise<{ x: number; y: number; text: string; warning?: string } | null> => {
+        type OcrHit = { x: number; y: number; text: string; warning?: string; bounds: { x: number; y: number; w: number; h: number }; confidence: number | null };
+        const ocrPromise: Promise<OcrHit | null> = (async (): Promise<OcrHit | null> => {
           try {
             const engine = getOcr();
             if (!engine.isAvailable()) return null;
@@ -227,10 +258,10 @@ export function getSmartTools(): ToolDefinition[] {
 
             // Pick best OCR candidate from a (possibly filtered) subset.
             // Returns null when no candidate clears the 0.3 score threshold.
-            const pickBest = (candidates: typeof result.elements) => {
-              let best: typeof candidates[number] | null = null;
+            const pickBest = (cands: typeof result.elements) => {
+              let best: typeof cands[number] | null = null;
               let bestScore = 0;
-              for (const el of candidates) {
+              for (const el of cands) {
                 const elText = el.text.toLowerCase();
                 if (elText === targetLower) { best = el; bestScore = 1; break; }
                 if (elText.includes(targetLower) || targetLower.includes(elText)) {
@@ -270,17 +301,23 @@ export function getSmartTools(): ToolDefinition[] {
             }
 
             if (!pick) return null;
+            const m = pick.match;
             return {
-              x: pick.match.x + Math.round(pick.match.width / 2),
-              y: pick.match.y + Math.round(pick.match.height / 2),
-              text: pick.match.text,
+              x: m.x + Math.round(m.width / 2),
+              y: m.y + Math.round(m.height / 2),
+              text: m.text,
               warning,
+              bounds: { x: m.x, y: m.y, w: m.width, h: m.height },
+              confidence: typeof (m as any).confidence === 'number' ? (m as any).confidence : null,
             };
           } catch { return null; }
         })();
 
         // Start a11y invoke in parallel
-        const a11yPromise = (async (): Promise<{ method: string; clickPoint?: { x: number; y: number } } | null> => {
+        type A11yHit =
+          | { method: 'invoke' }
+          | { method: 'bounds'; clickPoint: { x: number; y: number }; bounds?: { x: number; y: number; w: number; h: number }; text?: string };
+        const a11yPromise: Promise<A11yHit | null> = (async (): Promise<A11yHit | null> => {
           if (emptyA11y) return null;
           try {
             const result = await ctx.a11y.invokeElement({
@@ -303,7 +340,12 @@ export function getSmartTools(): ToolDefinition[] {
                 if (el.bounds?.width > 0) {
                   const cx = el.bounds.x + Math.floor(el.bounds.width / 2);
                   const cy = el.bounds.y + Math.floor(el.bounds.height / 2);
-                  return { method: 'bounds', clickPoint: { x: cx, y: cy } };
+                  return {
+                    method: 'bounds',
+                    clickPoint: { x: cx, y: cy },
+                    bounds: { x: el.bounds.x, y: el.bounds.y, w: el.bounds.width, h: el.bounds.height },
+                    text: el.name,
+                  };
                 }
               }
             } catch { /* fall through */ }
@@ -311,10 +353,33 @@ export function getSmartTools(): ToolDefinition[] {
           }
         })();
 
-        const [ocrMatch, a11yResult] = await Promise.all([ocrPromise, a11yPromise]);
+        // Wait for OCR + a11y in parallel, but bounded by the overall deadline.
+        // If both subsystems hang we abandon them at the deadline rather than
+        // letting an outer race fire — but we keep the diagnostic state we've
+        // already collected.
+        const parallelResult: { ocr: OcrHit | null; a11y: A11yHit | null; timedOut: boolean } = {
+          ocr: null,
+          a11y: null,
+          timedOut: false,
+        };
+        await new Promise<void>((resolve) => {
+          let settled = 0;
+          const finish = () => { if (++settled >= 2) resolve(); };
+          const timer = setTimeout(() => {
+            parallelResult.timedOut = true;
+            resolve();
+          }, remaining());
+          ocrPromise.then(r => { parallelResult.ocr = r; finish(); }, () => finish());
+          a11yPromise.then(r => { parallelResult.a11y = r; finish(); }, () => finish());
+          // Cancel the deadline timer once both settle so we don't keep the event loop alive
+          Promise.allSettled([ocrPromise, a11yPromise]).then(() => clearTimeout(timer));
+        });
+        const ocrMatch = parallelResult.ocr;
+        const a11yResult = parallelResult.a11y;
+        const parallelTimedOut = parallelResult.timedOut;
 
         // a11y invoke succeeded — best outcome (OS-level click, most reliable)
-        if (a11yResult?.method === 'invoke') {
+        if (a11yResult && (a11yResult as any).method === 'invoke') {
           ctx.a11y.invalidateCache();
           return { text: `Clicked "${target}" via UI Automation (invoke_element)` };
         }
@@ -328,23 +393,55 @@ export function getSmartTools(): ToolDefinition[] {
         // this is a no-op, so the fix is safe across every Windows config
         // and on macOS / Linux (where dpiRatio always returns 1).
         if (ocrMatch) {
+          const m = ocrMatch as NonNullable<typeof ocrMatch>;
+          // Record the OCR hit as a candidate even on the happy path —
+          // if mouseClick throws below, the failure payload still shows
+          // "OCR did find the text, the click itself failed".
+          candidates.push({
+            source: 'ocr',
+            text: m.text,
+            bounds: m.bounds,
+            confidence: m.confidence,
+          });
           const dpi = ctx.desktop.getDpiRatio?.() || 1;
-          const cx = Math.round(ocrMatch.x / dpi);
-          const cy = Math.round(ocrMatch.y / dpi);
-          await ctx.desktop.mouseClick(cx, cy);
+          const cx = Math.round(m.x / dpi);
+          const cy = Math.round(m.y / dpi);
+          try {
+            await ctx.desktop.mouseClick(cx, cy);
+          } catch (err: any) {
+            attempted.push(`ocr_match_click_threw: ${err?.message?.substring(0, 80) || 'unknown'}`);
+            return buildFailure('no_clickable_target', 'ocr_match_click_threw');
+          }
           ctx.a11y.invalidateCache();
-          const warningSuffix = ocrMatch.warning ? `  [WARNING: ${ocrMatch.warning} — verify with read_screen]` : '';
-          return { text: `Clicked "${target}" via OCR (matched "${ocrMatch.text}" at ${cx},${cy}${dpi > 1 ? ` — DPI-corrected from physical ${ocrMatch.x},${ocrMatch.y}` : ''})${warningSuffix}` };
+          const warningSuffix = m.warning ? `  [WARNING: ${m.warning} — verify with read_screen]` : '';
+          return { text: `Clicked "${target}" via OCR (matched "${m.text}" at ${cx},${cy}${dpi > 1 ? ` — DPI-corrected from physical ${m.x},${m.y}` : ''})${warningSuffix}` };
         }
 
         // a11y had bounds but couldn't invoke — coordinate fallback
-        if (a11yResult?.clickPoint) {
-          await ctx.desktop.mouseClick(a11yResult.clickPoint.x, a11yResult.clickPoint.y);
+        if (a11yResult && (a11yResult as any).method === 'bounds') {
+          const a = a11yResult as Extract<NonNullable<typeof a11yResult>, { method: 'bounds' }>;
+          if (a.bounds) {
+            candidates.push({
+              source: 'a11y',
+              text: a.text ?? target,
+              bounds: a.bounds,
+              confidence: null,
+            });
+          }
+          try {
+            await ctx.desktop.mouseClick(a.clickPoint.x, a.clickPoint.y);
+          } catch (err: any) {
+            attempted.push(`a11y_bounds_click_threw: ${err?.message?.substring(0, 80) || 'unknown'}`);
+            return buildFailure('no_clickable_target', 'a11y_bounds_click_threw');
+          }
           ctx.a11y.invalidateCache();
-          return { text: `Clicked "${target}" via a11y bounds (coordinate fallback at ${a11yResult.clickPoint.x},${a11yResult.clickPoint.y})` };
+          return { text: `Clicked "${target}" via a11y bounds (coordinate fallback at ${a.clickPoint.x},${a.clickPoint.y})` };
         }
 
         // Track what was attempted for diagnostics
+        if (parallelTimedOut) {
+          attempted.push('deadline_exceeded_during_ocr_a11y_parallel');
+        }
         if (emptyA11y) {
           attempted.push(`UIA(skipped): app "${appName}" has known traits: emptyAxTree`);
         } else {
@@ -353,7 +450,13 @@ export function getSmartTools(): ToolDefinition[] {
         attempted.push(ocrMatch === null ? 'ocr: no text match found' : 'ocr: unavailable');
 
         // ── Step 2: CDP click (browser content) ──
-        if (isBrowser || await ctx.cdp.isConnected().catch(() => false)) {
+        // Deadline-gated so the outer wall-clock can't fire mid-evaluate.
+        const cdpBudget = remaining();
+        const cdpEligible = isBrowser || (cdpBudget >= MIN_BUDGET_MS &&
+          await ctx.cdp.isConnected().catch(() => false));
+        if (cdpBudget < MIN_BUDGET_MS) {
+          attempted.push('deadline_exceeded_before_cdp');
+        } else if (cdpEligible) {
           try {
             const connected = await ctx.cdp.isConnected();
             if (connected) {
@@ -379,6 +482,8 @@ export function getSmartTools(): ToolDefinition[] {
                 }
                 attempted.push('CDP: no text match found');
               }
+            } else {
+              attempted.push('CDP: not connected');
             }
           } catch (err: any) {
             attempted.push(`CDP: ${err.message?.substring(0, 80)}`);
@@ -387,15 +492,14 @@ export function getSmartTools(): ToolDefinition[] {
           attempted.push(`CDP(skipped): foreground app "${appName}" is not a browser`);
         }
 
-        // All methods failed
-        return {
-          text: `smart_click failed: could not click "${target}" after all fallback methods.\nAttempted:\n${attempted.map((a, i) => `  ${i + 1}. ${a}`).join('\n')}\nDiagnosis:\n  No specific failure pattern detected`,
-          isError: true,
-        };
-        })()]);
-        } catch (err: any) {
-          return { text: err.message, isError: true };
+        // All methods failed. Choose the error code based on whether the
+        // deadline ate any of our subsystems — if so the caller should retry
+        // with a longer timeout; if not, the target is genuinely unfindable.
+        const deadlineHit = parallelTimedOut || remaining() < MIN_BUDGET_MS;
+        if (deadlineHit) {
+          return buildFailure('deadline_exceeded', 'deadline_exceeded');
         }
+        return buildFailure('no_clickable_target', 'all_fallbacks_failed');
       },
     },
 

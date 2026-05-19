@@ -1,0 +1,163 @@
+#!/usr/bin/env osascript -l JavaScript
+
+/**
+ * _window-picker.jxa
+ *
+ * Shared reference implementation for "which window of a process is the
+ * user's real interaction window?". osascript cannot `require()` other
+ * scripts, so the helpers below are also INLINED into the consumer scripts.
+ * Treat this file as the source of truth — if you change scoring here, mirror
+ * the change in:
+ *   - scripts/mac/focus-window.jxa
+ *   - scripts/mac/get-foreground-window.jxa
+ *
+ * Intended consumers:
+ *   - focus-window.jxa            (uses findTitleMatchWindow + pickInteractionWindow fallback)
+ *   - get-foreground-window.jxa   (uses pickInteractionWindow)
+ *
+ * Heuristics, in order of weight:
+ *   1. Visible area (largest wins; rejects 0x0 outright)
+ *   2. Subrole penalty: AXFloatingWindow / AXDialog / AXSystemDialog are
+ *      almost always popups; AXStandardWindow is preferred.
+ *   3. Title penalty: titles like "Downloads" / "Notifications" / "Updates"
+ *      are commonly system-tray-ish popovers in apps like Xcode, Safari.
+ *   4. Z-order tiebreak: lower index ~= newer / more recently activated,
+ *      so older-but-larger windows still beat tiny new popups via (1)+(2)+(3),
+ *      but among equally-scored windows the older one wins (it's the window
+ *      the user was already working in before the popup appeared).
+ *
+ * Bugs this addresses (clawdcursor #101):
+ *   #2 focus_window ignored title= on multi-window apps and grabbed windows[0]
+ *   #4 getActiveWindow grabbed windows[0] of the frontmost process, which on
+ *      Xcode would surface the "Downloads" popup instead of the project window
+ */
+
+function safeGet(obj, property, defaultValue) {
+    try {
+        var val = obj[property]();
+        return (val !== undefined && val !== null) ? val : defaultValue;
+    } catch (e) {
+        return defaultValue;
+    }
+}
+
+// Reads {x, y, width, height} for a window; returns zeros if AXPosition/AXSize
+// are not accessible (some background processes return EACCESS here).
+function getWinBounds(win) {
+    var bounds = { x: 0, y: 0, width: 0, height: 0 };
+    try {
+        var p = win.position();
+        var s = win.size();
+        if (p && s) {
+            bounds.x = p[0] || 0;
+            bounds.y = p[1] || 0;
+            bounds.width = s[0] || 0;
+            bounds.height = s[1] || 0;
+        }
+    } catch (e) {}
+    return bounds;
+}
+
+// Pulls the AXSubrole accessibility attribute, e.g. "AXStandardWindow",
+// "AXFloatingWindow", "AXDialog", "AXSystemDialog". Returns '' if unknown.
+function getWinSubrole(win) {
+    try {
+        return win.subrole() || '';
+    } catch (e) {}
+    try {
+        return win.attributes.byName('AXSubrole').value() || '';
+    } catch (e) {}
+    return '';
+}
+
+function isLikelyTrayTitle(title) {
+    if (!title) return false;
+    var t = String(title).trim().toLowerCase();
+    return t === 'downloads' || t === 'notifications' || t === 'updates' ||
+           t === 'inspector' || t === 'activity';
+}
+
+// Scores a window for "is this the user's real interaction window?".
+// Higher score wins. Returns -Infinity for 0x0 / invisible windows.
+function scoreWindow(win, index) {
+    var bounds = getWinBounds(win);
+    var area = bounds.width * bounds.height;
+    if (area <= 0) return -Infinity;
+
+    var score = area;
+
+    var subrole = getWinSubrole(win);
+    if (subrole === 'AXStandardWindow') {
+        score += 2000000;            // strongly prefer standard windows
+    } else if (subrole === 'AXFloatingWindow') {
+        score -= 5000000;            // popups, palettes
+    } else if (subrole === 'AXDialog' || subrole === 'AXSystemDialog') {
+        score -= 3000000;            // modal dialogs
+    }
+
+    var title = '';
+    try { title = win.name() || ''; } catch (e) {}
+    if (isLikelyTrayTitle(title)) score -= 1500000;
+
+    // Tiebreak: older windows (higher index) get a tiny nudge so popups
+    // (which arrive at index 0) lose ties to the underlying work window.
+    score += index * 10;
+
+    return score;
+}
+
+// Picks the most likely user-interaction window from a window list.
+// Returns { window, index } or null if no window has visible area.
+function pickInteractionWindow(windows) {
+    var best = null;
+    var bestScore = -Infinity;
+    var bestIndex = -1;
+    for (var i = 0; i < windows.length; i++) {
+        try {
+            var w = windows[i];
+            var s = scoreWindow(w, i);
+            if (s > bestScore) {
+                bestScore = s;
+                best = w;
+                bestIndex = i;
+            }
+        } catch (e) {}
+    }
+    if (!best) return null;
+    return { window: best, index: bestIndex };
+}
+
+// Finds first window whose name contains `needle` (case-insensitive)
+// AND has non-zero visible area. Used by focus-window.jxa.
+function findTitleMatchWindow(windows, needle) {
+    if (!needle) return null;
+    var n = String(needle).toLowerCase();
+    for (var i = 0; i < windows.length; i++) {
+        try {
+            var w = windows[i];
+            var title = '';
+            try { title = w.name() || ''; } catch (e) {}
+            if (!title) continue;
+            if (title.toLowerCase().indexOf(n) === -1) continue;
+            var b = getWinBounds(w);
+            if (b.width * b.height <= 0) continue;
+            return { window: w, index: i, title: title };
+        } catch (e) {}
+    }
+    return null;
+}
+
+// This file is reference-only when invoked directly — print the helpers
+// list so a curious developer running `osascript _window-picker.jxa` gets
+// something useful back instead of nothing.
+function run(argv) {
+    return JSON.stringify({
+        kind: 'reference',
+        helpers: [
+            'safeGet', 'getWinBounds', 'getWinSubrole',
+            'isLikelyTrayTitle', 'scoreWindow',
+            'pickInteractionWindow', 'findTitleMatchWindow'
+        ],
+        note: 'osascript cannot require() — these helpers are inlined in focus-window.jxa and get-foreground-window.jxa. Keep all three in sync.'
+    });
+}

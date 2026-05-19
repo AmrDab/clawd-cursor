@@ -169,14 +169,23 @@ describe('Smart Tools', () => {
       expect(result.text).toContain('OCR');
     });
 
-    it('reports all attempted methods on total failure', async () => {
+    it('reports structured failure JSON with attempted methods on total failure', async () => {
       mockInvokeElement.mockResolvedValue({ success: false });
       const ctx = createCtx();
       // OCR won't match "NonexistentButton"
       const result = await smartClick.handler({ target: 'NonexistentButton' }, ctx);
+      // Existing callers still see truthy isError — that contract is preserved.
       expect(result.isError).toBe(true);
-      expect(result.text).toContain('smart_click failed');
-      expect(result.text).toContain('Attempted');
+      // Smarter callers can JSON.parse(text) for structured diagnostics
+      // (see issue #101: bare timeout used to discard this info).
+      const parsed = JSON.parse(result.text);
+      expect(parsed.error).toBe('no_clickable_target');
+      expect(parsed.reason).toBe('all_fallbacks_failed');
+      expect(parsed.target).toBe('NonexistentButton');
+      expect(Array.isArray(parsed.tried)).toBe(true);
+      expect(parsed.tried.length).toBeGreaterThan(0);
+      expect(Array.isArray(parsed.candidates)).toBe(true);
+      expect(typeof parsed.elapsedMs).toBe('number');
     });
 
     it('matches OCR elements with partial text match', async () => {
@@ -186,6 +195,83 @@ describe('Smart Tools', () => {
       // "Sub" partially matches "Submit"
       expect(result.text).toContain('OCR');
       expect(result.text).toContain('Submit');
+    });
+
+    // ── Issue #101: structured failure payloads ──
+
+    it('successful click still returns plain human-readable text (not JSON)', async () => {
+      // Sanity check: the JSON failure payload must NOT bleed into the
+      // happy path. Existing string-matching callers depend on prose like
+      // `Clicked "X" via OCR (matched ...)`.
+      mockInvokeElement.mockResolvedValue({ success: false });
+      const ctx = createCtx();
+      const result = await smartClick.handler({ target: 'Submit' }, ctx);
+      expect(result.isError).toBeUndefined();
+      expect(result.text).toMatch(/^Clicked "Submit"/);
+      // Must not be parseable JSON — that would mean we accidentally
+      // routed a success through the failure builder.
+      expect(() => JSON.parse(result.text)).toThrow();
+    });
+
+    it('returns structured JSON with error: "deadline_exceeded" when the deadline fires', async () => {
+      // Force both OCR and a11y invoke to outlast the 50ms deadline.
+      // The OLD bare-Promise.race would have thrown a bare timeout and
+      // discarded the diagnostic state. The new deadline-aware loop must
+      // return a structured payload instead, with isError still truthy.
+      const slowInvoke = vi.fn(() => new Promise(r => setTimeout(() => r({ success: false }), 5000)));
+      // Patch the mocked OCR engine for this one test to be slow.
+      const ctx = createCtx({
+        a11y: {
+          getActiveWindow: mockGetActiveWindow,
+          invokeElement: slowInvoke,
+          findElement: mockFindElement,
+          getFocusedElement: mockGetFocusedElement,
+          getScreenContext: mockGetScreenContext,
+          writeClipboard: mockWriteClipboard,
+          invalidateCache: mockInvalidateCache,
+        } as any,
+      });
+      // Slow down OCR too by patching the singleton via re-import isn't easy;
+      // instead use a target the OCR mock won't match so OCR returns null
+      // quickly — what we're testing is the a11y branch overrunning the deadline.
+      const result = await smartClick.handler(
+        { target: 'NeverGonnaMatchAnythingInOcr', timeout: 50 },
+        ctx,
+      );
+      expect(result.isError).toBe(true);
+      const parsed = JSON.parse(result.text);
+      expect(parsed.error).toBe('deadline_exceeded');
+      expect(parsed.reason).toBe('deadline_exceeded');
+      expect(parsed.target).toBe('NeverGonnaMatchAnythingInOcr');
+      // The diagnostic state survived the deadline — that's the whole point.
+      expect(Array.isArray(parsed.tried)).toBe(true);
+      expect(parsed.tried.some((t: string) => t.includes('deadline_exceeded'))).toBe(true);
+      expect(typeof parsed.elapsedMs).toBe('number');
+    });
+
+    it('returns structured JSON with at least one OCR candidate when OCR matched but click failed', async () => {
+      // OCR sees "Submit" but mouseClick throws (simulates e.g. nut-js
+      // raising on a coordinate that's behind a modal, or the OS denying
+      // synthetic input). The failure payload must surface the OCR hit
+      // as a candidate so the caller knows the text WAS found.
+      mockInvokeElement.mockResolvedValue({ success: false });
+      const throwingMouseClick = vi.fn().mockRejectedValue(new Error('synthetic input denied'));
+      const ctx = createCtx({
+        desktop: {
+          mouseClick: throwingMouseClick,
+          keyPress: mockKeyPress,
+        } as any,
+      });
+      const result = await smartClick.handler({ target: 'Submit' }, ctx);
+      expect(result.isError).toBe(true);
+      const parsed = JSON.parse(result.text);
+      expect(parsed.error).toBe('no_clickable_target');
+      expect(parsed.target).toBe('Submit');
+      expect(parsed.candidates.length).toBeGreaterThanOrEqual(1);
+      const ocrCandidate = parsed.candidates.find((c: any) => c.source === 'ocr');
+      expect(ocrCandidate).toBeTruthy();
+      expect(ocrCandidate.text).toBe('Submit');
+      expect(ocrCandidate.bounds).toMatchObject({ x: 100, y: 200, w: 80, h: 30 });
     });
   });
 

@@ -88,6 +88,20 @@ export interface UiElement {
   automationId?: string;
   /** Owning-process id when known. */
   processId?: number;
+  /**
+   * Human-readable description of the element when its primary `name` is
+   * empty. UIA exposes this via `LocalizedControlType` / `HelpText`; AX
+   * exposes it via `AXDescription` / `AXRoleDescription`; AT-SPI exposes
+   * it via the `description` attribute. Many third-party macOS apps (Xcode
+   * in particular) put their visible text in `AXDescription` rather than
+   * `AXTitle`, so `name` arrives empty and the element looks anonymous to
+   * the agent. Consumers should fall back through `name → description →
+   * value → controlType` when rendering. Adapters populate when available;
+   * undefined is acceptable (back-compat).
+   *
+   * Added 0.9.4 for issue #101 bug 5.
+   */
+  description?: string;
 }
 
 export interface PermissionStatus {

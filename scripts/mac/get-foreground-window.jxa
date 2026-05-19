@@ -2,75 +2,156 @@
 
 /**
  * get-foreground-window.jxa
- * 
+ *
  * Gets the currently focused/foreground window.
- * 
+ *
  * Returns JSON with:
  *   - handle: Window identifier (on macOS this is the process ID as a proxy)
  *   - processId: Unix process ID of the foreground application
  *   - processName: Name of the foreground application
- *   - title: Title of the frontmost window
+ *   - title: Title of the chosen window
+ *   - bounds: {x, y, width, height} of the chosen window
+ *   - subrole: AXSubrole of the chosen window ("AXStandardWindow", etc.)
  *   - success: Boolean indicating success
- * 
+ *
+ * Bug #4 of clawdcursor issue #101: the previous implementation took
+ * processes.where({frontmost: true})[0].windows[0], which on apps that
+ * spawn a popup (Xcode "Downloads", Safari "Notifications") returned the
+ * popup instead of the user's actual interaction window. We now score
+ * each window of the frontmost process and pick the best one.
+ *
  * Usage: osascript -l JavaScript get-foreground-window.jxa
  */
 
-// Utility function to safely get property values
+// ── Inlined from scripts/mac/_window-picker.jxa ───────────────────
+// Keep these helpers in sync with _window-picker.jxa; osascript can't require().
+
 function safeGet(obj, property, defaultValue) {
     try {
         var val = obj[property]();
-        return val !== undefined && val !== null ? val : defaultValue;
+        return (val !== undefined && val !== null) ? val : defaultValue;
     } catch (e) {
         return defaultValue;
     }
 }
+
+function getWinBounds(win) {
+    var bounds = { x: 0, y: 0, width: 0, height: 0 };
+    try {
+        var p = win.position();
+        var s = win.size();
+        if (p && s) {
+            bounds.x = p[0] || 0;
+            bounds.y = p[1] || 0;
+            bounds.width = s[0] || 0;
+            bounds.height = s[1] || 0;
+        }
+    } catch (e) {}
+    return bounds;
+}
+
+function getWinSubrole(win) {
+    try { return win.subrole() || ''; } catch (e) {}
+    try { return win.attributes.byName('AXSubrole').value() || ''; } catch (e) {}
+    return '';
+}
+
+function isLikelyTrayTitle(title) {
+    if (!title) return false;
+    var t = String(title).trim().toLowerCase();
+    return t === 'downloads' || t === 'notifications' || t === 'updates' ||
+           t === 'inspector' || t === 'activity';
+}
+
+function scoreWindow(win, index) {
+    var bounds = getWinBounds(win);
+    var area = bounds.width * bounds.height;
+    if (area <= 0) return -Infinity;
+    var score = area;
+    var subrole = getWinSubrole(win);
+    if (subrole === 'AXStandardWindow') score += 2000000;
+    else if (subrole === 'AXFloatingWindow') score -= 5000000;
+    else if (subrole === 'AXDialog' || subrole === 'AXSystemDialog') score -= 3000000;
+    var title = '';
+    try { title = win.name() || ''; } catch (e) {}
+    if (isLikelyTrayTitle(title)) score -= 1500000;
+    score += index * 10;
+    return score;
+}
+
+function pickInteractionWindow(windows) {
+    var best = null, bestScore = -Infinity, bestIndex = -1;
+    for (var i = 0; i < windows.length; i++) {
+        try {
+            var s = scoreWindow(windows[i], i);
+            if (s > bestScore) { bestScore = s; best = windows[i]; bestIndex = i; }
+        } catch (e) {}
+    }
+    if (!best) return null;
+    return { window: best, index: bestIndex };
+}
+
+// ── End inlined helpers ───────────────────────────────────────────
 
 // run(argv) is the JXA entry point — osascript calls it and its return value becomes stdout.
 function run(argv) {
     try {
         var SystemEvents = Application('System Events');
         SystemEvents.includeStandardAdditions = true;
-        
+
         // Get the frontmost process
         var frontProcesses = SystemEvents.processes.where({ frontmost: true });
-        
+
         if (frontProcesses.length === 0) {
-            return JSON.stringify({ 
-                success: false, 
-                error: 'No foreground window found' 
+            return JSON.stringify({
+                success: false,
+                error: 'No foreground window found'
             });
         }
-        
+
         var frontProcess = frontProcesses[0];
         var processId = safeGet(frontProcess, 'unixId', 0);
         var processName = safeGet(frontProcess, 'name', 'unknown');
-        
-        // Get the frontmost window title
+
+        // Pick the user's real interaction window instead of windows[0].
+        // See header comment for bug #4 rationale.
         var title = '';
+        var bounds = { x: 0, y: 0, width: 0, height: 0 };
+        var subrole = '';
+
         try {
             var windows = frontProcess.windows;
             if (windows.length > 0) {
-                // Try to get the name of the first (frontmost) window
-                try {
-                    title = windows[0].name() || '';
-                } catch (e) {}
-                
-                // If no title, try to find a focused window
-                if (!title) {
+                var picked = pickInteractionWindow(windows);
+                var chosen = null;
+
+                if (picked) {
+                    chosen = picked.window;
+                } else {
+                    // No window had visible area — try a focused window as a
+                    // last resort before giving up on title/bounds entirely.
                     for (var i = 0; i < windows.length; i++) {
                         try {
                             if (windows[i].focused && windows[i].focused()) {
-                                title = windows[i].name() || '';
+                                chosen = windows[i];
                                 break;
                             }
                         } catch (e) {}
                     }
+                    // If still nothing, fall back to windows[0] purely for
+                    // title extraction — preserves prior behaviour when the
+                    // only available window is a popup.
+                    if (!chosen) chosen = windows[0];
                 }
+
+                try { title = chosen.name() || ''; } catch (e) {}
+                bounds = getWinBounds(chosen);
+                subrole = getWinSubrole(chosen);
             }
         } catch (e) {
             // No windows accessible
         }
-        
+
         // On macOS, we don't have window handles like Win32 HWND
         // We use processId as a proxy identifier
         return JSON.stringify({
@@ -78,13 +159,15 @@ function run(argv) {
             handle: processId,  // Using processId as handle equivalent
             processId: processId,
             processName: processName,
-            title: title
+            title: title,
+            bounds: bounds,
+            subrole: subrole
         });
-        
+
     } catch (error) {
-        return JSON.stringify({ 
-            success: false, 
-            error: error.toString() 
+        return JSON.stringify({
+            success: false,
+            error: error.toString()
         });
     }
 }

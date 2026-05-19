@@ -14,8 +14,23 @@ function formatWindow(w: WindowInfo): string {
     (!w.isMinimized ? ` at (${w.bounds.x},${w.bounds.y}) ${w.bounds.width}x${w.bounds.height}` : ' (minimized)');
 }
 
+/**
+ * Build a display label for an element. Falls back through
+ * `name → description → value → ''` so that Xcode and other macOS apps
+ * that put their visible text in `AXDescription` (instead of `AXTitle`)
+ * still render as something more informative than `"missing value"` or
+ * empty quotes. Issue #101 bug 5 — adapters populate `description` when
+ * the underlying a11y API exposes it.
+ */
+function elementLabel(el: UiElement): string {
+  if (el.name && el.name !== 'missing value') return el.name;
+  if (el.description) return el.description;
+  if (el.value) return el.value;
+  return '';
+}
+
 function formatElement(el: UiElement): string {
-  return `[${el.controlType}] "${el.name}"` +
+  return `[${el.controlType}] "${elementLabel(el)}"` +
     (el.automationId ? ` id:${el.automationId}` : '') +
     ` @${el.bounds.x},${el.bounds.y} ${el.bounds.width}x${el.bounds.height}` +
     (el.disabled || el.enabled === false ? ' DISABLED' : '') +
