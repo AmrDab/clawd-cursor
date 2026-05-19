@@ -35,7 +35,8 @@ import type {
 } from '../llm/providers';
 import { DEFAULT_CONFIG } from '../types';
 import { getPackageRoot } from '../paths';
-import { resolveApiConfig } from '../llm/credentials';
+import { resolveApiConfig, inferProviderFromBaseUrl } from '../llm/credentials';
+import type { ResolvedConfig } from '../llm/config';
 import { callVisionLLMDirect } from '../llm/client';
 import { hasConsent } from './onboarding';
 import { checkPermissionsQuick, requestPermissions, isMacOS } from '../platform/native-helper';
@@ -1633,7 +1634,7 @@ function resolveProviderApiKey(providerKey: string, fallbackApiKey?: string): st
   return fallbackApiKey || '';
 }
 
-export function loadPipelineConfig(): PipelineConfig | null {
+export function loadPipelineConfig(overlay?: ResolvedConfig | null): PipelineConfig | null {
   const pkgDir = getPackageRoot();
   let configPath = path.join(pkgDir, CONFIG_FILE);
 
@@ -1641,55 +1642,175 @@ export function loadPipelineConfig(): PipelineConfig | null {
     configPath = path.join(process.cwd(), CONFIG_FILE);
   }
 
+  // Read on-disk config (may be null if no file exists).
+  let diskConfig: PipelineConfig | null = null;
   try {
-    if (!fs.existsSync(configPath)) return null;
-    const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const providerKey = raw.provider || 'ollama';
+    if (fs.existsSync(configPath)) {
+      const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const providerKey = raw.provider || 'ollama';
+      const provider = PROVIDERS[providerKey] || PROVIDERS['ollama'];
+      // Resolve API key: check provider-scoped env vars FIRST, then fall back to
+      // generic resolution. This prevents OpenClaw auth-profiles (e.g. a stale
+      // Anthropic key) from overriding the correct provider-specific key.
+      const scopedEnvKey = (PROVIDER_ENV_VARS[providerKey] || [])
+        .map(k => process.env[k])
+        .find(v => v && v.length > 0) || '';
+      const resolvedDefault = resolveApiConfig();
+      const defaultApiKey = scopedEnvKey || resolvedDefault.apiKey;
+
+      // Support both v0.7.5+ (textModel/visionModel) and legacy (layer2/layer3) field names
+      const layer2Data = raw.pipeline?.textModel ?? raw.pipeline?.layer2;
+      const layer3Data = raw.pipeline?.visionModel ?? raw.pipeline?.layer3;
+
+      const layer2BaseUrl = layer2Data?.baseUrl ?? provider.baseUrl;
+      const layer3BaseUrl = layer3Data?.baseUrl ?? provider.baseUrl;
+      const layer2ProviderKey = layer2Data?.provider || providerKey;
+      const layer3ProviderKey = layer3Data?.provider || providerKey;
+      const layer3ComputerUse = layer3Data?.computerUse ?? false;
+
+      // Resolve API keys PER LAYER based on each layer's provider.
+      // Mixed pipelines (e.g., Kimi text + Anthropic vision) need different keys.
+      const layer2ApiKey = resolveProviderApiKey(layer2ProviderKey, defaultApiKey);
+      const layer3ApiKey = resolveProviderApiKey(layer3ProviderKey, defaultApiKey);
+
+      diskConfig = {
+        provider,
+        providerKey,
+        apiKey: layer2ApiKey, // primary key = text layer key (most LLM calls use text)
+        layer1: true,
+        layer2: {
+          enabled: layer2Data?.enabled ?? false,
+          model: layer2Data?.model ?? provider.textModel,
+          baseUrl: layer2BaseUrl,
+          apiKey: layer2ApiKey, // per-layer key for mixed-provider pipelines
+        },
+        layer3: {
+          enabled: layer3Data?.enabled ?? false,
+          model: layer3Data?.model ?? provider.visionModel,
+          baseUrl: layer3BaseUrl,
+          computerUse: layer3ComputerUse,
+          apiKey: layer3ApiKey, // always resolve per-layer, not just for CU
+        },
+      };
+    }
+  } catch {
+    diskConfig = null;
+  }
+
+  // No CLI overlay → just return whatever (or null) the disk gave us.
+  if (!overlay) return diskConfig;
+
+  return applyCliOverlay(diskConfig, overlay);
+}
+
+/**
+ * Overlay CLI-sourced fields from a ResolvedConfig onto a PipelineConfig.
+ *
+ * If `disk` is null but the overlay supplies enough to construct a pipeline
+ * (a text-model+base-url OR a vision-model+base-url with a CLI source),
+ * a minimal PipelineConfig is synthesized so the agent runtime sees the
+ * flags supplied on the command line.
+ *
+ * Only fields whose `source` tag is 'cli' override the disk values; this
+ * preserves the canonical precedence ladder. Project/user/env-sourced
+ * values from `ResolvedConfig` are NOT applied here — those flow through
+ * the existing disk-config path and provider-scoped env resolution.
+ */
+function applyCliOverlay(
+  disk: PipelineConfig | null,
+  overlay: ResolvedConfig,
+): PipelineConfig | null {
+  const src = overlay.source;
+  const textBaseFromCli   = src.textBaseUrl   === 'cli' ? overlay.textBaseUrl
+                          : src.baseUrl       === 'cli' ? overlay.baseUrl
+                          : undefined;
+  const textModelFromCli  = src.model         === 'cli' ? overlay.model         : undefined;
+  const textApiFromCli    = src.textApiKey    === 'cli' ? overlay.textApiKey
+                          : src.apiKey        === 'cli' ? overlay.apiKey
+                          : undefined;
+  const visionBaseFromCli = src.visionBaseUrl === 'cli' ? overlay.visionBaseUrl
+                          : src.baseUrl       === 'cli' ? overlay.baseUrl
+                          : undefined;
+  const visionModelFromCli= src.visionModel   === 'cli' ? overlay.visionModel   : undefined;
+  const visionApiFromCli  = src.visionApiKey  === 'cli' ? overlay.visionApiKey
+                          : src.apiKey        === 'cli' ? overlay.apiKey
+                          : undefined;
+  const providerFromCli   = src.provider      === 'cli' ? overlay.provider      : undefined;
+
+  const anyCli = textBaseFromCli || textModelFromCli || textApiFromCli
+              || visionBaseFromCli || visionModelFromCli || visionApiFromCli
+              || providerFromCli;
+
+  if (!disk && !anyCli) return null;
+
+  // Synthesize a minimal pipeline if no disk config exists.
+  if (!disk) {
+    const layer2BaseUrl = textBaseFromCli || '';
+    const layer3BaseUrl = visionBaseFromCli || '';
+    const providerKey = providerFromCli
+                      || inferProviderFromBaseUrl(layer2BaseUrl || layer3BaseUrl)
+                      || 'ollama';
     const provider = PROVIDERS[providerKey] || PROVIDERS['ollama'];
-    // Resolve API key: check provider-scoped env vars FIRST, then fall back to
-    // generic resolution. This prevents OpenClaw auth-profiles (e.g. a stale
-    // Anthropic key) from overriding the correct provider-specific key.
-    const scopedEnvKey = (PROVIDER_ENV_VARS[providerKey] || [])
-      .map(k => process.env[k])
-      .find(v => v && v.length > 0) || '';
-    const resolvedDefault = resolveApiConfig();
-    const defaultApiKey = scopedEnvKey || resolvedDefault.apiKey;
-
-    // Support both v0.7.5+ (textModel/visionModel) and legacy (layer2/layer3) field names
-    const layer2Data = raw.pipeline?.textModel ?? raw.pipeline?.layer2;
-    const layer3Data = raw.pipeline?.visionModel ?? raw.pipeline?.layer3;
-
-    const layer2BaseUrl = layer2Data?.baseUrl ?? provider.baseUrl;
-    const layer3BaseUrl = layer3Data?.baseUrl ?? provider.baseUrl;
-    const layer2ProviderKey = layer2Data?.provider || providerKey;
-    const layer3ProviderKey = layer3Data?.provider || providerKey;
-    const layer3ComputerUse = layer3Data?.computerUse ?? false;
-
-    // Resolve API keys PER LAYER based on each layer's provider.
-    // Mixed pipelines (e.g., Kimi text + Anthropic vision) need different keys.
-    const layer2ApiKey = resolveProviderApiKey(layer2ProviderKey, defaultApiKey);
-    const layer3ApiKey = resolveProviderApiKey(layer3ProviderKey, defaultApiKey);
-
+    const layer2Model = textModelFromCli || '';
+    const layer3Model = visionModelFromCli || '';
+    const layer2ApiKey = textApiFromCli || '';
+    const layer3ApiKey = visionApiFromCli || layer2ApiKey;
     return {
       provider,
       providerKey,
-      apiKey: layer2ApiKey, // primary key = text layer key (most LLM calls use text)
+      apiKey: layer2ApiKey,
       layer1: true,
       layer2: {
-        enabled: layer2Data?.enabled ?? false,
-        model: layer2Data?.model ?? provider.textModel,
+        enabled: Boolean(layer2Model && layer2BaseUrl),
+        model: layer2Model,
         baseUrl: layer2BaseUrl,
-        apiKey: layer2ApiKey, // per-layer key for mixed-provider pipelines
+        apiKey: layer2ApiKey,
       },
       layer3: {
-        enabled: layer3Data?.enabled ?? false,
-        model: layer3Data?.model ?? provider.visionModel,
+        enabled: Boolean(layer3Model && layer3BaseUrl),
+        model: layer3Model,
         baseUrl: layer3BaseUrl,
-        computerUse: layer3ComputerUse,
-        apiKey: layer3ApiKey, // always resolve per-layer, not just for CU
+        computerUse: false,
+        apiKey: layer3ApiKey,
       },
     };
-  } catch {
-    return null;
   }
+
+  // Disk config exists — overlay CLI fields on top of it. Each layer's
+  // `enabled` flag flips to true once the layer has both a model and a
+  // base URL (CLI flags can complete a partial disk config the same way
+  // an explicit `enabled: true` would).
+  const layer2BaseUrl = textBaseFromCli   ?? disk.layer2.baseUrl;
+  const layer2Model   = textModelFromCli  ?? disk.layer2.model;
+  const layer2ApiKey  = textApiFromCli    ?? disk.layer2.apiKey ?? disk.apiKey;
+  const layer3BaseUrl = visionBaseFromCli ?? disk.layer3.baseUrl;
+  const layer3Model   = visionModelFromCli?? disk.layer3.model;
+  const layer3ApiKey  = visionApiFromCli  ?? disk.layer3.apiKey ?? disk.apiKey;
+
+  const layer2Enabled = disk.layer2.enabled || Boolean((textModelFromCli || textBaseFromCli) && layer2Model && layer2BaseUrl);
+  const layer3Enabled = disk.layer3.enabled || Boolean((visionModelFromCli || visionBaseFromCli) && layer3Model && layer3BaseUrl);
+
+  const providerKey = providerFromCli ?? disk.providerKey;
+  const provider = providerFromCli ? (PROVIDERS[providerFromCli] || disk.provider) : disk.provider;
+
+  return {
+    ...disk,
+    provider,
+    providerKey,
+    apiKey: layer2ApiKey,
+    layer2: {
+      ...disk.layer2,
+      enabled: layer2Enabled,
+      model: layer2Model,
+      baseUrl: layer2BaseUrl,
+      apiKey: layer2ApiKey,
+    },
+    layer3: {
+      ...disk.layer3,
+      enabled: layer3Enabled,
+      model: layer3Model,
+      baseUrl: layer3BaseUrl,
+      apiKey: layer3ApiKey,
+    },
+  };
 }

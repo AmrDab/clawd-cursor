@@ -246,8 +246,19 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   // ── First-run auto-setup — best-effort, never fatal. ──
   // If no AI providers are found we still boot: the MCP tool surface
   // works fine without an LLM (the host's brain drives it).
+  //
+  // Skip auto-detect entirely when CLI flags already supply a usable
+  // model wiring — otherwise we'd print the misleading "No AI providers
+  // found — booting in tools-only mode" line moments before "Using
+  // externally configured models: text=X" (BUG-A: contradictory boot
+  // banners). The CLI-flag path knows its own answer.
   const configPath = path.join(getPackageRoot(), '.clawdcursor-config.json');
-  if (!forceNoLlm && !fs.existsSync(configPath)) {
+  const cliSuppliesLlm = Boolean(
+    opts.apiKey
+    || (opts.baseUrl && (opts.textModel || opts.visionModel || opts.model))
+    || ((opts.textModel || opts.visionModel || opts.model) && opts.provider),
+  );
+  if (!forceNoLlm && !cliSuppliesLlm && !fs.existsSync(configPath)) {
     console.log(`${e('🔍', '*')} First run — auto-detecting AI providers...\n`);
     const { quickSetup } = await import('./doctor');
     const pipeline = await quickSetup();
@@ -440,7 +451,9 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
 
     if (llmAvailable) {
       const { loadPipelineConfig } = await import('./doctor');
-      const pipelineConfig = loadPipelineConfig();
+      // Pass the resolved CLI overlay so the validation/print path sees the
+      // same pipeline config the agent runtime will use.
+      const pipelineConfig = loadPipelineConfig(resolved);
       if (pipelineConfig && pipelineConfig.layer2.enabled) {
         try {
           const { callTextLLMDirect } = await import('../llm/client');
