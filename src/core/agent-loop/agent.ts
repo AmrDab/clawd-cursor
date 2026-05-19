@@ -528,6 +528,64 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           }
         }
 
+        // 5a'''. BLIND-MODE RAW-COORDINATE-CLICK GUARD.
+        //
+        // Failure mode (BUG-D): in blind mode the LLM sometimes can't locate
+        // a target in the a11y snapshot and, instead of emitting `cannot_read`,
+        // starts random-clicking at guessed coordinates like click(1280,800).
+        // In a live run, this advanced an exam-test UI from the landing screen
+        // through several screens — real user-visible state damage — before
+        // the verifier even ran. The verifier alone (confidence threshold) is
+        // not a sufficient safety net because a more confident model could
+        // produce false-positive success.
+        //
+        // The guard: in blind mode, refuse `click(x, y)` unless an a11y-aware
+        // selector tool (invoke_element / set_field_value / focus_element /
+        // a11y_select / a11y_toggle / a11y_expand / a11y_collapse /
+        // wait_for_element) SUCCEEDED in the last A11Y_RECENCY turns. That
+        // tight window covers the legitimate "I just located the element by
+        // a11y; coord-click as fallback" pattern while rejecting guesses.
+        //
+        // Refusal consumes one turn (the runaway-guard above caps infinite
+        // retries) and routes the agent to either call `cannot_read` (the
+        // explicit blind→vision escape) or use an a11y-aware variant first.
+        // Refusal is NOT a tool success — it surfaces as an error in
+        // tool_result so the verifier won't read it as evidence of progress.
+        if (call.name === 'click' && input.mode === 'blind') {
+          const A11Y_RECENCY = 2; // last N step entries
+          const A11Y_RESOLVERS = new Set([
+            'invoke_element', 'set_field_value', 'focus_element',
+            'a11y_select', 'a11y_toggle', 'a11y_expand', 'a11y_collapse',
+            'wait_for_element', 'find_element',
+          ]);
+          const recentA11y = steps.slice(-A11Y_RECENCY).some(s =>
+            A11Y_RESOLVERS.has(s.toolName) && s.result.success,
+          );
+          if (!recentA11y) {
+            log.warn('agent.blind_coord_click.refused', {
+              turn,
+              args: compactArgs(call.args),
+              reason: 'no recent successful a11y selection',
+              recency: A11Y_RECENCY,
+            });
+            toolResults.push({
+              id: call.id,
+              text: 'raw coordinate click rejected in blind mode: no a11y element was selected in the last 2 turns, so (x,y) is a guess. Either (a) call invoke_element / focus_element / set_field_value with the element\'s a11y name from the snapshot, or (b) emit cannot_read to escalate to vision and get pixel evidence first. Guessing coordinates from a text snapshot can navigate the app to an unintended state.',
+              isError: true,
+            });
+            steps.push({
+              turn,
+              toolName: call.name,
+              toolArgs: call.args,
+              result: { success: false, text: 'blind-mode coord-click refused (no recent a11y selection)' },
+              durationMs: Date.now() - turnStart,
+              fingerprintChanged: false,
+              thought: llmResult.text,
+            });
+            continue;
+          }
+        }
+
         // 5b. Log and execute.
         log.info(EVENTS.AGENT_TOOL_CALL, { turn, tool: call.name, args: compactArgs(call.args) });
         const toolStart = Date.now();
