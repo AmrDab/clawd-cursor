@@ -141,7 +141,13 @@ export class Agent {
       const { Pipeline } = await import('./pipeline');
       const { getPlatform } = await import('../platform');
       const adapter = await getPlatform();
-      const pipelineConfig = loadPipelineConfig();
+      // Pass the resolved CLI overlay so flags supplied at boot time
+      // (--text-model, --base-url, --api-key, ...) are honoured even
+      // when no .clawdcursor-config.json exists on disk. Without this
+      // the runtime ignores CLI flags and falls back to disk-only,
+      // producing `models=text=off vision=disabled` and short-circuiting
+      // every ladder rung.
+      const pipelineConfig = loadPipelineConfig(this.resolvedConfig);
 
       const hasTextModel   = !!(pipelineConfig?.layer2.model && pipelineConfig.layer2.baseUrl);
       const hasVisionModel = !!(pipelineConfig?.layer3?.model && pipelineConfig?.layer3?.baseUrl);
