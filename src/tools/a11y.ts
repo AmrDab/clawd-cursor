@@ -51,11 +51,11 @@ async function queryCdpDom(
     const hits: Array<{ name: string; controlType: string; bounds: { x: number; y: number; width: number; height: number } }> =
       await page.evaluate(
         // The callback body is serialized by the SDK and executed in the
-        // browser's V8 context via CDP `Runtime.evaluate`. `document` and
-        // `HTMLElement` are defined there. The project's eslint config
-        // already includes the browser env for `src/tools/cdp.ts` and
-        // `src/tools/smart.ts` which do the same trick, so no per-line
-        // disables are needed here.
+        // browser's V8 context via CDP `Runtime.evaluate` — `document` and
+        // `HTMLElement` are live there. ESLint runs in the Node project
+        // context and would mark them as no-undef without this block-scoped
+        // override.
+        /* eslint-disable no-undef */
         ({ needle, limit }: { needle: string | null; limit: number }) => {
           const selector =
             'a, button, input, textarea, select, [role], [aria-label], [contenteditable="true"], [tabindex]';
@@ -83,6 +83,7 @@ async function queryCdpDom(
           }
           return out;
         },
+        /* eslint-enable no-undef */
         { needle, limit },
       );
     return hits.map(h => ({
