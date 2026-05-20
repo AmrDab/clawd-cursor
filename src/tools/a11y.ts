@@ -39,7 +39,7 @@ async function queryCdpDom(
   if (!getBrowserProcessNames().includes(appName)) return null;
 
   let connected = false;
-  try { connected = await ctx.cdp.isConnected(); } catch { connected = false; }
+  try { connected = await ctx.cdp.isConnected(); } catch { /* not connected */ }
   if (!connected) return null;
 
   const page = ctx.cdp.getPage?.();
@@ -50,6 +50,12 @@ async function queryCdpDom(
   try {
     const hits: Array<{ name: string; controlType: string; bounds: { x: number; y: number; width: number; height: number } }> =
       await page.evaluate(
+        // The callback body is serialized by the SDK and executed in the
+        // browser's V8 context via CDP `Runtime.evaluate`. `document` and
+        // `HTMLElement` are defined there. The project's eslint config
+        // already includes the browser env for `src/tools/cdp.ts` and
+        // `src/tools/smart.ts` which do the same trick, so no per-line
+        // disables are needed here.
         ({ needle, limit }: { needle: string | null; limit: number }) => {
           const selector =
             'a, button, input, textarea, select, [role], [aria-label], [contenteditable="true"], [tabindex]';
@@ -408,7 +414,7 @@ export function getA11yTools(): ToolDefinition[] {
       safetyTier: 0,
       handler: async ({ name, controlType, automationId, processId }, ctx) => {
         await ctx.ensureInitialized();
-        let uiaHits: UiElement[] = [];
+        let uiaHits: UiElement[];
         if (ctx.platform) {
           const elements = await ctx.platform.findElements({ name, controlType, processId });
           uiaHits = automationId

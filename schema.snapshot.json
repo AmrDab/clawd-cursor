@@ -594,7 +594,7 @@
     },
     {
       "name": "find_element",
-      "description": "Search for UI elements by name, control type, or automation ID within a process. Returns matching elements with bounds.",
+      "description": "Search for UI elements by name, control type, or automation ID within a process. Returns matching elements with bounds. For browser windows with CDP attached, falls back to a DOM query when UIA returns empty so canvas / SPA content is reachable too (results are flagged with a \"via CDP DOM\" header and use viewport-relative coords).",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -1424,7 +1424,7 @@
     },
     {
       "name": "read_screen",
-      "description": "Read the accessibility tree of the screen. Returns structured text showing: WINDOWS (all open windows), FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT (keyboard focus). This is fast, small, and structured — prefer this over screenshots.",
+      "description": "Read the accessibility tree of the screen. Returns structured text showing: WINDOWS, FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT (keyboard focus). When the focused window is a browser with CDP attached, also appends a BROWSER DOM section with interactive page elements (UIA stops at chrome — this is how to see canvas / SPA content). Fast, small, and structured — prefer this over screenshots.",
       "category": "perception",
       "parameters": {
         "type": "object",
