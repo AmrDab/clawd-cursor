@@ -11,7 +11,7 @@
  * the read_screen append behavior. No real CDP or platform is needed.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@nut-tree-fork/nut-js', () => ({
   mouse: { config: {}, move: vi.fn(), click: vi.fn(), setPosition: vi.fn() },
