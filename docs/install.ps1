@@ -41,32 +41,73 @@ Write-Host ""
 $DISPLAY_VERSION = if ($VERSION -eq "main") { "latest (main)" } else { $VERSION }
 
 if (Test-Path "$INSTALL_DIR\.git") {
-    # Update existing install
+    # Update existing install -- only proceed if the working tree is clean.
+    # The previous "git checkout && pull || rm -rf" path silently destroyed
+    # user state when git complained (dirty tree, diverged history, etc.).
     Write-Host "  Updating to $DISPLAY_VERSION..." -ForegroundColor Cyan
     Push-Location $INSTALL_DIR
-    git fetch --all --tags --quiet 2>&1 | Out-Null
-    git checkout $VERSION --quiet 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        git pull --quiet 2>&1 | Out-Null
+
+    $dirty = git status --porcelain 2>$null
+    if ($dirty) {
         Pop-Location
-    } else {
-        Write-Host "  Update failed, doing fresh install..." -ForegroundColor Yellow
-        Pop-Location; Set-Location $HOME
-        Remove-Item -Recurse -Force $INSTALL_DIR 2>$null
-        git clone https://github.com/AmrDab/clawdcursor.git --branch $VERSION $INSTALL_DIR --quiet 2>&1 | Out-Null
+        Write-Host "  [X] Refusing to update: $INSTALL_DIR has uncommitted changes." -ForegroundColor Red
+        Write-Host ""
+        $dirtyLines = @($dirty -split "`r?`n" | Where-Object { $_ })
+        foreach ($line in ($dirtyLines | Select-Object -First 20)) { Write-Host "      $line" }
+        if ($dirtyLines.Count -gt 20) { Write-Host "      ... and $($dirtyLines.Count - 20) more" }
+        Write-Host ""
+        Write-Host "  Pick one and re-run the installer:" -ForegroundColor Yellow
+        Write-Host "    - Stash:    Push-Location $INSTALL_DIR; git stash; Pop-Location"
+        Write-Host "    - Discard:  Push-Location $INSTALL_DIR; git reset --hard; git clean -fd; Pop-Location"
+        Write-Host "    - Sidecar:  `$env:INSTALL_DIR='$HOME\clawdcursor-new'; irm https://clawdcursor.com/install.ps1 | iex"
+        exit 1
     }
-} else {
-    # Fresh install (remove corrupted dir if exists)
-    if (Test-Path $INSTALL_DIR) {
-        Set-Location $HOME
-        Remove-Item -Recurse -Force $INSTALL_DIR 2>$null
+
+    $fetchErr = (git fetch --all --tags --quiet 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        Pop-Location
+        Write-Host "  [X] Failed to fetch from GitHub (network or auth issue):" -ForegroundColor Red
+        foreach ($line in ($fetchErr -split "`r?`n" | Where-Object { $_ })) { Write-Host "      $line" }
+        exit 1
     }
-    Write-Host "  Downloading $DISPLAY_VERSION..." -ForegroundColor Cyan
-    git clone https://github.com/AmrDab/clawdcursor.git --branch $VERSION $INSTALL_DIR --quiet 2>&1 | Out-Null
-}
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  [X] Download failed. Check your internet and try again." -ForegroundColor Red
+
+    $coErr = (git checkout $VERSION --quiet 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        Pop-Location
+        Write-Host "  [X] Failed to switch to '$VERSION':" -ForegroundColor Red
+        foreach ($line in ($coErr -split "`r?`n" | Where-Object { $_ })) { Write-Host "      $line" }
+        Write-Host "      (tree is clean -- likely the ref doesn't exist on origin)"
+        exit 1
+    }
+
+    # Only pull if we landed on a branch; tag/SHA checkouts are detached.
+    git symbolic-ref -q HEAD 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $pullErr = (git pull --ff-only --quiet 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            Pop-Location
+            Write-Host "  [X] Failed to fast-forward '$VERSION':" -ForegroundColor Red
+            foreach ($line in ($pullErr -split "`r?`n" | Where-Object { $_ })) { Write-Host "      $line" }
+            Write-Host "      Local branch may have diverged from origin. Resolve manually."
+            exit 1
+        }
+    }
+    Pop-Location
+} elseif (Test-Path $INSTALL_DIR) {
+    # Directory exists but isn't a git checkout. Could be user data we
+    # don't recognise -- refuse rather than silently Remove-Item -Force.
+    Write-Host "  [X] $INSTALL_DIR exists but is not a git checkout." -ForegroundColor Red
+    Write-Host "      Move or remove it manually, then re-run. (We won't delete"
+    Write-Host "      it for you because it might contain unrelated files.)"
     exit 1
+} else {
+    Write-Host "  Downloading $DISPLAY_VERSION..." -ForegroundColor Cyan
+    $cloneErr = (git clone https://github.com/AmrDab/clawdcursor.git --branch $VERSION $INSTALL_DIR --quiet 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [X] Clone failed:" -ForegroundColor Red
+        foreach ($line in ($cloneErr -split "`r?`n" | Where-Object { $_ })) { Write-Host "      $line" }
+        exit 1
+    }
 }
 
 # ── 4. Install dependencies ──────────────────────────────────────────────────
@@ -91,7 +132,7 @@ Write-Host "  Linking..." -ForegroundColor Cyan
 $npmPrefix = (npm prefix -g 2>$null)
 if ($npmPrefix) {
     $npmPrefix = $npmPrefix.Trim()
-    # Remove old shims — prevents EEXIST errors on re-install
+    # Remove old shims -- prevents EEXIST errors on re-install
     foreach ($ext in @('', '.cmd', '.ps1')) {
         $shimPath = "$npmPrefix\clawdcursor$ext"
         if (Test-Path $shimPath) { Remove-Item -Force $shimPath 2>$null }
@@ -152,7 +193,7 @@ Write-Host ""
 Write-Host "    Autonomous agent" -NoNewline -ForegroundColor White
 Write-Host " (clawdcursor brings the AI brain):" -ForegroundColor Gray
 if ($configPresent) {
-    Write-Host "      Config already saved — skip step 1 unless you want to reconfigure." -ForegroundColor DarkGray
+    Write-Host "      Config already saved -- skip step 1 unless you want to reconfigure." -ForegroundColor DarkGray
     Write-Host "      1. clawdcursor doctor   " -NoNewline -ForegroundColor DarkYellow
     Write-Host "(optional) Re-check / change AI provider + models" -ForegroundColor Gray
 } else {
@@ -167,7 +208,7 @@ Write-Host " (your editor brings the AI brain):" -ForegroundColor Gray
 Write-Host "      Register " -NoNewline -ForegroundColor Gray
 Write-Host "clawdcursor mcp" -NoNewline -ForegroundColor Yellow
 Write-Host " with Claude Code, Cursor, Windsurf, Zed, etc." -ForegroundColor Gray
-Write-Host "      No daemon, no API key in clawdcursor — your editor handles both." -ForegroundColor Gray
+Write-Host "      No daemon, no API key in clawdcursor -- your editor handles both." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Run now:" -ForegroundColor White
 if (-not $consentGiven) {

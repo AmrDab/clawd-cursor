@@ -40,25 +40,68 @@ echo ""
 DISPLAY_VERSION="$VERSION"
 [ "$VERSION" = "main" ] && DISPLAY_VERSION="latest (main)"
 
+ERR_LOG=$(mktemp -t clawd-installer.XXXXXX 2>/dev/null || echo "/tmp/clawd-installer-$$.log")
+trap 'rm -f "$ERR_LOG"' EXIT
+indent_err() { sed 's/^/      /' "$ERR_LOG"; }
+
 if [ -d "$INSTALL_DIR/.git" ]; then
-    # Update existing install
+    # Update existing install — only proceed if the working tree is clean.
+    # The previous "git checkout && pull || rm -rf" path silently destroyed
+    # user state when git complained (dirty tree, diverged history, etc.).
     echo "  📦 Updating to $DISPLAY_VERSION..."
     cd "$INSTALL_DIR"
-    git fetch --all --tags --quiet 2>/dev/null
-    git checkout "$VERSION" --quiet 2>/dev/null && git pull --quiet 2>/dev/null || {
-        echo "  ⚠️  Update failed, doing fresh install..."
-        cd "$HOME"
-        rm -rf "$INSTALL_DIR"
-        git clone https://github.com/AmrDab/clawdcursor.git --branch "$VERSION" "$INSTALL_DIR" --quiet
-    }
+
+    DIRTY=$(git status --porcelain 2>/dev/null)
+    if [ -n "$DIRTY" ]; then
+        echo "  ❌ Refusing to update: $INSTALL_DIR has uncommitted changes."
+        echo ""
+        echo "$DIRTY" | head -20 | sed 's/^/      /'
+        DIRTY_COUNT=$(echo "$DIRTY" | wc -l | tr -d ' ')
+        [ "$DIRTY_COUNT" -gt 20 ] && echo "      ... and $((DIRTY_COUNT - 20)) more"
+        echo ""
+        echo "  Pick one and re-run the installer:"
+        echo "    • Stash:      cd $INSTALL_DIR && git stash"
+        echo "    • Discard:    cd $INSTALL_DIR && git reset --hard && git clean -fd"
+        echo "    • Sidecar:    INSTALL_DIR=\$HOME/clawdcursor-new curl -fsSL https://clawdcursor.com/install.sh | bash"
+        exit 1
+    fi
+
+    if ! git fetch --all --tags --quiet 2>"$ERR_LOG"; then
+        echo "  ❌ Failed to fetch from GitHub (network or auth issue):"
+        indent_err
+        exit 1
+    fi
+
+    if ! git checkout "$VERSION" --quiet 2>"$ERR_LOG"; then
+        echo "  ❌ Failed to switch to '$VERSION':"
+        indent_err
+        echo "      (tree is clean — likely the ref doesn't exist on origin)"
+        exit 1
+    fi
+
+    # Only pull if we landed on a branch — tag/SHA checkouts are detached.
+    if git symbolic-ref -q HEAD >/dev/null 2>&1; then
+        if ! git pull --ff-only --quiet 2>"$ERR_LOG"; then
+            echo "  ❌ Failed to fast-forward '$VERSION':"
+            indent_err
+            echo "      Local branch may have diverged from origin. Resolve manually."
+            exit 1
+        fi
+    fi
 elif [ -d "$INSTALL_DIR" ]; then
-    # Corrupted — no .git, remove and reclone
-    rm -rf "$INSTALL_DIR"
-    echo "  📦 Downloading $DISPLAY_VERSION..."
-    git clone https://github.com/AmrDab/clawdcursor.git --branch "$VERSION" "$INSTALL_DIR" --quiet
+    # Directory exists but isn't a git checkout. Could be user data we
+    # don't recognise — refuse rather than silently rm -rf.
+    echo "  ❌ $INSTALL_DIR exists but is not a git checkout."
+    echo "      Move or remove it manually, then re-run. (We won't delete"
+    echo "      it for you because it might contain unrelated files.)"
+    exit 1
 else
     echo "  📦 Downloading $DISPLAY_VERSION..."
-    git clone https://github.com/AmrDab/clawdcursor.git --branch "$VERSION" "$INSTALL_DIR" --quiet
+    if ! git clone https://github.com/AmrDab/clawdcursor.git --branch "$VERSION" "$INSTALL_DIR" --quiet 2>"$ERR_LOG"; then
+        echo "  ❌ Clone failed:"
+        indent_err
+        exit 1
+    fi
 fi
 
 # ── 4. Install dependencies ──────────────────────────────────────────────────
