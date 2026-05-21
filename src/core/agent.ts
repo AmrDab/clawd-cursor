@@ -206,7 +206,9 @@ export class Agent {
       // (task + correlationId + models) when pipeline.start fires.
     }
 
-    this.state = { ...this.state, status: 'thinking', currentTask: task, stepsCompleted: 0, stepsTotal: 0 };
+    // Clear lastResult at task start so a poller can't read a stale result
+    // from a prior run while a new task is in flight.
+    this.state = { ...this.state, status: 'thinking', currentTask: task, stepsCompleted: 0, stepsTotal: 0, lastResult: undefined };
 
     const result = await this.pipelineUnified.run({
       task,
@@ -238,12 +240,18 @@ export class Agent {
       console.log(`   ${result.text}`);
     }
 
-    this.state.status = 'idle';
-    return {
+    // Snapshot the result onto state BEFORE returning so external pollers
+    // (delegate_to_agent compact tool) can read the outcome via agent_status
+    // after seeing status === 'idle'. Without this snapshot the compact
+    // `task` action returned success:false even on successful completion
+    // because lastResult was undefined.
+    const taskResult: TaskResult = {
       success: result.success,
       steps,
       duration: Date.now() - startTime,
     };
+    this.state = { ...this.state, status: 'idle', lastResult: taskResult };
+    return taskResult;
   }
 
   abort(): void {

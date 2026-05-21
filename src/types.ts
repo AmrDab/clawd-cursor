@@ -83,6 +83,14 @@ export interface AgentState {
   currentStep?: string;
   stepsCompleted: number;
   stepsTotal: number;
+  /**
+   * Result of the most recent `executeTask()` call. Populated when status
+   * transitions back to `idle`; cleared at the start of the next task. Lets
+   * external pollers (e.g. the `delegate_to_agent` compact tool) read the
+   * outcome of a completed task without holding a reference to the
+   * `executeTask` promise.
+   */
+  lastResult?: TaskResult;
 }
 
 export interface ClawdConfig {
