@@ -7,10 +7,17 @@ vi.mock('@nut-tree-fork/nut-js', () => {
   const noop = vi.fn(async () => {});
   const screenGrab = vi.fn(async () => ({ width: 1, height: 1, data: Buffer.alloc(4) }));
 
+  // Method names must match what production code in src/platform/native-desktop.ts
+  // actually calls — that file uses `mouse.click` (not just `leftClick`) and
+  // `screen.grabRegion`. Existing per-test `vi.mock(...)` declarations override
+  // this global mock, so the gap matters mostly for future tests that rely on
+  // the global fallback without their own override.
   return {
     mouse: {
       config: { autoDelayMs: 0 },
       setPosition: noop,
+      move: noop,
+      click: noop,
       leftClick: noop,
       rightClick: noop,
       doubleClick: noop,
@@ -31,6 +38,7 @@ vi.mock('@nut-tree-fork/nut-js', () => {
       width: vi.fn(async () => 1920),
       height: vi.fn(async () => 1080),
       grab: screenGrab,
+      grabRegion: screenGrab,
     },
     Point: class Point { constructor(public x: number, public y: number) {} },
     Region: class Region { constructor(public left: number, public top: number, public width: number, public height: number) {} },
