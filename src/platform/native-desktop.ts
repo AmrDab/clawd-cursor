@@ -700,6 +700,9 @@ export class NativeDesktop extends EventEmitter {
 
     const parts = keyCombo.split('+').map(k => k.trim()).filter(Boolean);
     const key = parts[parts.length - 1] || keyCombo;
+    if (!key) {
+      throw new Error(`macKeyPress: empty key after parsing combo "${keyCombo}"`);
+    }
     const mods = parts.slice(0, -1).map(k => k.toLowerCase());
 
     // Map modifier names to System Events syntax.
