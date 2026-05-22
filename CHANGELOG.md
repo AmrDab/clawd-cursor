@@ -2,6 +2,20 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [Unreleased]
+
+### Docs — `Toolbox` / `Tools` naming + restored action-enum tables (PR #111)
+
+The repositioning in #93 inadvertently stripped the per-toolbox action
+enum tables that v0.9.3 shipped. Readers landing on the post-v0.9.4
+README saw vague descriptions like *"computer — Mouse, keyboard,
+screenshot. Raw I/O."* with no way to discover the ~70 verbs each
+compound tool actually exposes short of querying `tools/list`. The
+tables are restored verbatim from v0.9.3, and the two sections are
+labeled **`Toolbox` — 6 compound tools (recommended)** and **`Tools`
+— 97 granular primitives** to make the catalog choice unambiguous.
+
+
 ## [0.9.5] - 2026-05-21 — repositioning + compact `task` fix + macOS Tahoe silent screenshots + npm publish prep
 
 Three threads landed: a documentation reframe so the README finally
@@ -67,6 +81,22 @@ the existing CG path on macOS 12-13 where CG is still silent.
 npm `prepare` lifecycle runs on `npm pack` / `npm publish`, so the
 published tarball always reflects the current source rather than
 shipping a stale `dist/` from the developer's last `npm run build`.
+
+### Fixed — installer no longer destroys user state on dirty tree (PR #108, backfilled to v0.9.5)
+
+The `irm https://clawdcursor.com/install.ps1 | iex` and equivalent
+`curl … | bash` paths previously did a `git checkout && git pull` and,
+on any non-zero exit, ran `rm -rf $INSTALL_DIR` and re-cloned from
+scratch. Any uncommitted work in the user's tree — feature branches,
+dirty edits, untracked scratch files — was destroyed with no consent
+and no recovery path. The error message also lied about the cause: a
+dirty tree, a missing ref, or a diverged branch all surfaced as
+"Download failed. Check your internet and try again."
+
+Both installers now refuse to update a dirty tree, surface the real
+`git` stderr on failure, and never delete `$INSTALL_DIR` without
+explicit user action. `install.ps1` also dropped UTF-8 em-dashes in
+comments to fix a Windows-PowerShell-5.1 ANSI-decoding parser issue.
 
 ### Notes
 

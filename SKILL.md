@@ -498,6 +498,32 @@ Per-OS setup notes:
 
 ---
 
+**What's new in 0.9.5** - repositioning + compact `task` fix + macOS Tahoe silent screenshots:
+
+- **README + homepage reframed.** Tagline is now *"The local MCP server that gives any agent safe desktop control."* The 6 compound tools are presented under the "Toolbox" label (each toolbox carries an `action` enum of ~10-15 verbs); the 97 underlying primitives are presented under "Tools." Public surface unchanged — just clearer naming. (#93, #111)
+- **Compact `task` compound now returns `success: true` on success** instead of always `success: false`. `AgentState` gained a `lastResult?: TaskResult` field that `executeTask()` snapshots before resolving, so the `delegate_to_agent` poll-then-read path actually sees the outcome. One of the 6 headline tools was silently broken in v0.9.4. (#110)
+- **Silent screenshots on macOS 14+ via ScreenCaptureKit.** macOS 26 Tahoe added a "screen captured" white-flash animation that fires on every `CGWindowListCreateImage` call. New SCK capture path on macOS 14+ bypasses the flash hook. Falls back to the existing CG path on macOS 12-13 where CG is still silent. (#109)
+- **`npm publish` prep.** `prepare: tsc && node dist/postbuild.js` added to `package.json` so the npm `prepare` lifecycle (run on `npm pack` / `npm publish`) always rebuilds `dist/` from current source. Groundwork for shipping the package to npm.
+
+**What's new in 0.9.4** - external-agent reliability + browser DOM reachability:
+
+- **`clawdcursor agent --compact` exposes the 6-compound MCP surface over HTTP.** Previously stdio-only (`clawdcursor mcp --compact`); the HTTP daemon was hard-coded to all 97 granular tools, silently breaking the "6 compact tools" pitch for external agents connecting over HTTP. Also reachable via `CLAWD_MCP_COMPACT=1` for non-CLI launchers. Default stays granular because the daemon dashboard at `/` still calls 9 granular tool names. (#106)
+- **CDP DOM fallback in `find_element` + `read_screen`.** When the focused window is a recognized browser and clawdcursor's CDP driver is connected, these tools now also query `document.querySelectorAll('a, button, input, ..., [aria-label], [role]')` and fold matches into the response. `find_element` flags CDP results with `(via CDP DOM; coords are viewport-relative)`; `read_screen` appends a `BROWSER DOM` section side-by-side with the UIA tree. (#107)
+- **Pipeline ladder climbs past rung LLM errors.** Replaced the stringly-typed "aborted" branch with a `RungFailureCategory` tagged-union + single-source-of-truth mapper. Chain-abort gate hard-aborts only on `user_abort` / `infra_error` / `anti_pattern` / high-confidence `verifier_rejected`. (#104)
+- **Blind-mode coordinate-click guardrail.** Refuses raw `click(x, y)` calls when `mode === 'blind'` AND no a11y-aware selector succeeded in the prior 2 turns. Stops coordinate hallucination on canvas content. (#103)
+- **CLI `--text-model` / `--api-key` / `--base-url` reach runtime.** `loadPipelineConfig` now accepts a `ResolvedConfig` overlay; CLI-tagged fields override disk values. (#105)
+- **`smart_click` candidates + macOS multi-window + `open_url` tier + a11y description fallback.** Several issue-101 fixes bundled. (#102)
+- **Installer no longer destroys user state on dirty tree.** `irm | iex` and `curl | bash` flows now refuse to update when the working tree has uncommitted changes; surface real git errors instead of the catch-all "Download failed". (#108)
+
+**What's new in 0.9.3** - tool-layer fixes + live-test report:
+
+- **Linux SIGSEGV on MCP stdin teardown fixed.** `releaseMcp` no longer calls `process.exit()` synchronously inside a stdin `'end'` handler.
+- **`navigate_browser` PowerShell shell injection (Win32 branch) fixed.** Direct `execFile()` against `msedge.exe`; no more shell-quoting escape vectors.
+- **`screenshot_full` MIME-type lie fixed.** Was hardcoded `image/png` but `captureForLLM()` returns JPEG by default. Now follows actual `frame.format`.
+- **`learn_app` silent no-op fixed.** Returned `{saved: true}` even when nothing was persisted; now returns `{saved: false, reason, isError: true}` for no-payload cases.
+- **Windows window-title UTF-8 corruption fixed.** `scripts/ps-bridge.ps1` and `ocr-recognize.ps1` now force UTF-8 on stdin/stdout.
+- **Compact `direction` enum dropped `scroll_horizontal` values.** Restored.
+
 **What's new in 0.9.2** - reliability + scanner-friendliness:
 
 - **MCP reconnect no longer wedged by stale lockfiles or orphan processes.** `~/.clawdcursor/{start,mcp,serve}.pid` is now JSON `{v, pid, startTime, mode}` verified by OS-reported start-time match — Windows PID recycling no longer fools `claimPidFile` into thinking a long-dead clawdcursor is still live. The `mcp` command also exits cleanly on stdin EOF, so an editor host that crashes without reaping its child no longer leaves an orphan holding the lock. `clawdcursor stop` and `clawdcursor uninstall` both handle the new format and the legacy bare-int format transparently.
