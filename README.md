@@ -22,7 +22,7 @@
 <p align="center">
   <a href="#quickstart">Quickstart</a> &middot;
   <a href="#the-pitch">Why</a> &middot;
-  <a href="#compact-tool-surface">Tools</a> &middot;
+  <a href="#toolbox--6-compound-tools-recommended">Toolbox</a> &middot;
   <a href="#two-pipelines">How it thinks</a> &middot;
   <a href="#platform-support">Platforms</a> &middot;
   <a href="CHANGELOG.md">Changelog</a>
@@ -50,23 +50,24 @@ It's **model-agnostic** (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), **
 
 ---
 
-## Compact Tool Surface
+## Toolbox &mdash; 6 compound tools (recommended)
 
-Six compound tools cover every desktop primitive. This is the recommended public surface &mdash; catalog footprint ~1,500 tokens, about 12&times; smaller than the granular surface.
+Two catalogs ship side-by-side. The **toolbox** (this section) is 6 compound tools, each with an `action` enum that covers ~10-15 verbs. **Tools** (next section) is the 97 underlying granular primitives, one schema per verb.
 
-| Tool | What it does | Typical use case |
-|---|---|---|
-| `computer` | Mouse, keyboard, screenshot. Raw I/O. | Click a button at coordinates, take a screenshot, press `Ctrl+S`. |
-| `accessibility` | Drive UI by element name, not by pixel. | Find the "Send" button by name, read the a11y tree, set a field value. |
-| `window` | Launch, focus, resize apps. | Open Outlook, maximize a window, switch to a browser tab. |
-| `system` | Clipboard, OCR, shortcuts, pipeline introspection. | Read the clipboard, OCR the screen, load an app guide for your LLM. |
-| `browser` | Chrome DevTools Protocol &mdash; real DOM for Electron / WebView2 apps. | Click inside Teams or VS Code where a11y is sparse. |
-| `task` | Hand off a full task to the built-in autonomous loop. | `task({ instruction: "reply to Sarah's latest email about budget" })` |
+Compound is the default surface. Catalog footprint is ~1,500 tokens (about 12&times; smaller than granular), which keeps small models focused on the action choice instead of drowning in primitives. Same `computer_20250124` shape Anthropic uses, so editor hosts already know how to drive it.
+
+| Toolbox | Actions |
+|---|---|
+| `computer` | `screenshot`, `click`, `double_click`, `right_click`, `triple_click`, `hover`, `scroll`, `scroll_horizontal`, `drag`, `drag_path`, `type`, `key`, `wait` |
+| `accessibility` | `read_tree`, `find`, `get_element`, `focused`, `invoke`, `focus`, `set_value`, `get_value`, `expand`, `collapse`, `toggle`, `select`, `state`, `list_children`, `wait_for` |
+| `window` | `list`, `active`, `focus`, `maximize`, `minimize`, `restore`, `close`, `resize`, `list_displays`, `screen_size`, `open_app`, `open_file`, `open_url`, `switch_tab`, `navigate` |
+| `system` | `clipboard_read`, `clipboard_write`, `system_time`, `ocr`, `undo`, `shortcuts_list`, `shortcuts_run`, `delegate`, `detect_webview`, `relaunch_with_cdp`, `app_guide`, `detect_app`, `classify_task`, `system_prompt` |
+| `browser` | `connect`, `page_context`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
+| `task` | `{instruction: string}` &mdash; hand off the whole task to the built-in pipeline. No `action` enum. |
 
 A typical turn:
 
 ```js
-// Compact form — recommended
 computer({ action: "key", combo: "mod+s" })          // resolves to Cmd+S / Ctrl+S
 accessibility({ action: "invoke", name: "Send" })
 window({ action: "open_app", name: "Outlook" })
@@ -304,18 +305,18 @@ curl -s -X POST http://127.0.0.1:3847/mcp \
 
 ---
 
-## Compatibility / Debugging &mdash; 97 Granular Tools
+## Tools &mdash; 97 granular primitives
 
-The 6 compact tools above are the recommended public surface. Under the hood, each dispatches to one of **97 granular tools** &mdash; one schema per primitive.
+The flat catalog. Each of the 6 compound toolboxes above dispatches to one of these under the hood. Use this surface directly when:
 
-The granular surface exists for two reasons:
-- **Compatibility.** Some agent runtimes require every action as a top-level MCP tool (no `action` enum). Pass `--granular` instead of `--compact` to expose them.
-- **Debugging.** When you want to call a specific primitive directly &mdash; `key_press`, `mouse_move`, `get_accessibility_tree` &mdash; without going through the compound dispatcher.
+- **Compatibility** &mdash; your agent runtime requires every action as a top-level MCP tool (no `action` enum). Run the daemon without `--compact` (granular is the default for `clawdcursor agent`) to expose them.
+- **Debugging** &mdash; you want to call a specific primitive directly (`key_press`, `mouse_move`, `get_accessibility_tree`) without going through the compound dispatcher.
 
-The full catalog is always visible through MCP `tools/list` on either transport. Schema reference: [`schema.snapshot.json`](schema.snapshot.json).
+The full catalog &mdash; both compact toolboxes and granular tools &mdash; is always visible through MCP `tools/list` on either transport. Authoritative schema lives in [`schema.snapshot.json`](schema.snapshot.json).
+
+A typical turn:
 
 ```js
-// Granular form — one tool per verb
 key_press({ key: "mod+s" })
 invoke_element({ name: "Send" })
 open_app({ name: "Outlook" })
