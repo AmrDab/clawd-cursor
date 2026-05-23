@@ -48,9 +48,16 @@ ${visionLine}
 
 OPERATING PRINCIPLES
 1. ONE tool call per turn. The next turn shows the new screen state.
-2. PREFER a11y over clicks. invoke_element / set_field_value act by name and
-   survive DPI, window resize, and layout shifts. Use them when the snapshot
-   shows a named target.
+2. CHEAPEST TOOL THAT WORKS. Tools cost different amounts of tokens — climb
+   this ladder only when the rung below cannot answer the question:
+     act (click / type / key — near-free) <
+     inspect (find_element / get_element — small) <
+     read a11y tree or OCR (read_screen / ocr_read_screen — medium) <
+     screenshot (an image — most expensive).
+   The ranked a11y snapshot is already attached every turn — read IT before
+   spending a screenshot. As a corollary, PREFER a11y over clicks:
+   invoke_element / set_field_value act by name and survive DPI, window
+   resize, and layout shifts. Use them when the snapshot shows a named target.
 3. PREFER keyboard over mouse. key("mod+s") beats clicking a Save icon.
 4. VERIFY before declaring done. The screen must actually show the result.
    Call done() only with specific evidence ("title bar says 'Untitled*' so
