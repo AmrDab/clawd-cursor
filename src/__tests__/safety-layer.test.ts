@@ -58,6 +58,53 @@ describe('SafetyLayer.evaluate', () => {
     });
   });
 
+  // #124: destructive-label patterns must NOT fire on the CONTENT typed by a
+  // typing tool. The `targetLabel` for type_text/cdp_type is the text payload,
+  // not a control label — typing a sentence containing "confirm"/"send" is
+  // benign and must stay at input tier.
+  describe('typed text is not a destructive label (#124)', () => {
+    const prose = 'This is part of the v0.9.5 verification to confirm reliable desktop automation.';
+
+    it('allows type_text whose content contains "confirm"', () => {
+      const d = evaluate({ tool: 'type_text', args: { text: prose }, targetLabel: prose });
+      expect(d.decision).toBe('allow');
+    });
+
+    it('allows type_text whose content contains "send"', () => {
+      const d = evaluate({ tool: 'type_text', args: { text: 'please send the report' }, targetLabel: 'please send the report' });
+      expect(d.decision).toBe('allow');
+    });
+
+    it('allows the compound computer.type action with "confirm" in the text', () => {
+      // unpacks to canonical type_text
+      const d = evaluate({ tool: 'computer', args: { action: 'type', text: prose }, targetLabel: prose });
+      expect(d.decision).toBe('allow');
+    });
+
+    it('allows cdp_type (browser.type) prose containing "delete"', () => {
+      const d = evaluate({ tool: 'browser', args: { action: 'type', text: 'delete this line of the draft' }, targetLabel: 'delete this line of the draft' });
+      expect(d.decision).toBe('allow');
+    });
+
+    // Coverage that MUST be preserved: activating a control whose label is
+    // destructive still confirms, including cdp_click by visible text.
+    it('still confirms cdp_click on visible text "Send"', () => {
+      const d = evaluate({ tool: 'cdp_click', args: { text: 'Send' }, targetLabel: 'Send' });
+      expect(d.decision).toBe('confirm');
+      expect(d.tier).toBe('destructive');
+    });
+
+    it('still confirms invoke_element name="Delete"', () => {
+      const d = evaluate({ tool: 'invoke_element', args: { name: 'Delete' }, targetLabel: 'Delete' });
+      expect(d.decision).toBe('confirm');
+    });
+
+    it('still confirms the compound browser.click on visible text "Pay"', () => {
+      const d = evaluate({ tool: 'browser', args: { action: 'click', text: 'Pay' }, targetLabel: 'Pay' });
+      expect(d.decision).toBe('confirm');
+    });
+  });
+
   describe('input tier default', () => {
     it.each(['mouse_click', 'type_text', 'smart_click', 'smart_type', 'a11y_click'])(
       '%s with no target defaults to allow',

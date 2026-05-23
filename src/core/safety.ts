@@ -148,6 +148,16 @@ const CONFIRM_LABEL_PATTERNS: RegExp[] = [
   /\bconfirm\b/i,          // confirm dialogs themselves — require user
 ];
 
+// Canonical tools that type ARBITRARY TEXT. Their text payload is content,
+// not a control label, so CONFIRM_LABEL_PATTERNS must NOT run against it —
+// otherwise typing a sentence that merely contains "confirm" / "send" / etc.
+// spuriously trips the confirm gate (#124: "verification to confirm reliable
+// desktop automation" elevated to destructive tier). This is a denylist, not
+// an allowlist: any tool NOT listed here stays gated by default, so a future
+// click/activation tool can never silently lose label-pattern coverage — the
+// worst a missing entry can do is add benign friction, never remove safety.
+const TYPING_TOOLS = new Set<string>(['type_text', 'cdp_type']);
+
 // Sensitive-app list lives at src/core/app-categories.ts as the single
 // source of truth — imported at the top of this file. Edit there, not here.
 
@@ -451,7 +461,11 @@ export function evaluate(ctx: EvaluationContext): Decision {
   }
 
   // 5. Input tier with a Confirm-pattern target label.
-  if (ctx.targetLabel) {
+  //    Skip for typing tools: their `targetLabel` is the text being typed
+  //    (content), not the label of a control being activated. Clicking a
+  //    button labelled "Send"/"Delete" is destructive; typing those words
+  //    into a field is not. See TYPING_TOOLS above (#124).
+  if (ctx.targetLabel && !TYPING_TOOLS.has(canonicalTool)) {
     for (const pattern of CONFIRM_LABEL_PATTERNS) {
       if (pattern.test(ctx.targetLabel)) {
         // Intent-matched bypass: if the user's task text contains the
