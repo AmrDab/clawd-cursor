@@ -45,6 +45,10 @@ try {
         public static extern uint GetCurrentThreadId();
         [DllImport("user32.dll")]
         public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+        [DllImport("user32.dll")]
+        public static extern IntPtr WindowFromPoint(int x, int y);
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
         // Additional constants for force-focus path:
         //   HWND_TOPMOST    = -1
         //   HWND_NOTOPMOST  = -2
@@ -52,6 +56,7 @@ try {
         //   SWP_NOMOVE      = 0x0002
         //   SWP_SHOWWINDOW  = 0x0040
         //   SWP_NOACTIVATE  = 0x0010
+        //   GA_ROOT         = 2  (for GetAncestor)
     }
 "@
 } catch { } # May already be defined in a long-running session
@@ -210,6 +215,51 @@ function Cmd-GetScreenContext {
     }
 
     return [ordered]@{ windows = $windowList; uiTree = $uiTree }
+}
+
+# ── Command: activate-at-point ────────────────────────────────────────────────
+# Before a coordinate click, ensure the window at (x, y) is the foreground.
+# This prevents clicks from landing on a background window when a dialog sits
+# over another window and the foreground changed between screenshot and click.
+#
+# Uses the same AttachThreadInput + AllowSetForegroundWindow dance as
+# Cmd-FocusWindow so that the Windows foreground lock is properly overcome.
+function Cmd-ActivateAtPoint {
+    param($cmd)
+    $x = [int]$cmd.x
+    $y = [int]$cmd.y
+    $hwnd = [Win32UIA]::WindowFromPoint($x, $y)
+    if ($hwnd -eq [IntPtr]::Zero) { return @{ success=$true; action="noop"; reason="no-window-at-point" } }
+    # Walk up to the root owner (GA_ROOT = 2) so child controls map to their
+    # top-level window before we compare / promote to foreground.
+    $root = [Win32UIA]::GetAncestor($hwnd, 2)
+    if ($root -eq [IntPtr]::Zero) { $root = $hwnd }
+    $fg = [Win32UIA]::GetForegroundWindow()
+    if ($root -eq $fg) { return @{ success=$true; action="noop"; reason="already-foreground" } }
+
+    # AttachThreadInput dance — needed to overcome Windows focus lock.
+    $currentThread = [Win32UIA]::GetCurrentThreadId()
+    $pidTmp = 0
+    $fgThread = 0
+    if ($fg -ne [IntPtr]::Zero) {
+        $fgThread = [Win32UIA]::GetWindowThreadProcessId($fg, [ref]$pidTmp)
+    }
+    $attached = $false
+    if ($fgThread -ne 0 -and $fgThread -ne $currentThread) {
+        try { [Win32UIA]::AttachThreadInput($currentThread, $fgThread, $true) | Out-Null; $attached = $true } catch {}
+    }
+    try {
+        [Win32UIA]::AllowSetForegroundWindow(-1) | Out-Null
+        [Win32UIA]::BringWindowToTop($root) | Out-Null
+        [Win32UIA]::SetForegroundWindow($root) | Out-Null
+    } catch {}
+    finally {
+        if ($attached) { try { [Win32UIA]::AttachThreadInput($currentThread, $fgThread, $false) | Out-Null } catch {} }
+    }
+
+    Start-Sleep -Milliseconds 40
+    $newFg = [Win32UIA]::GetForegroundWindow()
+    return @{ success=$true; action="activated"; activated=($newFg -eq $root) }
 }
 
 # ── Command: get-foreground-window ────────────────────────────────────────────
@@ -617,6 +667,7 @@ while ($true) {
             "find-element"          { Cmd-FindElement $cmd }
             "invoke-element"        { Cmd-InvokeElement $cmd }
             "get-focused-element"   { Cmd-GetFocusedElement }
+            "activate-at-point"     { Cmd-ActivateAtPoint $cmd }
             "ping"                  { @{ pong=$true } }
             default                 { @{ error="Unknown command: $($cmd.cmd)" } }
         }
