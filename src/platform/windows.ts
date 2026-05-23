@@ -644,20 +644,6 @@ export class WindowsAdapter implements PlatformAdapter {
     const count = opts?.count ?? 1;
     const btn = this.toNutButton(opts?.button);
 
-    // Triple-click on Windows Win32 Edit controls (including ComboBox inner
-    // edits like the Save As filename field) does NOT select-all — triple-
-    // click is not a standard Win32 Edit gesture. We send a single click to
-    // move focus to the field, then Ctrl+A to reliably select all existing
-    // text, matching the behaviour callers expect from triple_click.
-    if (count === 3 && btn === Button.LEFT) {
-      await mouse.click(Button.LEFT);
-      await this.delay(80);
-      await keyboard.pressKey(Key.LeftControl, Key.A);
-      await this.delay(30);
-      await keyboard.releaseKey(Key.LeftControl, Key.A);
-      return;
-    }
-
     for (let i = 0; i < count; i++) {
       if (btn === Button.RIGHT) await mouse.rightClick();
       else if (btn === Button.MIDDLE) {

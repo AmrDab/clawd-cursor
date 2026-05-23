@@ -1,46 +1,21 @@
 /**
- * Save As dialog reliability — unit tests for fixes #121, #122, #123.
+ * Save As dialog reliability — unit tests for fixes #122, #123.
  *
  * These tests cover the deterministic logic changes without requiring a
  * live GUI (native input / UIA calls are mocked or exercised via pure math).
  *
  * Live-GUI verification is documented in the PR body.
+ *
+ * #121 (triple_click in Save As) is intentionally NOT addressed by changing
+ * the triple_click primitive: `mouse_triple_click` is documented as "selects
+ * a paragraph in most text editors", so globally rerouting it to Ctrl+A
+ * (select-all) would break that contract in browsers/editors/terminals. The
+ * Save As field opens with its text pre-selected, so the correct handling is
+ * to type directly (no triple_click needed); a future text-replace helper can
+ * Ctrl+A at the typing layer if required.
  */
 
 import { describe, it, expect } from 'vitest';
-
-// ─── Bug #121: triple_click → Ctrl+A select-all ───────────────────────────
-//
-// Windows Win32 Edit controls do not treat triple-click as select-all.
-// The fix replaces count===3 left-click with click + Ctrl+A in
-// WindowsAdapter.mouseClick(). Test the decision logic in isolation.
-
-function shouldUseCtrlAForSelectAll(count: number, button: 'left' | 'right' | 'middle'): boolean {
-  // Mirrors the condition added to WindowsAdapter.mouseClick()
-  return count === 3 && button === 'left';
-}
-
-describe('#121 triple_click → Ctrl+A select-all decision', () => {
-  it('count=3, left button → use Ctrl+A path', () => {
-    expect(shouldUseCtrlAForSelectAll(3, 'left')).toBe(true);
-  });
-
-  it('count=2, left button → normal double-click, not Ctrl+A', () => {
-    expect(shouldUseCtrlAForSelectAll(2, 'left')).toBe(false);
-  });
-
-  it('count=1, left button → normal single click', () => {
-    expect(shouldUseCtrlAForSelectAll(1, 'left')).toBe(false);
-  });
-
-  it('count=3, right button → not Ctrl+A (only left clicks can select)', () => {
-    expect(shouldUseCtrlAForSelectAll(3, 'right')).toBe(false);
-  });
-
-  it('count=3, middle button → not Ctrl+A', () => {
-    expect(shouldUseCtrlAForSelectAll(3, 'middle')).toBe(false);
-  });
-});
 
 // ─── Bug #122: set_field_value widest-element heuristic ───────────────────
 //
