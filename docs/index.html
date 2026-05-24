@@ -406,7 +406,7 @@
   <!-- Hero -->
   <div class="hero">
     <div class="hero-badge"><div class="pulse"></div> v0.9.7 — latest stable</div>
-    <h1>The local MCP server that gives<br><span class="gr">any agent safe desktop control</span></h1>
+    <h1>A cursor and a keyboard<br><span class="gr">for any AI agent</span></h1>
     <p>Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry. v0.9: MCP-only protocol, Reflector feedback, guides marketplace.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
@@ -423,8 +423,8 @@
 
   <!-- Stats -->
   <div class="stats">
-    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Compact Tools (public surface)</div></div>
-    <div class="stat"><div class="stat-val">97</div><div class="stat-lbl">Granular Tools (compat / debug)</div></div>
+    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Toolbox &mdash; compound tools (recommended)</div></div>
+    <div class="stat"><div class="stat-val">97</div><div class="stat-lbl">Tools &mdash; granular (compat / debug)</div></div>
     <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Operating Systems</div></div>
   </div>
 
@@ -535,8 +535,8 @@
     <div class="feat-grid" style="grid-template-columns: repeat(2, 1fr);">
       <div class="feat-card">
         <div class="feat-icon">🎯</div>
-        <h4>Compact tool surface</h4>
-        <p>6 compound tools — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code>. ~12× smaller catalog than the granular surface.</p>
+        <h4>Toolbox &mdash; 6 compound tools</h4>
+        <p>The recommended surface — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code>. ~12× smaller catalog than the granular Tools surface.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">🧩</div>
@@ -734,22 +734,25 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
   <!-- Install -->
   <section id="install" class="sect">
     <div class="sect-label">Install</div>
-    <h2>One line per OS.</h2>
-    <p class="sub">Providers auto-detected.</p>
-
-    <div class="code-box" style="display:block;margin-bottom:20px;">
-      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>npm &mdash; any OS</span></div>
-      <pre><code><span class="c-cmd">npm i -g clawdcursor</span>   <span class="c-comment"># now on npm</span></code></pre>
-    </div>
-    <p class="sub" style="margin-top:-8px;">Windows &amp; Linux work as-is. macOS: also run <code style="font-size:0.95em">clawdcursor grant</code> to build the native helper. Or use the per-OS installer below, which handles everything.</p>
+    <h2>Pick your install.</h2>
+    <p class="sub">Same MCP server, your choice of channel. Providers auto-detected.</p>
 
     <div class="os-tabs">
-      <button class="os-tab active" onclick="switchOS('windows')">Windows</button>
-      <button class="os-tab" onclick="switchOS('macos')">macOS</button>
-      <button class="os-tab" onclick="switchOS('linux')">Linux</button>
+      <button class="os-tab active" data-os="npm" onclick="switchOS('npm')">npm &middot; any OS</button>
+      <button class="os-tab" data-os="windows" onclick="switchOS('windows')">Windows</button>
+      <button class="os-tab" data-os="unix" onclick="switchOS('unix')">macOS / Linux</button>
+      <button class="os-tab" data-os="source" onclick="switchOS('source')">Source</button>
     </div>
 
-    <div class="code-box" id="os-windows" style="display:block;">
+    <div class="code-box" id="os-npm" style="display:block;">
+      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>npm &mdash; any OS</span></div>
+      <pre><code><span class="c-cmd">npm i -g clawdcursor</span>
+<span class="c-cmd">clawdcursor consent --accept</span>   <span class="c-comment"># one-time desktop-control authorization</span>
+<span class="c-cmd">clawdcursor doctor</span>            <span class="c-comment"># verify permissions; optionally configure an LLM</span>
+<span class="c-comment"># macOS: also run `clawdcursor grant` to build the native helper</span></code></pre>
+    </div>
+
+    <div class="code-box" id="os-windows" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>PowerShell</span></div>
       <pre><code><span class="c-cmd">powershell -c</span> <span class="c-string">"irm https://clawdcursor.com/install.ps1 | iex"</span>
 <span class="c-cmd">clawdcursor consent --accept</span>   <span class="c-comment"># one-time desktop-control authorization (required)</span>
@@ -757,7 +760,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-cmd">clawdcursor mcp</span>               <span class="c-comment"># OR `clawdcursor agent` — see "Pick a mode" above</span></code></pre>
     </div>
 
-    <div class="code-box" id="os-macos" style="display:none;">
+    <div class="code-box" id="os-unix" style="display:none;">
       <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
       <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
 <span class="c-cmd">clawdcursor grant</span>             <span class="c-comment"># Accessibility + Screen Recording (macOS only)</span>
@@ -766,15 +769,14 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-cmd">clawdcursor mcp</span>               <span class="c-comment"># OR `clawdcursor agent` — see "Pick a mode" above</span></code></pre>
     </div>
 
-    <div class="code-box" id="os-linux" style="display:none;">
-      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
-      <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
-<span class="c-cmd">clawdcursor consent --accept</span>   <span class="c-comment"># one-time desktop-control authorization (required)</span>
-<span class="c-cmd">clawdcursor doctor</span>            <span class="c-comment"># verify permissions; optionally configure an LLM</span>
-<span class="c-cmd">clawdcursor mcp</span>               <span class="c-comment"># OR `clawdcursor agent` — see "Pick a mode" above</span></code></pre>
+    <div class="code-box" id="os-source" style="display:none;">
+      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>git</span></div>
+      <pre><code><span class="c-cmd">git clone</span> <span class="c-string">https://github.com/AmrDab/clawdcursor.git</span>
+<span class="c-cmd">cd</span> clawdcursor &amp;&amp; <span class="c-cmd">npm install</span> &amp;&amp; <span class="c-cmd">npm run build</span> &amp;&amp; <span class="c-cmd">npm link</span>
+<span class="c-cmd">clawdcursor consent --accept</span></code></pre>
     </div>
 
-    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only, bearer-token auth on every HTTP request. Installer clones into <code style="font-size:0.95em">~/clawdcursor</code>, builds, and <code style="font-size:0.95em">npm link</code>s a global shim. Pin a version with <code style="font-size:0.95em">$env:VERSION='v0.9.7'</code> (PowerShell) or <code style="font-size:0.95em">VERSION=v0.9.7</code> (bash) before running the installer.</p>
+    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only, bearer-token auth on every HTTP request. The <code style="font-size:0.95em">npm</code> install is the simplest; the OS installers clone into <code style="font-size:0.95em">~/clawdcursor</code> and build the macOS native helper for you. Pin a version with <code style="font-size:0.95em">$env:VERSION='v0.9.7'</code> (PowerShell) or <code style="font-size:0.95em">VERSION=v0.9.7</code> (bash).</p>
   </section>
 
 </div>
@@ -917,13 +919,14 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
     }
   });
 
-  // OS tab switcher
+  // Install channel switcher (npm / windows / unix / source)
   function switchOS(id) {
-    ['windows','macos','linux'].forEach(k => {
-      document.getElementById('os-' + k).style.display = k === id ? 'block' : 'none';
+    ['npm','windows','unix','source'].forEach(k => {
+      const el = document.getElementById('os-' + k);
+      if (el) el.style.display = k === id ? 'block' : 'none';
     });
-    document.querySelectorAll('.os-tab').forEach((t, i) => {
-      t.classList.toggle('active', ['windows','macos','linux'][i] === id);
+    document.querySelectorAll('.os-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.os === id);
     });
   }
 
