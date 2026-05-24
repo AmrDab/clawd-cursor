@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> &middot;
-  <a href="#the-pitch">Why</a> &middot;
+  <a href="#the-fallback-execution-layer">Why</a> &middot;
   <a href="#toolbox--6-compound-tools-recommended">Toolbox</a> &middot;
   <a href="#two-pipelines">How it thinks</a> &middot;
   <a href="#platform-support">Platforms</a> &middot;
@@ -30,7 +30,7 @@
 
 ---
 
-## The Pitch
+## The fallback execution layer
 
 Clawd Cursor is a **local MCP server**. Install it once. Any tool-calling agent on the machine &mdash; Claude Code, Cursor, Windsurf, OpenClaw, Claude Agent SDK, your own loop &mdash; connects via MCP and gets safe control of the real desktop. The agent clicks, types, reads the screen, opens apps, and drives any GUI the same way a human would.
 
@@ -63,7 +63,7 @@ Compound is the default surface. Catalog footprint is ~1,500 tokens (about 12&ti
 | `window` | `list`, `active`, `focus`, `maximize`, `minimize`, `restore`, `close`, `resize`, `list_displays`, `screen_size`, `open_app`, `open_file`, `open_url`, `switch_tab`, `navigate` |
 | `system` | `clipboard_read`, `clipboard_write`, `system_time`, `ocr`, `undo`, `shortcuts_list`, `shortcuts_run`, `delegate`, `detect_webview`, `relaunch_with_cdp`, `app_guide`, `detect_app`, `classify_task`, `system_prompt` |
 | `browser` | `connect`, `page_context`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
-| `task` | `{instruction: string}` &mdash; hand off the whole task to the built-in pipeline. No `action` enum. |
+| `task` | `{instruction: string}` &mdash; hand off the whole task to the built-in autonomous pipeline. No `action` enum. **Requires `clawdcursor agent` with an LLM configured (`clawdcursor doctor`) &mdash; unavailable under `--no-llm` or stdio `clawdcursor mcp`.** If your agent has its own brain, drive the other five toolboxes directly instead. |
 
 A typical turn:
 
@@ -85,7 +85,7 @@ Sixty seconds from zero to a tool-calling agent on your desktop.
 
 | Your situation | Use | Why |
 |---|---|---|
-| AI lives in your editor (Claude Code, Cursor, Windsurf, Zed) | **`clawdcursor mcp`** | stdio MCP server. Editor spawns it on demand. No daemon, no port. |
+| AI lives in your editor (Claude Code, Cursor, Windsurf, Zed) | **`clawdcursor mcp`** | stdio MCP server. **You never run this yourself** &mdash; the editor/MCP host spawns it on demand from its config (you just add the JSON below). No daemon, no port. |
 | You're building an agent that runs unattended | **`clawdcursor agent`** | HTTP MCP daemon on `127.0.0.1:3847`. Has its own LLM brain optionally configured via `doctor`. |
 | Your agent has its own brain &mdash; you just want the tools as an HTTP endpoint | **`clawdcursor agent --no-llm`** | Same daemon, no built-in pipeline, no scheduler startup, no credential validation. Pure tool surface. |
 
@@ -137,6 +137,8 @@ Wire it into Claude Code, Cursor, Windsurf, or Zed:
 
 That's it. Ask your agent to *"open Outlook and reply to the latest email from Sarah"* and watch it run.
 
+> **Don't run `clawdcursor mcp` in a terminal yourself** &mdash; your editor launches it automatically over stdio when it needs the server. The only commands you run by hand are the install, `consent`, and `doctor` steps above.
+
 > **macOS:** run `clawdcursor grant` to walk through Accessibility + Screen Recording permissions.
 > **Linux:** install `tesseract-ocr`, `python3-gi`, `gir1.2-atspi-2.0`, and (Wayland only) `ydotool` or `wtype`.
 
@@ -144,12 +146,22 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 ## Why Clawd Cursor
 
-- **Works where APIs don't exist.** Native apps. Legacy enterprise tools. Web portals behind SSO that block headless browsers. Anything inside Citrix or RDP. If pixels reach the screen, your agent can drive it.
-- **Model-agnostic.** Claude, GPT, Gemini, Llama, Kimi, anything local via Ollama. 13 providers ship configured. Vision and text can be different models from different vendors.
-- **App-agnostic.** No per-app plugins, no per-service auth. The same six compound tools drive Outlook, Figma, your bank, and that 2003-era ERP.
-- **Cheapest-tier-first pipeline.** Accessibility tree (free) before OCR (cheap) before screenshot (medium) before vision (expensive). The Reflector feeds verifier signals back to the planner so it doesn't keep paying for vision when text would work.
-- **Local-only by default.** Server binds to `127.0.0.1`. Screenshots stay in RAM unless you point a cloud model at them. No telemetry.
-- **One protocol, two transports.** MCP over stdio for editor hosts; MCP over HTTP for daemons. Same tool catalog, same JSON-RPC envelope.
+Most "let an agent use the computer" tools are browser-only, single-OS, or vision-only. Clawd Cursor is the cross-OS, accessibility-first, MCP-native one &mdash; with a single safety gate every call routes through.
+
+|                                     | **Clawd Cursor**        | browser-use | Playwright     | computer-use        |
+|-------------------------------------|:-----------------------:|:-----------:|:--------------:|:-------------------:|
+| Any desktop app, not just web       | ✅                      | web only    | web only       | ✅                  |
+| Cross-OS (Win + macOS + Linux)      | ✅                      | &mdash;     | &mdash;        | runs in a sandbox   |
+| Accessibility-first, not pixel-only | ✅ a11y → OCR → vision   | DOM         | DOM            | vision only         |
+| Any model / vendor                  | ✅                      | ✅          | not an agent   | Claude only         |
+| MCP-native (one config, any host)   | ✅                      | library     | test framework | tool-use API        |
+| Single safety chokepoint            | ✅                      | &mdash;     | &mdash;        | &mdash;             |
+| Local-only, no cloud required       | ✅                      | ✅          | ✅             | screenshots → cloud |
+
+Two mechanisms the others don't have:
+
+- **Cheapest-tier-first by design.** Accessibility tree (free) → OCR (cheap) → screenshot (medium) → vision (expensive); the agent climbs only when it must, so token cost tracks task difficulty.
+- **One protocol, two transports.** MCP over stdio for editor hosts, MCP over HTTP for daemons &mdash; same catalog, same JSON-RPC envelope.
 
 ---
 
@@ -193,6 +205,7 @@ flowchart TB
     verifier -- pass --> done["done"]
     verifier -- fail --> reflector["Reflector<br/>cause + next strategy"]
     reflector --> retry["retry with<br/>better context"]
+    retry -- escalate to a higher rung --> pick
 
     classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a;
     classDef agent fill:#dbeafe,stroke:#2563eb,color:#0f172a;
@@ -375,7 +388,7 @@ clawdcursor guides submit my-app.json    # lint + print PR instructions
 
 Every guide passes through a client-side linter on every load &mdash; schema check + prompt-injection patterns + dangerous-prose detection. A guide that fails lint is dropped and the agent falls back to no-knowledge, never poisoned-knowledge. Same linter runs as the registry's CI check on every PR.
 
-Voting: each guide has a `vote: <app>` issue on the source repo. React / . A nightly job aggregates reactions into `index.json` so `clawdcursor guides list` shows ratings.
+Voting: each guide has a `vote: <app>` issue on the source repo. React with 👍 or 👎. A nightly job aggregates reactions into `index.json` so `clawdcursor guides list` shows ratings.
 
 See [`docs/guide-marketplace.md`](docs/guide-marketplace.md) for the full architecture, trust model, and CI flow.
 
@@ -431,7 +444,7 @@ Hardening summary:
 - **Network isolation.** Server binds to `127.0.0.1`. Verify with `netstat -an | findstr 3847` (Windows) or `| grep 3847` (Unix).
 - **Bearer-token auth.** Every HTTP request needs `Authorization: Bearer $(cat ~/.clawdcursor/token)`.
 - **Sensitive-app policy.** Email, banking, password managers, private messaging auto-elevate to Confirm. The agent must ask the user before acting on these surfaces.
-- **No telemetry.** Screenshots stay in RAM. With Ollama or any local model, nothing leaves the machine. With a cloud provider, screenshots go only to the endpoint you configured.
+- **No telemetry by default.** Nothing phones home on its own. Screenshots stay in RAM; with Ollama or any local model, nothing leaves the machine; with a cloud provider, screenshots go only to the endpoint you configured. The one exception is opt-in: `clawdcursor report` lets you *manually* send a diagnostic snapshot when you want help, and it previews exactly what's included before sending.
 - **Prompt-injection defense.** Screen text returned inside `<untrusted-screen-content>` tags is treated as data, never as instructions.
 - **Log privacy.** JSON logs at `~/.clawdcursor/logs/` redact password-field values (`AXSecureTextField`, UIA `IsPassword=true`).
 
