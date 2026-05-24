@@ -1,7 +1,8 @@
 {
   "name": "clawdcursor",
   "version": "0.9.7",
-  "description": "The skill that gives any AI agent a cursor and a keyboard on a real desktop. Open source (MIT). Model-agnostic — works with Claude, GPT, Gemini, Llama, or any tool-calling model — on Windows, macOS, and Linux.",
+  "mcpName": "io.github.AmrDab/clawdcursor",
+  "description": "Local MCP server that gives any AI agent safe cross-OS desktop control — the fallback execution layer for when APIs, CLIs, and direct integrations aren't available. Works with any tool-calling model (Claude, GPT, Gemini, Llama) on Windows, macOS, and Linux. Open source (MIT).",
   "homepage": "https://clawdcursor.com",
   "repository": {
     "type": "git",
@@ -15,9 +16,11 @@
     "agent",
     "ai-agent",
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "desktop-automation",
     "computer-use",
+    "gui-automation",
     "accessibility",
     "claude",
     "gpt",
