@@ -179,6 +179,7 @@ const TOOL_TIER: Record<string, Tier> = {
   'cdp_read_text': 'read',
   'cdp_list_tabs': 'read',
   'shortcuts_list': 'read',
+  'build_uri': 'read',          // pure string construction — no side effects
   // Input — allow with label check
   'mouse_click': 'input',
   'mouse_double_click': 'input',
@@ -255,6 +256,9 @@ const TOOL_TIER: Record<string, Tier> = {
   // v0.8.2 — Electron/WebView2 bridge tools
   'detect_webview_apps': 'read',
   'relaunch_with_cdp': 'destructive',  // closes the app — app may prompt to save
+  // URI escape hatch + guide-write — match their granular safetyTier (2).
+  'open_uri': 'destructive',    // dispatches to an arbitrary registered handler (file: can execute)
+  'learn_app': 'destructive',   // writes a guide to ~/.clawdcursor
   // Tranche 3 — compact compound MCP surface. When an agent calls one of
   // these, the real action is decided by the `action` arg (already
   // unpacked above via unpackCompoundTool for the unified-agent compound
@@ -304,6 +308,7 @@ function unpackCompoundTool(tool: string, args: Record<string, unknown>): string
       expand: 'a11y_expand', collapse: 'a11y_collapse',
       toggle: 'a11y_toggle', select: 'a11y_select', state: 'get_element_state',
       list_children: 'a11y_list_children', wait_for: 'wait_for_element',
+      smart_click: 'smart_click', smart_type: 'smart_type', smart_read: 'smart_read',
     },
     window: {
       list: 'get_windows', active: 'get_active_window', focus: 'focus_window',
@@ -321,6 +326,8 @@ function unpackCompoundTool(tool: string, args: Record<string, unknown>): string
       // v0.8.2
       detect_webview: 'detect_webview_apps',
       relaunch_with_cdp: 'relaunch_with_cdp',
+      // URI escape hatches + guide-write (added to the compound surface)
+      build_uri: 'build_uri', open_uri: 'open_uri', learn_app: 'learn_app',
     },
     browser: {
       connect: 'cdp_connect', page_context: 'cdp_page_context', read_text: 'cdp_read_text',
