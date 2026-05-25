@@ -311,6 +311,29 @@
     .os-tab.active { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: var(--accent2); }
     .os-tab:hover:not(.active) { border-color: var(--border2); color: var(--text); }
 
+    /* Install card (Quick Start) — method tabs left, OS toggle right */
+    .install-card { position: relative; }
+    .install-hd { flex-wrap: wrap; }
+    .inst-methods { display: flex; gap: 4px; margin-left: 10px; }
+    .inst-os { display: flex; gap: 4px; margin-left: auto; }
+    .inst-tab, .inst-os-tab {
+      padding: 3px 12px; border-radius: 6px; font-size: 0.72rem; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace; background: transparent;
+      border: 1px solid transparent; color: var(--text3); cursor: pointer; transition: all 0.15s;
+    }
+    .inst-tab:hover, .inst-os-tab:hover { color: var(--text); }
+    .inst-tab.active { background: var(--accent2); color: #06281a; }
+    .inst-os-tab { border-color: var(--border2); color: var(--text2); }
+    .inst-os-tab.active { background: var(--red); border-color: var(--red); color: #fff; }
+    .c-prompt { color: var(--red); font-weight: 700; }
+    .copy-btn {
+      position: absolute; top: 48px; right: 14px; z-index: 2;
+      width: 30px; height: 28px; background: var(--surface); color: var(--text3);
+      border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+      font-size: 0.95rem; line-height: 1; transition: all 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--border2); }
+
     /* CTA */
     .cta { text-align: center; padding: 64px 0; border-top: 1px solid var(--border); }
     .cta h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
@@ -733,50 +756,28 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 
   <!-- Install -->
   <section id="install" class="sect">
-    <div class="sect-label">Install</div>
-    <h2>Pick your install.</h2>
-    <p class="sub">Same MCP server, your choice of channel. Providers auto-detected.</p>
+    <div class="sect-label">Quick Start</div>
+    <h2>One line. Any OS.</h2>
 
-    <div class="os-tabs">
-      <button class="os-tab active" data-os="npm" onclick="switchOS('npm')">npm &middot; any OS</button>
-      <button class="os-tab" data-os="windows" onclick="switchOS('windows')">Windows</button>
-      <button class="os-tab" data-os="unix" onclick="switchOS('unix')">macOS / Linux</button>
-      <button class="os-tab" data-os="source" onclick="switchOS('source')">Source</button>
+    <div class="code-box install-card">
+      <div class="code-hd install-hd">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <div class="inst-methods">
+          <button class="inst-tab active" data-m="oneliner" onclick="pickMethod('oneliner')">One-liner</button>
+          <button class="inst-tab" data-m="npm" onclick="pickMethod('npm')">npm</button>
+          <button class="inst-tab" data-m="source" onclick="pickMethod('source')">Source</button>
+        </div>
+        <div class="inst-os">
+          <button class="inst-os-tab" data-o="unix" onclick="pickOS('unix')">macOS &amp; Linux</button>
+          <button class="inst-os-tab active" data-o="win" onclick="pickOS('win')">Windows</button>
+        </div>
+      </div>
+      <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy command" title="Copy command">&#x2398;</button>
+      <pre><code><span class="c-comment" id="inst-comment"></span>
+<span class="c-prompt">$</span> <span id="inst-cmd"></span></code></pre>
     </div>
 
-    <div class="code-box" id="os-npm" style="display:block;">
-      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>npm &mdash; any OS</span></div>
-      <pre><code><span class="c-cmd">npm i -g clawdcursor</span>
-<span class="c-cmd">clawdcursor consent --accept</span>   <span class="c-comment"># one-time desktop-control authorization</span>
-<span class="c-cmd">clawdcursor doctor</span>            <span class="c-comment"># verify permissions; optionally configure an LLM</span>
-<span class="c-comment"># macOS: also run `clawdcursor grant` to build the native helper</span></code></pre>
-    </div>
-
-    <div class="code-box" id="os-windows" style="display:none;">
-      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>PowerShell</span></div>
-      <pre><code><span class="c-cmd">powershell -c</span> <span class="c-string">"irm https://clawdcursor.com/install.ps1 | iex"</span>
-<span class="c-cmd">clawdcursor consent --accept</span>   <span class="c-comment"># one-time desktop-control authorization (required)</span>
-<span class="c-cmd">clawdcursor doctor</span>            <span class="c-comment"># verify permissions; optionally configure an LLM</span>
-<span class="c-cmd">clawdcursor mcp</span>               <span class="c-comment"># OR `clawdcursor agent` — see "Pick a mode" above</span></code></pre>
-    </div>
-
-    <div class="code-box" id="os-unix" style="display:none;">
-      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>Terminal</span></div>
-      <pre><code><span class="c-cmd">curl -fsSL</span> <span class="c-string">https://clawdcursor.com/install.sh</span> <span class="c-cmd">| bash</span>
-<span class="c-cmd">clawdcursor grant</span>             <span class="c-comment"># Accessibility + Screen Recording (macOS only)</span>
-<span class="c-cmd">clawdcursor consent --accept</span>   <span class="c-comment"># one-time desktop-control authorization (required)</span>
-<span class="c-cmd">clawdcursor doctor</span>            <span class="c-comment"># verify permissions; optionally configure an LLM</span>
-<span class="c-cmd">clawdcursor mcp</span>               <span class="c-comment"># OR `clawdcursor agent` — see "Pick a mode" above</span></code></pre>
-    </div>
-
-    <div class="code-box" id="os-source" style="display:none;">
-      <div class="code-hd"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>git</span></div>
-      <pre><code><span class="c-cmd">git clone</span> <span class="c-string">https://github.com/AmrDab/clawdcursor.git</span>
-<span class="c-cmd">cd</span> clawdcursor &amp;&amp; <span class="c-cmd">npm install</span> &amp;&amp; <span class="c-cmd">npm run build</span> &amp;&amp; <span class="c-cmd">npm link</span>
-<span class="c-cmd">clawdcursor consent --accept</span></code></pre>
-    </div>
-
-    <p style="color:var(--text3);font-size:0.78rem;margin-top:10px;">Node.js 20+. Localhost only, bearer-token auth on every HTTP request. The <code style="font-size:0.95em">npm</code> install is the simplest; the OS installers clone into <code style="font-size:0.95em">~/clawdcursor</code> and build the macOS native helper for you. Pin a version with <code style="font-size:0.95em">$env:VERSION='v0.9.9'</code> (PowerShell) or <code style="font-size:0.95em">VERSION=v0.9.9</code> (bash).</p>
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. The one-liner installs Node if needed, builds, and links the global shim; <code style="font-size:0.95em">npm</code> is the leanest. After install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>. Pin a version with <code style="font-size:0.95em">VERSION=v0.9.9</code>.</p>
   </section>
 
 </div>
@@ -919,16 +920,47 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
     }
   });
 
-  // Install channel switcher (npm / windows / unix / source)
-  function switchOS(id) {
-    ['npm','windows','unix','source'].forEach(k => {
-      const el = document.getElementById('os-' + k);
-      if (el) el.style.display = k === id ? 'block' : 'none';
-    });
-    document.querySelectorAll('.os-tab').forEach(t => {
-      t.classList.toggle('active', t.dataset.os === id);
-    });
+  // Install card: method (oneliner/npm/source) × OS (win/unix)
+  const INSTALL_CMDS = {
+    'oneliner|win':  'powershell -c "irm https://clawdcursor.com/install.ps1 | iex"',
+    'oneliner|unix': 'curl -fsSL https://clawdcursor.com/install.sh | bash',
+    'npm|win':  'npm i -g clawdcursor',
+    'npm|unix': 'npm i -g clawdcursor',
+    'source|win':  'git clone https://github.com/AmrDab/clawdcursor.git && cd clawdcursor && npm i && npm run build && npm link',
+    'source|unix': 'git clone https://github.com/AmrDab/clawdcursor.git && cd clawdcursor && npm i && npm run build && npm link',
+  };
+  const INSTALL_COMMENTS = {
+    oneliner: '# Works everywhere. Installs Node if needed, builds, links the global shim.',
+    npm: '# Simplest — any OS. (macOS: also run `clawdcursor grant` for the native helper.)',
+    source: '# Clone, build, link — for hacking on clawdcursor itself.',
+  };
+  let _instM = 'oneliner', _instO = 'win';
+  function renderInstall() {
+    const cmd = document.getElementById('inst-cmd');
+    const comment = document.getElementById('inst-comment');
+    if (!cmd || !comment) return;
+    cmd.textContent = INSTALL_CMDS[_instM + '|' + _instO];
+    comment.textContent = INSTALL_COMMENTS[_instM];
+    document.querySelectorAll('.inst-tab').forEach(t => t.classList.toggle('active', t.dataset.m === _instM));
+    document.querySelectorAll('.inst-os-tab').forEach(t => t.classList.toggle('active', t.dataset.o === _instO));
+    // The OS toggle only changes the one-liner; dim + disable it otherwise.
+    const osEl = document.querySelector('.inst-os');
+    if (osEl) {
+      const matters = _instM === 'oneliner';
+      osEl.style.opacity = matters ? '1' : '0.4';
+      osEl.style.pointerEvents = matters ? 'auto' : 'none';
+    }
   }
+  function pickMethod(m) { _instM = m; renderInstall(); }
+  function pickOS(o) { _instO = o; renderInstall(); }
+  function copyInstall(btn) {
+    const txt = document.getElementById('inst-cmd').textContent;
+    navigator.clipboard.writeText(txt).then(() => {
+      const orig = btn.innerHTML; btn.textContent = '✓';
+      setTimeout(() => { btn.innerHTML = orig; }, 1200);
+    }).catch(() => {});
+  }
+  renderInstall();
 
 </script>
 </body>
