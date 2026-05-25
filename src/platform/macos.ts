@@ -365,22 +365,22 @@ export class MacOSAdapter implements PlatformAdapter {
   private buildMacWindowTargetClause(query?: { processName?: string; processId?: number; title?: string }): string {
     if (!query) return 'window 1 of (first application process whose frontmost is true)';
     if (query.processName) {
-      const safe = query.processName.replace(/"/g, '\\"');
+      const safe = query.processName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
       if (query.title) {
-        const t = query.title.replace(/"/g, '\\"');
+        const t = query.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         return `window "${t}" of application process "${safe}"`;
       }
       return `window 1 of application process "${safe}"`;
     }
     if (query.processId !== undefined) {
       if (query.title) {
-        const t = query.title.replace(/"/g, '\\"');
+        const t = query.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         return `window "${t}" of (first application process whose unix id is ${query.processId})`;
       }
       return `window 1 of (first application process whose unix id is ${query.processId})`;
     }
     if (query.title) {
-      const t = query.title.replace(/"/g, '\\"');
+      const t = query.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
       return `first window whose title contains "${t}" of (first application process whose frontmost is true)`;
     }
     return 'window 1 of (first application process whose frontmost is true)';
