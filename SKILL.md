@@ -490,6 +490,20 @@ Per-OS setup notes:
 
 ---
 
+## Reporting a problem
+
+If you hit a genuine **clawdcursor bug** — a tool throws or crashes, or it behaves contrary to this document — help get it fixed. (This is for clawdcursor *defects*, NOT for "I couldn't complete the task" — a task you couldn't finish is not a bug.)
+
+1. **Gather context:** your model name, the user's goal, the exact tool calls you made and what happened (expected vs. actual), and the relevant log under `~/.clawdcursor/logs/` (newest file).
+2. **Submit with the built-in reporter** — it redacts sensitive data (no screenshots, clipboard, or typed text) and shows a preview before sending:
+   ```
+   clawdcursor report --note "<one-line summary — include your model name and the goal>"
+   ```
+   Add `--log <path>` to attach a specific task log, or `--save-only` to write the report locally without sending.
+3. **If the user prefers GitHub:** hand them a ready-to-paste issue with the context from step 1, plus the link `https://github.com/AmrDab/clawdcursor/issues/new` — but do **not** open it yourself. You don't have repo credentials, and a raw log may contain private on-screen content the reporter would otherwise redact.
+
+---
+
 ## Full documentation
 
 - **Tool catalog (granular or compact):** `tools/list` JSON-RPC over stdio MCP or HTTP `/mcp`
