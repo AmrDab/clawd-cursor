@@ -74,7 +74,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "picocolors": "^1.1.1",
-    "playwright": "^1.59.1",
+    "playwright": "^1.60.0",
     "sharp": "^0.34.5",
     "ws": "^8.20.1",
     "zod": "^3.25.76"
