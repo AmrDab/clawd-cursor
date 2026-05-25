@@ -52,6 +52,33 @@ export interface GetToolsOptions {
  *   getTools({ compactGroup: 'computer' })      → granular tools owned by computer
  *   getTools({ palette: 'granular', compactGroup: 'accessibility' })
  */
+// The granular tool definitions are static (built from module-level
+// get*Tools() functions, no runtime registration), so assemble the array
+// once and reuse it. Before this, every getTool()/getTools() call rebuilt
+// the whole 14-source array — and getTool() is on the hot dispatch path.
+let _granularCache: ToolDefinition[] | null = null;
+function granularTools(): ToolDefinition[] {
+  if (_granularCache === null) {
+    _granularCache = [
+      ...getDesktopTools(),
+      ...getA11yTools(),
+      ...getCdpTools(),
+      ...getOrchestrationTools(),
+      ...getShortcutTools(),
+      ...getOcrTools(),
+      ...getSmartTools(),
+      ...getExtraTools(),
+      ...getA11yDepthTools(),
+      ...getElectronBridgeTools(),
+      ...getAgentTools(),
+      ...getFavoritesTools(),
+      ...getSchedulerTools(),
+      ...getIntrospectionTools(),
+    ];
+  }
+  return _granularCache;
+}
+
 export function getTools(options?: GetToolsOptions): ToolDefinition[] {
   const palette = options?.palette ?? 'granular';
 
@@ -59,29 +86,14 @@ export function getTools(options?: GetToolsOptions): ToolDefinition[] {
     return getCompactTools();
   }
 
-  // Granular surface (default)
-  const all = [
-    ...getDesktopTools(),
-    ...getA11yTools(),
-    ...getCdpTools(),
-    ...getOrchestrationTools(),
-    ...getShortcutTools(),
-    ...getOcrTools(),
-    ...getSmartTools(),
-    ...getExtraTools(),
-    ...getA11yDepthTools(),
-    ...getElectronBridgeTools(),
-    ...getAgentTools(),
-    ...getFavoritesTools(),
-    ...getSchedulerTools(),
-    ...getIntrospectionTools(),
-  ];
+  const all = granularTools();
 
   if (options?.compactGroup) {
     return all.filter(t => t.compactGroup === options.compactGroup);
   }
 
-  return all;
+  // Return a shallow copy so callers can't mutate the cached array.
+  return all.slice();
 }
 
 /** Get all registered GRANULAR tools (the full primitive surface). Back-compat wrapper around getTools(). */
@@ -106,5 +118,6 @@ export function getToolsByCategory(category: string): ToolDefinition[] {
 
 /** Get a tool by name */
 export function getTool(name: string): ToolDefinition | undefined {
-  return getAllTools().find(t => t.name === name);
+  // Search the cached array directly — no copy, no rebuild (hot path).
+  return granularTools().find(t => t.name === name);
 }
