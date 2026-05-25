@@ -85,7 +85,7 @@
     "@types/node": "^25.9.0",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.0",
-    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/eslint-plugin": "^8.60.0",
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^10.4.0",
     "supertest": "^7.2.2",
