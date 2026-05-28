@@ -47,6 +47,19 @@ describe('preprocess — strategy selection', () => {
     expect(preprocess(task).strategy).toBe('vision');
   });
 
+  // Regression: drag gestures phrased with "into"/"onto" (not just "to")
+  // must still morph to vision. The strategy classifier's drag rule had
+  // drifted out of sync with the capability classifier, sending these to
+  // blind — where a screenshot-less text-agent can't compute drag coords.
+  it.each([
+    'drag the file into the folder',
+    'drag the icon onto the desktop',
+    'drag and drop the photo into the album',
+    'drag the card into the Done column',
+  ])('%s → vision (drag into/onto)', (task) => {
+    expect(preprocess(task).strategy).toBe('vision');
+  });
+
   it.each([
     'click the blue button in the top right',
     'click the red area at the bottom left',

@@ -25,7 +25,15 @@ const POSITIONAL_CLICK = /\b(click|tap)\s+(in|on|at)\s+(the\s+)?(middle|center|t
 const NAVIGATION     = /\b(go to|navigate to|visit|open\s+https?:|browse to|search for|find on page)\b/i;
 const NAVIGATION_URL = /\b(https?:\/\/|www\.|\.com|\.org|\.io|\.dev|\.net)\b/i;
 
-const SPATIAL   = /\b(draw|sketch|paint|design|arrange|drag\s.*\bto\b|resize|move\s+(the\s+)?element|color|shade|fill\s+(with|in)|illustrate|diagram|annotate)\b/i;
+// `drag\s.*\b(to|onto|into)\b` — must stay in sync with the capability
+// classifier's spatial rule (classify/capability.ts). Earlier this only
+// matched a standalone "to", so "drag X into/onto Y" fell through to the
+// default reasoning bucket → blind rung, even though the capability layer
+// already tagged it spatial. A blind text-agent has no screenshot and
+// cannot compute drag coordinates, so those tasks wasted a full rung
+// before escalating to vision. Cover into/onto so drag gestures go
+// straight to vision as the docstring promises.
+const SPATIAL   = /\b(draw|sketch|paint|design|arrange|drag\s+.*\b(to|onto|into)\b|resize|move\s+(the\s+)?element|color|shade|fill\s+(with|in)|illustrate|diagram|annotate)\b/i;
 const REASONING = /\b(compose|write|draft|fill\s+(out|in)\b|log\s*in|sign\s*in|register|check|compare|review|analyze|read|summarize|reply|respond|forward)\b/i;
 const EMAIL     = /\b(email|send\s+(an?\s+)?email|compose\s+mail|send\s+to\s+\S+@)\b/i;
 
