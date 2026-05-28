@@ -16,6 +16,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { getAllTools } from '../tools/registry';
+import { validateCostClassMap } from '../tools/cost-class';
 import type { ToolCostClass } from '../tools/types';
 
 const COMPOUND_EXEMPTIONS = new Set([
@@ -45,19 +46,12 @@ describe('costClass coverage (Phase A — warn mode)', () => {
     expect(bad).toEqual([]);
   });
 
-  // Warn-mode: report progress, never fail. Flip to `it(...)` and the
-  // toBe(0) assertion below to enforce.
-  it('reports missing costClass coverage', () => {
-    const missing = tools
+  // Enforced (Phase A back-fill complete): every granular tool must carry a
+  // costClass, and the central table must have no stale entries.
+  it('every granular tool has a costClass (table is complete and current)', () => {
+    const toolNames = tools
       .filter(t => !COMPOUND_EXEMPTIONS.has(t.name))
-      .filter(t => t.costClass === undefined)
       .map(t => t.name);
-    const total = tools.length - COMPOUND_EXEMPTIONS.size;
-    const covered = total - missing.length;
-    // Surface progress on every test run without failing CI.
-    // eslint-disable-next-line no-console
-    console.log(`[cost-class-coverage] ${covered}/${total} tools annotated. ${missing.length === 0 ? 'COMPLETE — flip the assertion below to enforce.' : `Missing: ${missing.slice(0, 10).join(', ')}${missing.length > 10 ? ` (+${missing.length - 10} more)` : ''}`}`);
-    // Phase-A guarantee only — once back-fill is complete, swap to .toBe(0).
-    expect(missing.length).toBeGreaterThanOrEqual(0);
+    expect(validateCostClassMap(toolNames)).toEqual([]);
   });
 });

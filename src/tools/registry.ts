@@ -22,6 +22,7 @@ import { getSchedulerTools } from './scheduler';
 import { getIntrospectionTools } from './introspection';
 import type { ToolDefinition, ToolContext, ToolResult, CompactGroup } from './types';
 import { toOpenAiFunctions, toJsonSchema } from './types';
+import { stampCostClasses } from './cost-class';
 
 export type { ToolDefinition, ToolContext, ToolResult };
 export { toOpenAiFunctions, toJsonSchema };
@@ -76,6 +77,10 @@ export function getTools(options?: GetToolsOptions): ToolDefinition[] {
     ...getSchedulerTools(),
     ...getIntrospectionTools(),
   ];
+
+  // Phase A: stamp token-cost metadata from the central table so every
+  // consumer (tools/list, coverage test, runtime hints) sees `costClass`.
+  stampCostClasses(all);
 
   if (options?.compactGroup) {
     return all.filter(t => t.compactGroup === options.compactGroup);
