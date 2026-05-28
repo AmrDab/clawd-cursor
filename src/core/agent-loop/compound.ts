@@ -44,6 +44,29 @@ const MOUSE_ACTIONS = [
   'scroll', 'drag', 'drag_stepped',
 ] as const;
 
+/**
+ * Downsample target width the vision screenshot is resized to. Mirrors
+ * LLM_TARGET_WIDTH in the platform adapters / native-desktop — keep in sync.
+ */
+const LLM_TARGET_WIDTH = 1280;
+
+/**
+ * Vision-mode coordinates arrive in IMAGE space: the model only ever sees a
+ * screenshot downsampled to <=1280px wide, so it picks coordinates in that
+ * space. The platform mouse layer expects REAL screen pixels. Scale by the
+ * exact factor every adapter applies when it downsamples — physicalWidth /
+ * min(physicalWidth, 1280) — which is also what the MCP mouse_click path does
+ * via getMouseScaleFactor(). Without this, on a 2× display a click meant for
+ * image (649,546) lands at screen (649,546) — half-way to the target, on
+ * whatever window happens to be there. Stays OS-agnostic: the only input is
+ * the adapter-reported physical width.
+ */
+function imageScale(ctx: { screen?: { physicalWidth?: number } }): number {
+  const w = ctx.screen?.physicalWidth ?? 0;
+  return w > LLM_TARGET_WIDTH ? w / LLM_TARGET_WIDTH : 1;
+}
+const px = (v: number, scale: number): number => Math.round(v * scale);
+
 export const mouseCompound: UnifiedTool = {
   name: 'mouse',
   description:
@@ -83,40 +106,47 @@ export const mouseCompound: UnifiedTool = {
   changesScreen: true,
   async execute(args, ctx): Promise<UnifiedToolResult> {
     const action = String(args.action ?? '');
-    const x = typeof args.x === 'number' ? args.x : 0;
-    const y = typeof args.y === 'number' ? args.y : 0;
     const btn = (args.button as 'left' | 'right' | 'middle') ?? 'left';
+
+    // Image-space (what the model passed) vs screen-space (what the OS needs).
+    // Echo image coords in result text so the model's mental model stays put;
+    // send scaled screen coords to the platform. See imageScale() above.
+    const s = imageScale(ctx);
+    const ix = typeof args.x === 'number' ? args.x : 0;
+    const iy = typeof args.y === 'number' ? args.y : 0;
+    const x = px(ix, s);
+    const y = px(iy, s);
 
     switch (action) {
       case 'click':
         await ctx.platform.mouseClick(x, y, { button: btn });
         await sleep(150);
-        return { success: true, text: `Clicked ${btn} at (${x}, ${y})` };
+        return { success: true, text: `Clicked ${btn} at (${ix}, ${iy})` };
       case 'double_click':
         await ctx.platform.mouseClick(x, y, { button: 'left', count: 2 });
         await sleep(150);
-        return { success: true, text: `Double-clicked at (${x}, ${y})` };
+        return { success: true, text: `Double-clicked at (${ix}, ${iy})` };
       case 'right_click':
         await ctx.platform.mouseClick(x, y, { button: 'right' });
         await sleep(150);
-        return { success: true, text: `Right-clicked at (${x}, ${y})` };
+        return { success: true, text: `Right-clicked at (${ix}, ${iy})` };
       case 'middle_click':
         await ctx.platform.mouseClick(x, y, { button: 'middle' });
         await sleep(150);
-        return { success: true, text: `Middle-clicked at (${x}, ${y})` };
+        return { success: true, text: `Middle-clicked at (${ix}, ${iy})` };
       case 'triple_click':
         await ctx.platform.mouseClick(x, y, { button: 'left', count: 3 });
         await sleep(150);
-        return { success: true, text: `Triple-clicked at (${x}, ${y})` };
+        return { success: true, text: `Triple-clicked at (${ix}, ${iy})` };
       case 'move':
       case 'hover':
         await ctx.platform.mouseMove(x, y);
-        return { success: true, text: `Moved cursor to (${x}, ${y})` };
+        return { success: true, text: `Moved cursor to (${ix}, ${iy})` };
       case 'move_relative': {
-        const dx = typeof args.dx === 'number' ? args.dx : 0;
-        const dy = typeof args.dy === 'number' ? args.dy : 0;
-        await ctx.platform.mouseMoveRelative(dx, dy);
-        return { success: true, text: `Cursor moved by (${dx}, ${dy})` };
+        const idx = typeof args.dx === 'number' ? args.dx : 0;
+        const idy = typeof args.dy === 'number' ? args.dy : 0;
+        await ctx.platform.mouseMoveRelative(px(idx, s), px(idy, s));
+        return { success: true, text: `Cursor moved by (${idx}, ${idy})` };
       }
       case 'down':
         await ctx.platform.mouseDown(btn);
@@ -128,14 +158,14 @@ export const mouseCompound: UnifiedTool = {
         const dir = (args.direction as 'up' | 'down' | 'left' | 'right') ?? 'down';
         const amount = typeof args.amount === 'number' ? args.amount : 3;
         await ctx.platform.mouseScroll(x, y, dir, amount);
-        return { success: true, text: `Scrolled ${dir} ${amount} at (${x}, ${y})` };
+        return { success: true, text: `Scrolled ${dir} ${amount} at (${ix}, ${iy})` };
       }
       case 'drag': {
         const sx = typeof args.startX === 'number' ? args.startX : 0;
         const sy = typeof args.startY === 'number' ? args.startY : 0;
         const ex = typeof args.endX === 'number' ? args.endX : 0;
         const ey = typeof args.endY === 'number' ? args.endY : 0;
-        await ctx.platform.mouseDrag(sx, sy, ex, ey);
+        await ctx.platform.mouseDrag(px(sx, s), px(sy, s), px(ex, s), px(ey, s));
         await sleep(200);
         return { success: true, text: `Dragged (${sx},${sy})→(${ex},${ey})` };
       }
@@ -146,11 +176,11 @@ export const mouseCompound: UnifiedTool = {
         if (!Array.isArray(points) || points.length < 2) {
           return { success: false, text: 'drag_stepped: need at least 2 points' };
         }
-        await ctx.platform.mouseMove(points[0].x, points[0].y);
+        await ctx.platform.mouseMove(px(points[0].x, s), px(points[0].y, s));
         await ctx.platform.mouseDown('left');
         try {
           for (let i = 1; i < points.length; i++) {
-            await ctx.platform.mouseMove(points[i].x, points[i].y);
+            await ctx.platform.mouseMove(px(points[i].x, s), px(points[i].y, s));
             await sleep(16);
           }
         } finally {
