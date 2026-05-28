@@ -24,7 +24,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "a11y_expand",
@@ -49,7 +50,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "a11y_get_element",
@@ -74,7 +76,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "a11y_get_value",
@@ -99,7 +102,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "a11y_list_children",
@@ -129,7 +133,8 @@
         "required": [
           "parentName"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "a11y_select",
@@ -154,7 +159,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "a11y_toggle",
@@ -179,7 +185,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "abort_task",
@@ -188,7 +195,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "agent_status",
@@ -197,7 +205,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "build_uri",
@@ -222,7 +231,8 @@
         "required": [
           "scheme"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "cdp_click",
@@ -240,7 +250,8 @@
             "description": "Visible text of the element to click (alternative to selector)"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "cdp_connect",
@@ -249,7 +260,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "cdp_evaluate",
@@ -266,7 +278,8 @@
         "required": [
           "javascript"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "cdp_list_tabs",
@@ -275,7 +288,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "cdp_page_context",
@@ -284,7 +298,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "cdp_read_text",
@@ -302,7 +317,8 @@
             "description": "Max characters to return (default: 3000)"
           }
         }
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "cdp_scroll",
@@ -327,7 +343,8 @@
         "required": [
           "direction"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "cdp_select_option",
@@ -349,7 +366,8 @@
           "selector",
           "value"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "cdp_switch_tab",
@@ -366,7 +384,8 @@
         "required": [
           "target"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "cdp_type",
@@ -391,7 +410,8 @@
         "required": [
           "text"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "cdp_wait_for_selector",
@@ -412,7 +432,8 @@
         "required": [
           "selector"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "classify_task",
@@ -437,7 +458,8 @@
         "required": [
           "task"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "close_window",
@@ -459,7 +481,8 @@
             "description": "Optional title-substring match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "delegate_to_agent",
@@ -480,7 +503,8 @@
         "required": [
           "task"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "desktop_screenshot",
@@ -489,7 +513,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "perceive-image"
     },
     {
       "name": "desktop_screenshot_region",
@@ -521,7 +546,8 @@
           "width",
           "height"
         ]
-      }
+      },
+      "costClass": "perceive-image"
     },
     {
       "name": "detect_app",
@@ -538,7 +564,8 @@
         "required": [
           "urlOrTitle"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "detect_webview_apps",
@@ -547,7 +574,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "favorites_add",
@@ -564,7 +592,8 @@
         "required": [
           "task"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "favorites_list",
@@ -573,7 +602,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "favorites_remove",
@@ -590,7 +620,8 @@
         "required": [
           "task"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "find_element",
@@ -616,7 +647,8 @@
             "description": "Process ID to search within"
           }
         }
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "focus_element",
@@ -641,7 +673,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "focus_window",
@@ -663,7 +696,8 @@
             "description": "Window title substring to match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "get_active_window",
@@ -672,7 +706,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "get_app_guide",
@@ -690,7 +725,8 @@
             "description": "URL or window title to resolve into an app key"
           }
         }
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "get_element_state",
@@ -715,7 +751,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "get_focused_element",
@@ -724,7 +761,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "get_screen_size",
@@ -733,7 +771,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "get_system_prompt",
@@ -753,7 +792,8 @@
             "default": "blind"
           }
         }
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "get_system_time",
@@ -762,7 +802,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "get_windows",
@@ -771,7 +812,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "invoke_element",
@@ -813,7 +855,8 @@
             "description": "Value for set-value action"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "key_down",
@@ -830,7 +873,8 @@
         "required": [
           "key"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "key_press",
@@ -847,7 +891,8 @@
         "required": [
           "key"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "key_up",
@@ -864,7 +909,8 @@
         "required": [
           "key"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "learn_app",
@@ -897,7 +943,8 @@
         "required": [
           "processName"
         ]
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "list_displays",
@@ -906,7 +953,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "logs_recent",
@@ -922,7 +970,8 @@
             "maximum": 500
           }
         }
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "maximize_window",
@@ -944,7 +993,8 @@
             "description": "Optional title-substring match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "minimize_window",
@@ -966,7 +1016,8 @@
             "description": "Window title substring to match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "minimize_window_to_taskbar",
@@ -988,7 +1039,8 @@
             "description": "Optional title-substring match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_click",
@@ -1010,7 +1062,8 @@
           "x",
           "y"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_double_click",
@@ -1032,7 +1085,8 @@
           "x",
           "y"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_down",
@@ -1051,7 +1105,8 @@
             ]
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_drag",
@@ -1099,7 +1154,8 @@
           "endX",
           "endY"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_drag_stepped",
@@ -1116,7 +1172,8 @@
         "required": [
           "path"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_hover",
@@ -1138,7 +1195,8 @@
           "x",
           "y"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_middle_click",
@@ -1160,7 +1218,8 @@
           "x",
           "y"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_move_relative",
@@ -1182,7 +1241,8 @@
           "dx",
           "dy"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_right_click",
@@ -1204,7 +1264,8 @@
           "x",
           "y"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_scroll",
@@ -1240,7 +1301,8 @@
           "y",
           "direction"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_scroll_horizontal",
@@ -1276,7 +1338,8 @@
           "y",
           "direction"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_triple_click",
@@ -1298,7 +1361,8 @@
           "x",
           "y"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "mouse_up",
@@ -1317,7 +1381,8 @@
             ]
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "navigate_browser",
@@ -1334,7 +1399,8 @@
         "required": [
           "url"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "ocr_read_screen",
@@ -1343,7 +1409,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "open_app",
@@ -1360,7 +1427,8 @@
         "required": [
           "name"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "open_file",
@@ -1377,7 +1445,8 @@
         "required": [
           "path"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "open_uri",
@@ -1394,7 +1463,8 @@
         "required": [
           "uri"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "open_url",
@@ -1411,7 +1481,8 @@
         "required": [
           "url"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "read_clipboard",
@@ -1420,7 +1491,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "read_screen",
@@ -1434,7 +1506,8 @@
             "description": "Focus on a specific process ID (optional — reads foreground window by default)"
           }
         }
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "relaunch_with_cdp",
@@ -1456,7 +1529,8 @@
         "required": [
           "appName"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "resize_window",
@@ -1494,7 +1568,8 @@
             "description": "Optional title-substring match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "restore_window",
@@ -1516,7 +1591,8 @@
             "description": "Optional title-substring match"
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "scheduled_task_create",
@@ -1542,7 +1618,8 @@
           "task",
           "cron"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "scheduled_task_delete",
@@ -1559,7 +1636,8 @@
         "required": [
           "id"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "scheduled_task_list",
@@ -1568,7 +1646,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "scheduled_task_toggle",
@@ -1590,7 +1669,8 @@
           "id",
           "enabled"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "screenshot_full",
@@ -1599,7 +1679,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "perceive-image"
     },
     {
       "name": "set_field_value",
@@ -1629,7 +1710,8 @@
           "name",
           "value"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "shortcuts_execute",
@@ -1650,7 +1732,8 @@
         "required": [
           "intent"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "shortcuts_list",
@@ -1678,7 +1761,8 @@
             "description": "Filter by app context (e.g. \"reddit\", \"outlook\", \"x.com\"). Shows context-specific shortcuts that match."
           }
         }
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "smart_click",
@@ -1703,7 +1787,8 @@
         "required": [
           "target"
         ]
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "smart_read",
@@ -1730,7 +1815,8 @@
             "description": "Limit to specific process"
           }
         }
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "smart_type",
@@ -1755,7 +1841,8 @@
         "required": [
           "text"
         ]
-      }
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "submit_report",
@@ -1774,7 +1861,8 @@
             "minimum": 0
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "submit_task",
@@ -1791,7 +1879,8 @@
         "required": [
           "task"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "switch_tab_os",
@@ -1815,7 +1904,8 @@
             ]
           }
         }
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "task_logs_current",
@@ -1824,7 +1914,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "task_logs_list",
@@ -1833,7 +1924,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "type_text",
@@ -1850,7 +1942,8 @@
         "required": [
           "text"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "undo_last",
@@ -1859,7 +1952,8 @@
       "parameters": {
         "type": "object",
         "properties": {}
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "wait",
@@ -1878,7 +1972,8 @@
         "required": [
           "seconds"
         ]
-      }
+      },
+      "costClass": "act"
     },
     {
       "name": "wait_for_element",
@@ -1910,7 +2005,8 @@
             "default": 250
           }
         }
-      }
+      },
+      "costClass": "inspect"
     },
     {
       "name": "write_clipboard",
@@ -1927,7 +2023,8 @@
         "required": [
           "text"
         ]
-      }
+      },
+      "costClass": "act"
     }
   ]
 }

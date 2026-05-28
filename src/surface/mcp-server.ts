@@ -76,9 +76,17 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
     // MCP SDK 1.29 arg parsing breaks if schema is undefined (shifts callback
     // position). Always pass a schema — use empty object for parameterless tools.
     const hasParams = Object.keys(zodParams).length > 0;
+    // Phase A: surface the token-cost class to the tool-picking LLM. The
+    // high-level SDK `server.tool()` API has no slot for a vendor metadata
+    // field, so a `[costClass]` description prefix is the reliable
+    // LLM-readable channel in tools/list. `costClass` in source stays the
+    // single source of truth; the prefix is rendered only at this projection.
+    const description = tool.costClass
+      ? `[${tool.costClass}] ${tool.description}`
+      : tool.description;
     server.tool(
       tool.name,
-      tool.description,
+      description,
       hasParams ? zodParams : {},
       async (params: any) => {
         const safetyError = evaluateToolCall(tool, params ?? {});

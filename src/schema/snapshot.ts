@@ -15,6 +15,8 @@ export interface CanonicalTool {
   description: string;
   category: string;
   parameters: object;
+  /** Phase A token-cost class; omitted for compound dispatchers. */
+  costClass?: string;
 }
 
 export interface SnapshotFile {
@@ -33,6 +35,7 @@ export function canonicalize(): CanonicalTool[] {
       description: t.description,
       category: t.category,
       parameters: toJsonSchema(t.parameters),
+      ...(t.costClass ? { costClass: t.costClass } : {}),
     }));
 }
 
