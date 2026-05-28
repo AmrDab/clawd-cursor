@@ -55,7 +55,32 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
   const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js' as any);
   const { z } = await import('zod');
 
-  const server = new McpServer({ name: 'clawdcursor', version: VERSION });
+  // MCP `instructions` — sent once at the initialize handshake and injected
+  // into the connecting agent's context. This is the only channel to tell an
+  // integrating agent (Claude Code, Cursor, Windsurf, Zed, OpenClaw) HOW to
+  // use clawdcursor cheaply. Without it, agents drive the raw GUI tools with
+  // their own premium model — the expensive path — and never discover the
+  // local fallback pipeline. The guidance differs by mode: only the daemon
+  // (HTTP) context has a live agent, so only it can offer `task`.
+  const instructions = ctx.agent
+    ? // Daemon / HTTP MCP — the cheap local pipeline is available.
+      'clawdcursor is a local desktop-automation execution layer. PREFER the ' +
+      '`task` tool: it runs the full perceive→act→verify loop locally on a ' +
+      'cheap model, so you spend almost no tokens driving the GUI yourself. ' +
+      'Fall back to the granular tools only when you need fine-grained control. ' +
+      'Every tool name carries a token-cost class — order of preference is ' +
+      '[act] < [inspect] < [perceive-text] < [perceive-image]: act and read the ' +
+      'accessibility tree before you reach for a screenshot.'
+    : // Stdio MCP (editor integration) — no pipeline; you drive the tools.
+      'clawdcursor is a local desktop-automation tool layer. You drive the tools ' +
+      'yourself. To minimize tokens, follow the cost-class prefix on each tool — ' +
+      '[act] < [inspect] < [perceive-text] < [perceive-image]: prefer direct ' +
+      'actions and accessibility reads; capture a screenshot ([perceive-image]) ' +
+      'only when the accessibility tree is empty. For fully autonomous, ' +
+      'low-cost execution, start the daemon (`clawdcursor agent`) and use the ' +
+      '`task` tool — it runs a local cheap-model pipeline instead of your model.';
+
+  const server = new McpServer({ name: 'clawdcursor', version: VERSION }, { instructions });
   const tools = compact ? getCompactSurface() : getAllTools();
 
   for (const tool of tools) {
