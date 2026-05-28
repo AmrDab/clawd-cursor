@@ -71,6 +71,36 @@ export interface ToolContext {
 /** The 6 compact compound tool names */
 export type CompactGroup = 'computer' | 'accessibility' | 'window' | 'system' | 'browser' | 'task';
 
+/**
+ * What kind of evidence a tool produces and how token-expensive its
+ * response typically is for the calling LLM. Distinct from `safetyTier`
+ * (which answers "is this destructive?") — `costClass` answers "how
+ * much will I pay in tokens when this returns?".
+ *
+ * Cheaper-first ordering: `act` < `inspect` < `perceive-text` < `perceive-image`.
+ *
+ *   act              — side-effect verb; caller already knows what + where.
+ *                      Response typically ≤200 tokens (a status line).
+ *                      Examples: mouse_click, key_press, type_text, mouse_drag.
+ *
+ *   inspect          — cheap structured read. Response ≤2K tokens.
+ *                      Examples: get_active_window, get_windows, find_element,
+ *                      cdp_list_tabs.
+ *
+ *   perceive-text    — a11y tree, OCR, or DOM dump. Response ≤10K tokens.
+ *                      Examples: read_screen, ocr_read_screen, cdp_page_context,
+ *                      smart_click (internally OCR+a11y), smart_type.
+ *
+ *   perceive-image   — screenshot with image bytes. Response ≤50K tokens
+ *                      including base64 image data; vision LLMs pay extra.
+ *                      Examples: desktop_screenshot, desktop_screenshot_region.
+ *
+ * Compound dispatcher tools (`computer`, `accessibility`, `window`, `system`,
+ * `browser`, `task`) leave this `undefined` — their cost depends on which
+ * delegate the `action` parameter routes to.
+ */
+export type ToolCostClass = 'act' | 'inspect' | 'perceive-text' | 'perceive-image';
+
 /** A single tool definition — transport agnostic */
 export interface ToolDefinition {
   /** Unique tool name (e.g. "mouse_click", "read_screen") */
@@ -100,6 +130,26 @@ export interface ToolDefinition {
    * `pipeline/safety/layer.ts` for backward-compatibility.
    */
   safetyTier?: 0 | 1 | 2 | 3;
+  /**
+   * Token-cost class — what kind of evidence this tool returns and how
+   * expensive its response is for the calling LLM. See `ToolCostClass`.
+   * `tools/list` exposes this so a tool-picking LLM can prefer cheaper
+   * alternatives first (e.g. `find_element` before `read_screen` before
+   * `desktop_screenshot`).
+   *
+   * Optional during the rollout. The coverage test in
+   * `src/__tests__/cost-class-coverage.test.ts` warns on missing values
+   * and will flip to required in a future minor.
+   */
+  costClass?: ToolCostClass;
+  /**
+   * Other tools the caller should try BEFORE this one when they apply
+   * to the same job at a lower cost class. Names must reference real
+   * tools — validated at module load.
+   *
+   * Example: `read_screen.cheaperAlternatives = ['find_element']`.
+   */
+  cheaperAlternatives?: string[];
   /** The handler function */
   handler: (params: Record<string, any>, ctx: ToolContext) => Promise<ToolResult>;
 }
