@@ -136,6 +136,37 @@ COORDINATES
     Wrong:   click(x="390, 79", y=79)
   • On platforms with DPI scaling, coordinates still go through the platform's
     logical-pixel mapper; you don't need to adjust.
+${mode === 'blind' ? '' : `
+INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
+  When the actionable content is a canvas (targets, tiles, drag zones, paths,
+  numbered dots, an inner scrolling list) you must drive it by SCREENSHOT +
+  precise mouse/keyboard. Use the right gesture for each:
+  • CLICK a target: click its CENTER (read x,y straight from the screenshot).
+  • DRAG a tile/shape into a zone/slot: mouse action:"drag" with
+    startX/startY = the item center, endX/endY = the destination center.
+  • MATCH multiple shapes: drag each shape onto the slot with the SAME shape;
+    do them one at a time, re-screenshot between drags only if unsure.
+  • CLICK A SEQUENCE in order (1→6): click each numbered item lowest→highest.
+  • HOVER/DWELL: mouse action:"move" onto the target, then wait(ms) for the
+    required dwell (e.g. wait(1600) for a "hover 1.5s" prompt) — do not click.
+  • SCROLL AN INNER LIST/PANEL: first move the cursor OVER that list, then
+    mouse action:"scroll" with x,y at the list's center and a direction +
+    amount; repeat until the wanted row is visible, THEN click it. A page that
+    "won't scroll" usually means the wheel landed outside the scrollable list.
+  • TRACE A PATH/CURVE: mouse action:"drag_stepped" with path = a JSON array of
+    12–20 {x,y} points. The FIRST point MUST be exactly on the draggable knob
+    (one end of the track). FOLLOW THE CURVE'S SHAPE — if the track bows/arcs,
+    your midpoints must bow with it (an arc that bulges upward needs midpoints
+    with a SMALLER y than the endpoints). A straight line between the two ends
+    will FAIL — sample points along the actual visible curve, ending on the far
+    end. Coverage must reach the far end and stay within the track.
+  • DOUBLE / RIGHT click: use action:"double_click" / "right_click".
+  AUTO-ADVANCING EXAMS/WIZARDS: many such UIs load the NEXT step automatically
+  ~1–2s after each success. After an action, take ONE screenshot to see the new
+  state, then act on it. Keep going through every step until you reach a clearly
+  terminal screen (a results/summary/grade page). Do NOT re-screenshot several
+  times without acting, and do NOT give_up just because the a11y tree looks the
+  same between steps — judge progress from the SCREENSHOT and any on-screen log.`}
 
 KEY COMBO SYNTAX
   • Use "mod" for the platform-correct modifier (Cmd on macOS, Ctrl elsewhere).

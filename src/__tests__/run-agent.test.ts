@@ -35,6 +35,9 @@ vi.mock('../llm/client', async (importOriginal) => {
     ...orig,
     callLLMWithTools: vi.fn(async (): Promise<ToolUseResult> => {
       const next = llmTurnQueue.shift();
+      // A queued Error simulates an LLM-call failure for that turn (used to
+      // test transient-error retry vs fatal-error abort).
+      if (next instanceof Error) throw next;
       if (!next) {
         // Defensive: a runaway test would otherwise loop forever. Returning
         // an empty turn here lets the loop's NO_TOOL_CALL_LIMIT trip
@@ -279,6 +282,41 @@ describe('runAgent — vision/canvas guards must not misfire (live-test regressi
 
     expect(result.exit).toBe('done');
     expect(result.success).toBe(true);
+  });
+});
+
+describe('runAgent — transient LLM-error resilience (live-test regression 2026-05-28)', () => {
+  beforeEach(() => {
+    llmTurnQueue.length = 0;
+  });
+
+  it('retries a transient LLM error instead of throwing away the run', async () => {
+    // A 10-of-14 live run died at turn 45 to ONE transient API error. A blip
+    // must not abort a long run: retry, then continue to done().
+    llmTurnQueue.push(new Error('Overloaded: upstream returned 529') as unknown as ToolUseResult);
+    llmTurnQueue.push(turnCall('done', { evidence: 'screen shows the expected content' }));
+
+    const result = await runAgent(
+      { task: 'survive an API blip', mode: 'blind', maxTurns: 10 },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    expect(result.success).toBe(true);
+  });
+
+  it('fails fast (no retry) on a non-transient LLM error', async () => {
+    // A 400 bad-request will never succeed on retry — give up immediately.
+    llmTurnQueue.push(new Error('400 invalid_request_error: bad tool schema') as unknown as ToolUseResult);
+    llmTurnQueue.push(turnCall('done', { evidence: 'unreached' }));
+
+    const result = await runAgent(
+      { task: 'fatal request', mode: 'blind', maxTurns: 10 },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('llm_error');
+    expect(result.success).toBe(false);
   });
 });
 

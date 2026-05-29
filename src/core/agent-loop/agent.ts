@@ -56,7 +56,7 @@ import type {
 // safety net, not the primary detector — so it can be generous enough to
 // support long sequential tasks (e.g. a multi-challenge benchmark) that
 // legitimately need 30+ actions. Was 20, which truncated such runs mid-task.
-const DEFAULT_MAX_TURNS = 40;
+const DEFAULT_MAX_TURNS = 70;
 /**
  * Number of consecutive identical fingerprints that triggers a stagnation
  * WARNING in the next turn's prompt. Below this we trust the agent to
@@ -257,26 +257,46 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       log.info(EVENTS.AGENT_TURN_START, { turn, mode: input.mode, historyTurns: history.length });
       const turnStart = Date.now();
 
-      // 1. Call the LLM with tools.
+      // 1. Call the LLM with tools. Retry TRANSIENT failures (overload, rate
+      //    limit, timeout, 5xx, dropped socket) with exponential backoff — a
+      //    single API blip must not throw away a long multi-step run (a live
+      //    14-challenge run died at turn 45 to one transient error after
+      //    completing 10 steps). Non-transient errors (bad request, auth) fail
+      //    fast — retrying them is pointless.
       let llmResult: ToolUseResult;
-      try {
-        llmResult = await callLLMWithTools({
-          baseUrl: llmConfig.baseUrl,
-          model: llmConfig.model,
-          apiKey: llmConfig.apiKey,
-          isAnthropic: llmConfig.isAnthropic,
-          system: systemPrompt,
-          tools: llmTools,
-          messages: history,
-          maxTokens: llmConfig.maxTokens ?? 1024,
-          timeoutMs: 45_000,
-          toolChoice: 'auto',
-        });
-        llmCalls += 1;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error('agent.llm.failed', { turn, error: msg });
-        return finish('llm_error', `LLM call failed: ${msg}`, steps, llmCalls, screenshotsCaptured.n, startedAt);
+      {
+        const LLM_MAX_ATTEMPTS = 4;
+        let attempt = 0;
+        for (;;) {
+          attempt += 1;
+          try {
+            llmResult = await callLLMWithTools({
+              baseUrl: llmConfig.baseUrl,
+              model: llmConfig.model,
+              apiKey: llmConfig.apiKey,
+              isAnthropic: llmConfig.isAnthropic,
+              system: systemPrompt,
+              tools: llmTools,
+              messages: history,
+              maxTokens: llmConfig.maxTokens ?? 1024,
+              timeoutMs: 45_000,
+              toolChoice: 'auto',
+            });
+            llmCalls += 1;
+            break;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const transient = /\b(timeout|timed out|429|rate.?limit|overload|529|50[0-4]|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed)\b/i.test(msg);
+            if (attempt < LLM_MAX_ATTEMPTS && transient) {
+              const backoffMs = 800 * 2 ** (attempt - 1); // 0.8s, 1.6s, 3.2s
+              log.warn('agent.llm.retry', { turn, attempt, error: truncate(msg, 120), backoffMs });
+              await new Promise(r => setTimeout(r, backoffMs));
+              continue;
+            }
+            log.error('agent.llm.failed', { turn, attempt, error: msg });
+            return finish('llm_error', `LLM call failed after ${attempt} attempt(s): ${msg}`, steps, llmCalls, screenshotsCaptured.n, startedAt);
+          }
+        }
       }
 
       // 2. Log the agent's thinking, if any.

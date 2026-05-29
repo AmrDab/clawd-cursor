@@ -200,7 +200,7 @@ export const PIPELINE_DEFAULTS: Required<Pick<PipelineDeps, 'disableVision' | 'm
   // backstop, not the primary stuck-detector — so it can be generous enough to
   // let a single rung carry a long sequential task (e.g. a multi-step/
   // multi-challenge run) to completion. Was 20, which truncated such runs.
-  maxTurnsPerRung: 40,
+  maxTurnsPerRung: 70,
   maxEscalations: 3,
   disableVerifier: false,
 };
