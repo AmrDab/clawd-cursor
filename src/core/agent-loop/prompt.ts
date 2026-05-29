@@ -149,10 +149,13 @@ INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
   • CLICK A SEQUENCE in order (1→6): click each numbered item lowest→highest.
   • HOVER/DWELL: mouse action:"move" onto the target, then wait(ms) for the
     required dwell (e.g. wait(1600) for a "hover 1.5s" prompt) — do not click.
-  • SCROLL AN INNER LIST/PANEL: first move the cursor OVER that list, then
-    mouse action:"scroll" with x,y at the list's center and a direction +
-    amount; repeat until the wanted row is visible, THEN click it. A page that
-    "won't scroll" usually means the wheel landed outside the scrollable list.
+  • SCROLL AN INNER LIST/PANEL: put x,y at the CENTER of that list and use
+    mouse action:"scroll" with a LARGE amount (15–25 — small amounts like 3
+    barely move a long list, one row at a time, and waste turns). REPEAT the
+    big scroll several times, screenshotting between, until the wanted row is
+    visible, THEN click it. To reach a far item (e.g. #48 of 60) expect 3–5
+    large scrolls. A list that "won't scroll" means the wheel landed outside
+    it — re-aim x,y inside the list. Do NOT try to drag the scrollbar.
   • TRACE A PATH/CURVE: mouse action:"drag_stepped" with path = a JSON array of
     12–20 {x,y} points. The FIRST point MUST be exactly on the draggable knob
     (one end of the track). FOLLOW THE CURVE'S SHAPE — if the track bows/arcs,
@@ -161,12 +164,24 @@ INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
     will FAIL — sample points along the actual visible curve, ending on the far
     end. Coverage must reach the far end and stay within the track.
   • DOUBLE / RIGHT click: use action:"double_click" / "right_click".
+  • MULTI-STEP WORKFLOW: do EVERY sub-step in order before moving on. A typical
+    workflow is: click a "start" button → a tile + drop-zone appear → drag the
+    tile into the zone → an input box appears → type the requested word (e.g.
+    "done"). The step only completes after the LAST sub-step. Re-screenshot
+    after each sub-step to see the next one appear.
   AUTO-ADVANCING EXAMS/WIZARDS: many such UIs load the NEXT step automatically
   ~1–2s after each success. After an action, take ONE screenshot to see the new
   state, then act on it. Keep going through every step until you reach a clearly
-  terminal screen (a results/summary/grade page). Do NOT re-screenshot several
-  times without acting, and do NOT give_up just because the a11y tree looks the
-  same between steps — judge progress from the SCREENSHOT and any on-screen log.`}
+  terminal screen. Do NOT re-screenshot several times without acting, and do NOT
+  give_up just because the a11y tree looks the same between steps — judge
+  progress from the SCREENSHOT and any on-screen log.
+  RECOGNIZING COMPLETION: the ONLY screen that means a graded exam/wizard is
+  finished is the RESULTS/GRADE page — it shows a big letter grade (S/A/B/C/D/F)
+  and a breakdown table listing every test with PASS/FAIL. A screen that still
+  shows a challenge prompt, a "start" button, an input box, a target, or a
+  scoreboard WITHOUT a final letter grade is NOT the results page — keep going.
+  NEVER call done() claiming a grade/score you cannot literally see on screen;
+  if you have not reached the letter-grade page, the exam is not finished.`}
 
 KEY COMBO SYNTAX
   • Use "mod" for the platform-correct modifier (Cmd on macOS, Ctrl elsewhere).

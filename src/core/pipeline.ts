@@ -83,6 +83,19 @@ import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../platf
 const COMPOUND_TASK_PATTERN = /\b(?:and|then|,)\b/i;
 
 /**
+ * Continuous-interactive-session cues. A task that describes ONE stateful,
+ * self-advancing flow in a single window — a wizard, an exam, a game, a guided
+ * multi-step form — must run as a SINGLE agent session, never be decomposed.
+ * Splitting it hands each subtask to a fresh agent that has lost the live
+ * session state (it re-starts the flow, re-clicks "begin", loses progress).
+ * Observed live: the same 14-challenge exam scored 13/14 as one session but
+ * collapsed to 1/14 when the LLM decomposer fragmented it into 8 subtasks.
+ * When this matches, keep the task whole and skip decomposition entirely.
+ */
+const CONTINUOUS_SESSION_PATTERN =
+  /\b(keep going|until you (see|reach)|do ?n[o']?t stop until|auto-?advanc|one continuous|single (continuous )?session|each (challenge|step|screen|round)|through (all|every|each) (the )?(challenge|step|round)|results? (page|screen)|grade page)\b/i;
+
+/**
  * Indefinite phrasing — "any X", "the latest", "a random", "some Y",
  * "today's news", "anything", "an example". Any of these forces LLM
  * decomposition even when the surrounding structure looks trivial.
@@ -351,10 +364,20 @@ export class Pipeline {
       // "open Outlook" subtask. The router's focus_existing path was
       // already idempotent; this just stops us paying the LLM round-trip
       // for a subtask that didn't need to exist.
+      // A continuous interactive session (wizard/exam/game/guided form) must
+      // stay ONE subtask — decomposing it strands each subtask in a fresh
+      // agent that lost the live session state. This overrides the compound/
+      // indefinite triggers below.
+      const forceSingleSession = CONTINUOUS_SESSION_PATTERN.test(input.task);
+      if (forceSingleSession) {
+        subtasks = [input.task];
+        log.info('pipeline.decompose.kept_single_session', { reason: 'continuous-session cue in task' });
+      }
       const needsDecompose =
-        outerDecision.subtasks.length >= 2
-        || COMPOUND_TASK_PATTERN.test(input.task)
-        || INDEFINITE_INTENT_PATTERN.test(input.task);
+        !forceSingleSession
+        && (outerDecision.subtasks.length >= 2
+          || COMPOUND_TASK_PATTERN.test(input.task)
+          || INDEFINITE_INTENT_PATTERN.test(input.task));
       if (this.decomposer && needsDecompose) {
         log.info('pipeline.decompose.refine_attempt', { task: input.task });
         try {

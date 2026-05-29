@@ -77,7 +77,7 @@ export class Agent {
   }
 
   /** Safety-net timeout — only fires if task is truly stuck (stagnation + abort didn't catch it) */
-  private static readonly TASK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — generous, real stop signals are stagnation + abort
+  private static readonly TASK_TIMEOUT_MS = 12 * 60 * 1000; // 12 minutes — a long sequential task (e.g. a 14-step benchmark) legitimately runs several minutes; the real stop signals are stagnation, runaway-guard, and max_turns. Was 5min, which aborted a slow-but-progressing run mid-exam.
 
   async executeTask(task: string): Promise<TaskResult> {
     // Atomic concurrency guard — boolean lock prevents TOCTOU race
