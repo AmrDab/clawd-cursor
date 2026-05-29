@@ -150,12 +150,13 @@ INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
   • HOVER/DWELL: mouse action:"move" onto the target, then wait(ms) for the
     required dwell (e.g. wait(1600) for a "hover 1.5s" prompt) — do not click.
   • SCROLL AN INNER LIST/PANEL: put x,y at the CENTER of that list and use
-    mouse action:"scroll" with a LARGE amount (15–25 — small amounts like 3
-    barely move a long list, one row at a time, and waste turns). REPEAT the
-    big scroll several times, screenshotting between, until the wanted row is
-    visible, THEN click it. To reach a far item (e.g. #48 of 60) expect 3–5
-    large scrolls. A list that "won't scroll" means the wheel landed outside
-    it — re-aim x,y inside the list. Do NOT try to drag the scrollbar.
+    mouse action:"scroll" with a BIG amount — each scroll "amount" unit moves
+    only ~1 row, so to cross a long list use amount 60–120 per call (NOT 3, NOT
+    25 — those crawl one row at a time and burn your whole turn budget). One or
+    two big scrolls should jump most of the way; screenshot, then fine-tune
+    with a smaller scroll (up or down) to land on the wanted row, THEN click it.
+    A list that "won't scroll" means the wheel landed outside it — re-aim x,y
+    inside the list. Do NOT drag the scrollbar.
   • TRACE A PATH/CURVE: mouse action:"drag_stepped" with path = a JSON array of
     12–20 {x,y} points. The FIRST point MUST be exactly on the draggable knob
     (one end of the track). FOLLOW THE CURVE'S SHAPE — if the track bows/arcs,
