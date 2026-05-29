@@ -51,7 +51,12 @@ import type {
   AgentMode,
 } from './types';
 
-const DEFAULT_MAX_TURNS = 20;
+// Backstop turn cap. With the runaway guard (repeated identical actions) and
+// stagnation hard-abort catching genuine stuck-loops early, max_turns is a
+// safety net, not the primary detector — so it can be generous enough to
+// support long sequential tasks (e.g. a multi-challenge benchmark) that
+// legitimately need 30+ actions. Was 20, which truncated such runs mid-task.
+const DEFAULT_MAX_TURNS = 40;
 /**
  * Number of consecutive identical fingerprints that triggers a stagnation
  * WARNING in the next turn's prompt. Below this we trust the agent to
@@ -440,7 +445,13 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           .slice(-REPEAT_WINDOW)
           .filter(s => s.toolName === call.name && JSON.stringify(s.toolArgs ?? {}) === argKey)
           .length;
-        if (recentRepeats >= REPEAT_THRESHOLD) {
+        // Only ACTION tools (changesScreen) can "run away" — re-issuing the
+        // same action because the agent can't see its result. Perception tools
+        // (screenshot, read_screen, list_windows, wait — all changesScreen:false)
+        // are HOW a vision agent sees a canvas that changes every challenge;
+        // repeating them is mandatory, not a loop. Counting them aborted a
+        // legitimately-progressing vision run mid-exam (live test 2026-05-28).
+        if (tool.changesScreen && recentRepeats >= REPEAT_THRESHOLD) {
           log.warn('agent.runaway_guard', {
             turn, tool: call.name, repeats: recentRepeats, window: REPEAT_WINDOW,
           });
@@ -727,14 +738,27 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       // build_uri to construct a mailto URI and was one turn away from
       // dispatching it via open_uri when the stagnation hard-abort fired.
       const stagnant = fph.isStagnant(STAGNATION_WINDOW);
-      if (stagnant && anyScreenChangingTool) {
+      // The a11y fingerprint only drives stagnation in BLIND mode. In vision
+      // and hybrid modes the agent perceives via SCREENSHOTS, and the a11y
+      // fingerprint is an unreliable progress signal: on a canvas / custom-
+      // rendered app (or inside a browser, where the a11y tree is the static
+      // chrome) it stays CONSTANT while the screen advances every action.
+      // Counting it falsely aborted a legitimately-progressing vision run
+      // mid-exam — the agent itself logged "the a11y fingerprint isn't changing
+      // but the screen IS changing" right before the hard-abort fired (live
+      // test 2026-05-28). In vision/hybrid the backstops are the runaway guard
+      // (repeated identical ACTIONS) and max_turns. Blind mode is unchanged:
+      // a11y is its only perception channel, so stale a11y genuinely means
+      // stuck (the blind stagnation regression test stays green).
+      const a11yStagnationApplies = input.mode === 'blind';
+      if (stagnant && anyScreenChangingTool && a11yStagnationApplies) {
         consecutiveStagnantTurns += 1;
       } else if (!stagnant) {
         consecutiveStagnantTurns = 0;
       }
-      // else: stagnant && no screen-changing tool -> neutral turn, leave
-      // the counter alone so the agent gets a chance to use its compute
-      // tools (build_uri, list_windows) without being punished for them.
+      // else: neutral turn (compute-only tool, or a screenshot-driven mode
+      // where the a11y fingerprint is not a valid stuck signal) — leave the
+      // counter alone.
 
       if (consecutiveStagnantTurns >= STAGNATION_HARD_LIMIT) {
         log.warn(EVENTS.AGENT_STAGNATION, {
@@ -752,7 +776,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         );
       }
 
-      if (stagnant) {
+      if (stagnant && a11yStagnationApplies) {
         log.warn(EVENTS.AGENT_STAGNATION, {
           turn,
           window: STAGNATION_WINDOW,

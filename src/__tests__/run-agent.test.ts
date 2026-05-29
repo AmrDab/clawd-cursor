@@ -137,6 +137,12 @@ const LLM_CONFIG = {
   text: { baseUrl: 'http://stub', model: 'stub-text', apiKey: 'k', isAnthropic: false },
 };
 
+// Vision mode requires a vision config; reuse the same stub for both.
+const VISION_CONFIG = {
+  text: { baseUrl: 'http://stub', model: 'stub-text', apiKey: 'k', isAnthropic: false },
+  vision: { baseUrl: 'http://stub', model: 'stub-vision', apiKey: 'k', isAnthropic: false },
+};
+
 // ─── Tests ──────────────────────────────────────────────────────────
 
 describe('runAgent — happy path', () => {
@@ -225,6 +231,52 @@ describe('runAgent — stagnation exit', () => {
     // The previous behavior would have aborted with exit:'stagnation'
     // after STAGNATION_HARD_LIMIT (5) of those pure-compute turns. With
     // the fix the agent reaches the done() call cleanly.
+    expect(result.exit).toBe('done');
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('runAgent — vision/canvas guards must not misfire (live-test regression 2026-05-28)', () => {
+  beforeEach(() => {
+    llmTurnQueue.length = 0;
+  });
+
+  it('does NOT trip the runaway guard on repeated screenshots (perception is how vision sees)', async () => {
+    // A vision agent on a canvas (empty a11y) must re-screenshot to perceive
+    // each new state. screenshot is changesScreen:false — repeating it is not
+    // a runaway loop. Pre-fix: 3 screenshots in 6 turns → give_up. Post-fix:
+    // perception tools are exempt, so the agent reaches done().
+    llmTurnQueue.push(turnCall('screenshot'));
+    llmTurnQueue.push(turnCall('screenshot'));
+    llmTurnQueue.push(turnCall('screenshot'));
+    llmTurnQueue.push(turnCall('screenshot'));
+    llmTurnQueue.push(turnCall('done', { evidence: 'the event log shows the exam advanced' }));
+
+    const result = await runAgent(
+      { task: 'drive a canvas exam by vision', mode: 'vision', maxTurns: 20 },
+      { adapter: makeAdapter(), llm: VISION_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    expect(result.success).toBe(true);
+  });
+
+  it('does NOT stagnation-abort in vision mode when a11y is empty but the agent keeps acting (canvas progress)', async () => {
+    // Empty a11y (canvas) → the a11y fingerprint never moves, but the SCREEN
+    // is advancing each challenge. Clicks are changesScreen:true with DIFFERENT
+    // coords (so the runaway guard stays quiet). Pre-fix: a11y-fingerprint
+    // stagnation hard-aborts after 5 → exit:'stagnation' before done. Post-fix:
+    // a11y stagnation is suppressed for vision+empty-a11y, so done() is reached.
+    for (let i = 0; i < 8; i++) {
+      llmTurnQueue.push(turnCall('mouse', { action: 'click', x: 100 + i * 30, y: 200 + i * 17 }));
+    }
+    llmTurnQueue.push(turnCall('done', { evidence: 'reached the results page' }));
+
+    const result = await runAgent(
+      { task: 'click through canvas challenges', mode: 'vision', maxTurns: 30 },
+      { adapter: makeAdapter(), llm: VISION_CONFIG },
+    );
+
     expect(result.exit).toBe('done');
     expect(result.success).toBe(true);
   });

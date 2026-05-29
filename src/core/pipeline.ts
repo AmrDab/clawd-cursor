@@ -195,7 +195,12 @@ export interface PipelineDeps {
 
 export const PIPELINE_DEFAULTS: Required<Pick<PipelineDeps, 'disableVision' | 'maxTurnsPerRung' | 'maxEscalations' | 'disableVerifier'>> = {
   disableVision: false,
-  maxTurnsPerRung: 20,
+  // Per-rung action budget. With the runaway guard (repeated identical actions)
+  // and blind-mode stagnation catching genuine stuck-loops early, this is a
+  // backstop, not the primary stuck-detector — so it can be generous enough to
+  // let a single rung carry a long sequential task (e.g. a multi-step/
+  // multi-challenge run) to completion. Was 20, which truncated such runs.
+  maxTurnsPerRung: 40,
   maxEscalations: 3,
   disableVerifier: false,
 };
