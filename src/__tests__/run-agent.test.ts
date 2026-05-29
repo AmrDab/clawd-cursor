@@ -264,6 +264,24 @@ describe('runAgent — vision/canvas guards must not misfire (live-test regressi
     expect(result.success).toBe(true);
   });
 
+  it('does NOT runaway-abort on repeated identical scrolls (long-list traversal)', async () => {
+    // Traversing a long list repeats the SAME scroll many times — forward
+    // progress, not a loop. Pre-fix: 3 identical scrolls → runaway give_up,
+    // killing the run mid-list (observed live on the 60-row scroll challenge).
+    for (let i = 0; i < 6; i++) {
+      llmTurnQueue.push(turnCall('mouse', { action: 'scroll', x: 630, y: 380, direction: 'down', amount: 25 }));
+    }
+    llmTurnQueue.push(turnCall('done', { evidence: 'the target row is now visible and selected' }));
+
+    const result = await runAgent(
+      { task: 'scroll a long list to the target', mode: 'vision', maxTurns: 20 },
+      { adapter: makeAdapter(), llm: VISION_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    expect(result.success).toBe(true);
+  });
+
   it('does NOT stagnation-abort in vision mode when a11y is empty but the agent keeps acting (canvas progress)', async () => {
     // Empty a11y (canvas) → the a11y fingerprint never moves, but the SCREEN
     // is advancing each challenge. Clicks are changesScreen:true with DIFFERENT

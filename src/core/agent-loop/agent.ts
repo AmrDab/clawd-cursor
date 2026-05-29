@@ -471,7 +471,15 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         // are HOW a vision agent sees a canvas that changes every challenge;
         // repeating them is mandatory, not a loop. Counting them aborted a
         // legitimately-progressing vision run mid-exam (live test 2026-05-28).
-        if (tool.changesScreen && recentRepeats >= REPEAT_THRESHOLD) {
+        //
+        // Scroll is also exempt: traversing a long list/panel legitimately
+        // repeats the SAME scroll (same x,y,direction,amount) many times — that
+        // is forward progress, not a stuck loop. max_turns still caps a truly
+        // endless scroll. Observed: scrolling a 60-row list to row 48 tripped
+        // the guard after 3 identical scrolls and aborted the run mid-exam.
+        const isScroll = call.name === 'scroll'
+          || (call.name === 'mouse' && (call.args as Record<string, unknown>)?.action === 'scroll');
+        if (tool.changesScreen && !isScroll && recentRepeats >= REPEAT_THRESHOLD) {
           log.warn('agent.runaway_guard', {
             turn, tool: call.name, repeats: recentRepeats, window: REPEAT_WINDOW,
           });
