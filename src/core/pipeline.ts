@@ -46,6 +46,7 @@ import { preprocess, type Strategy } from './preprocessor/preprocessor';
 import { Router, type RouteResult } from './router/router';
 import { SkillCache } from './skills/skill-cache';
 import { runAgent } from './agent-loop/agent';
+import { summarizeForHandoff } from './agent-loop/handoff';
 import type { AgentLlmConfig, AgentLlmDeps, AgentMode, AgentResult } from './agent-loop/types';
 import type { Verifier, StateSnapshot, TaskType, ReflectionFeedback } from './verifier-types';
 import { GroundTruthVerifier } from './verifier';
@@ -612,6 +613,8 @@ export class Pipeline {
     let rungsTried = 0;
     /** Last structured feedback from the verifier — carried into the next rung's agent call. */
     let lastFeedback: ReflectionFeedback | undefined;
+    /** Handoff note from the previous rung's agent — the text↔vision channel. */
+    let lastHandoff: string | undefined;
 
     // Whether the Reflector override is active (gated env var — see PR9 spec).
     const reflectorEnabled = process.env.CLAWD_REFLECTOR === '1';
@@ -660,8 +663,10 @@ export class Pipeline {
       rungsTried++;
       env.log.info(EVENTS.PIPELINE_RUNG, { strategy: rung, attempt: rungsTried });
 
-      const attempt = await this.executeStrategy(rung, task, decision, env, lastFeedback);
+      const attempt = await this.executeStrategy(rung, task, decision, env, lastFeedback, lastHandoff);
       last = attempt;
+      // Carry this rung's agent handoff into the next rung (text↔vision).
+      if (attempt.handoff) lastHandoff = attempt.handoff;
 
       // Verifier post-check. Only runs when:
       //   • a verifier is active (not disabled)
@@ -899,13 +904,14 @@ export class Pipeline {
     decision: ReturnType<typeof preprocess>,
     env: StrategyEnv,
     prevFeedback?: ReflectionFeedback,
+    priorHandoff?: string,
   ): Promise<StrategyResult> {
     switch (strategy) {
       case 'router':   return this.runRouter(task, env);
       case 'playbook': return this.runPlaybook(task, decision, env);
-      case 'blind':    return this.runUnifiedAgent(task, decision, env, 'blind', prevFeedback);
-      case 'hybrid':   return this.runUnifiedAgent(task, decision, env, 'hybrid', prevFeedback);
-      case 'vision':   return this.runUnifiedAgent(task, decision, env, 'vision', prevFeedback);
+      case 'blind':    return this.runUnifiedAgent(task, decision, env, 'blind', prevFeedback, priorHandoff);
+      case 'hybrid':   return this.runUnifiedAgent(task, decision, env, 'hybrid', prevFeedback, priorHandoff);
+      case 'vision':   return this.runUnifiedAgent(task, decision, env, 'vision', prevFeedback, priorHandoff);
     }
   }
 
@@ -1067,6 +1073,7 @@ export class Pipeline {
     env: StrategyEnv,
     mode: AgentMode,
     prevFeedback?: ReflectionFeedback,
+    priorHandoff?: string,
   ): Promise<StrategyResult> {
     const path: PipelineTaskResult['path'] = mode === 'vision' || mode === 'hybrid'
       ? 'vision-agent'
@@ -1112,9 +1119,14 @@ export class Pipeline {
         maxTurns: this.maxTurnsPerRung,
         isAborted: env.isAborted,
         reflectorHint: prevFeedback?.hint,
+        priorHandoff,
       },
       { adapter: this.deps.adapter, llm: llmDeps },
     );
+
+    // Build this rung's handoff note so the NEXT rung (the morph's other
+    // half) continues our work instead of restarting. Generic + deterministic.
+    const handoff = summarizeForHandoff(agentResult, mode);
 
     // Cost approximation — crude but non-zero. Each turn ≈ 400 input +
     // 120 output tokens for blind; vision bumps that by ~1500 per screenshot.
@@ -1138,7 +1150,7 @@ export class Pipeline {
     }
 
     if (agentResult.success) {
-      return { success: true, text: agentResult.text, path };
+      return { success: true, text: agentResult.text, path, handoff };
     }
 
     // Map exit → failureReason so the escalator can make intelligent
@@ -1151,7 +1163,7 @@ export class Pipeline {
       : agentResult.exit === 'aborted' ? 'aborted'
       : 'agent_failed';
 
-    return { success: false, text: agentResult.text, path, failureReason };
+    return { success: false, text: agentResult.text, path, failureReason, handoff };
   }
 
   // ─── Helpers ────────────────────────────────────────────────────
@@ -1216,6 +1228,9 @@ interface StrategyResult {
    *  idempotent no-op (e.g. "create new canvas in Paint" when Paint just
    *  opened with a blank canvas → zero pixel-change → low confidence). */
   verifierConfidence?: number;
+  /** Handoff note from this rung's agent, carried to the NEXT rung so text and
+   *  vision agents continue each other's work instead of restarting. */
+  handoff?: string;
 }
 
 export type { TaskResult } from './pipeline-types';

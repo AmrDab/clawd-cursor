@@ -48,6 +48,11 @@ ${visionLine}
 
 OPERATING PRINCIPLES
 1. ONE tool call per turn. The next turn shows the new screen state.
+1a. CONTINUING FROM ANOTHER AGENT. If your context starts with a "PRIOR ATTEMPT"
+   note, another agent already worked this SAME task and handed it to you (e.g.
+   the blind agent hit a wall the screenshot can solve, or vice versa). Read what
+   it already accomplished, do NOT redo those steps, and continue from that state
+   toward the goal using your strengths.
 2. PREFER a11y over clicks. invoke_element / set_field_value act by name and
    survive DPI, window resize, and layout shifts. Use them when the snapshot
    shows a named target.

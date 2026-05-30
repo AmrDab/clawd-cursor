@@ -196,12 +196,19 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         ? `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, DPI scale ${ssScale}×. Screenshots are downsampled to 1280px wide. Pass screenshot pixel coords DIRECTLY to mouse_* tools — they scale internally. Do NOT pre-multiply.`
         : `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, DPI scale ${ssScale}×.`;
 
+    // Cross-rung handoff: if a previous agent (the morph's other half) worked
+    // this same task and escalated to us, lead with its note so we continue
+    // rather than restart. Generic — it's just the prior agent's trace summary.
+    const handoffPreamble = input.priorHandoff
+      ? `${input.priorHandoff}\n\n`
+      : '';
     const initialBlocks: LLMUserBlock[] = [
       {
         type: 'text',
-        text: `TASK: ${input.task}${dpiNote}\n\nACCESSIBILITY SNAPSHOT:\n${wrapUntrustedScreenContent(snapshotText)}\n\nPICK ONE TOOL CALL.`,
+        text: `${handoffPreamble}TASK: ${input.task}${dpiNote}\n\nACCESSIBILITY SNAPSHOT:\n${wrapUntrustedScreenContent(snapshotText)}\n\nPICK ONE TOOL CALL.`,
       },
     ];
+    if (input.priorHandoff) log.info('agent.handoff.received', { mode: input.mode, chars: input.priorHandoff.length });
 
     if (input.mode === 'vision') {
       const shot = await deps.adapter.screenshot({ maxWidth: 1280 });

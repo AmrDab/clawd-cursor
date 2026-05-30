@@ -29,11 +29,13 @@ import type { ToolUseResult, LLMAssistantBlock } from '../llm/client';
 // Mock callLLMWithTools BEFORE importing runAgent so the loop binds to
 // the mock. Each test pushes turn-by-turn behavior into `llmTurnQueue`.
 const llmTurnQueue: ToolUseResult[] = [];
+const capturedLlmCalls: any[] = [];
 vi.mock('../llm/client', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../llm/client')>();
   return {
     ...orig,
-    callLLMWithTools: vi.fn(async (): Promise<ToolUseResult> => {
+    callLLMWithTools: vi.fn(async (opts?: any): Promise<ToolUseResult> => {
+      capturedLlmCalls.push(opts);
       const next = llmTurnQueue.shift();
       // A queued Error simulates an LLM-call failure for that turn (used to
       // test transient-error retry vs fatal-error abort).
@@ -335,6 +337,39 @@ describe('runAgent — transient LLM-error resilience (live-test regression 2026
 
     expect(result.exit).toBe('llm_error');
     expect(result.success).toBe(false);
+  });
+});
+
+describe('runAgent — cross-rung handoff (text↔vision communication)', () => {
+  beforeEach(() => {
+    llmTurnQueue.length = 0;
+    capturedLlmCalls.length = 0;
+  });
+
+  it('injects a priorHandoff note into the receiving agent\'s context', async () => {
+    // When the morph escalates, the next agent must SEE what the previous one
+    // did — so it continues rather than restarts.
+    llmTurnQueue.push(turnCall('done', { evidence: 'continued from where blind left off' }));
+    const handoff = 'PRIOR ATTEMPT — blind agent (exited: cannot_read). Already done (do NOT repeat): set_value(name=To) → set To. Why handed to you: drive it by the screenshot instead.';
+
+    await runAgent(
+      { task: 'finish sending the message', mode: 'vision', maxTurns: 5, priorHandoff: handoff },
+      { adapter: makeAdapter(), llm: VISION_CONFIG },
+    );
+
+    const firstCallMessages = JSON.stringify(capturedLlmCalls[0]?.messages ?? []);
+    expect(firstCallMessages).toContain('PRIOR ATTEMPT — blind agent');
+    expect(firstCallMessages).toContain('set_value(name=To)');
+  });
+
+  it('does not add a handoff preamble when none is provided (back-compat)', async () => {
+    llmTurnQueue.push(turnCall('done', { evidence: 'fresh start' }));
+    await runAgent(
+      { task: 'do a thing', mode: 'blind', maxTurns: 5 },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+    const firstCallMessages = JSON.stringify(capturedLlmCalls[0]?.messages ?? []);
+    expect(firstCallMessages).not.toContain('PRIOR ATTEMPT');
   });
 });
 
