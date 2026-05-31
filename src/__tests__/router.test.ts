@@ -189,11 +189,15 @@ describe('Router.route — URL nav with verification', () => {
   it('launches and confirms a browser window appeared', async () => {
     const newTab = mkWindow({ processName: 'chrome', title: 'github.com - Chrome', processId: 88, handle: 333 });
     const adapter = makeStatefulAdapter({ postLaunchWindows: [newTab] });
-    const r = new Router(adapter);
+    // Inject a stub https-handler resolver so URL-nav is deterministic and
+    // launches the REAL browser exe — never the magic 'default-browser' string
+    // (which would fall through to a Start-menu search that types it).
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
     const res = await r.route('navigate to github.com');
     expect(res.handled).toBe(true);
     expect(res.path).toBe('url_nav');
-    expect(adapter.launchApp).toHaveBeenCalledWith('default-browser', expect.objectContaining({ url: 'https://github.com' }));
+    expect(adapter.launchApp).toHaveBeenCalledWith('C:\\fake\\msedge.exe', expect.objectContaining({ url: 'https://github.com' }));
+    expect(adapter.launchApp).not.toHaveBeenCalledWith('default-browser', expect.anything());
   });
 
   it('normalizes bare URLs to https://', async () => {
@@ -235,14 +239,15 @@ describe('Router.route — web-service redirect (v0.9.0 fix)', () => {
 
   it('"open youtube" redirects to https://www.youtube.com via url_nav', async () => {
     const adapter = makeStatefulAdapter({ postLaunchWindows: [] });
-    const r = new Router(adapter);
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
     const res = await r.route('open youtube');
     expect(res.handled).toBe(true);
     expect(res.path).toBe('url_nav');
     expect(adapter.launchApp).toHaveBeenCalledWith(
-      'default-browser',
+      'C:\\fake\\msedge.exe',
       expect.objectContaining({ url: 'https://www.youtube.com' }),
     );
+    expect(adapter.launchApp).not.toHaveBeenCalledWith('default-browser', expect.anything());
     expect(r.telemetry.webServiceRedirects).toBe(1);
   });
 

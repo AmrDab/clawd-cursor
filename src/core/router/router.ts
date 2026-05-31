@@ -26,6 +26,7 @@ import { APP_ALIASES, resolveAlias, type AppAlias } from './aliases';
 import { normalizeAppName } from './normalize';
 import { needsWebView2Settle, settleIfWebView2 } from './webview2';
 import { resolveWebService } from './web-services';
+import { resolveSchemeHandlerExecutable } from '../../platform/uri-handler';
 
 export { APP_ALIASES, resolveAlias, needsWebView2Settle, settleIfWebView2 };
 export { WEB_SERVICES, resolveWebService } from './web-services';
@@ -130,7 +131,17 @@ export class Router {
     webServiceRedirects: 0,
   };
 
-  constructor(private readonly adapter: PlatformAdapter) {}
+  /**
+   * @param adapter            platform adapter.
+   * @param resolveHttpHandler resolves the registered https handler executable
+   *   (default: the real OS resolver). Injected so URL-nav is deterministic in
+   *   tests — production reads the registry, tests pass a stub.
+   */
+  constructor(
+    private readonly adapter: PlatformAdapter,
+    private readonly resolveHttpHandler: () => Promise<string | null> =
+      () => resolveSchemeHandlerExecutable('https'),
+  ) {}
 
   async route(subtask: string): Promise<RouteResult> {
     const task = subtask.trim();
@@ -372,7 +383,23 @@ export class Router {
     logger.debug('router.url_nav.launching', { url });
 
     try {
-      await this.adapter.launchApp('default-browser', { url });
+      // Dispatch to the REAL default browser. The magic name 'default-browser'
+      // is not a launchable executable — `launchApp('default-browser', …)`
+      // fails to start, finds no window, and falls through to launchApp's
+      // Start-menu-search fallback, which presses Win and types
+      // "default-browser" into the search bar. That's the user-visible
+      // "searching for the browser" bug. Instead resolve the registered https
+      // handler (e.g. msedge.exe) and launch IT — its window is findable, so no
+      // search fallback. macOS/Linux keep their canonical URL openers.
+      const plat = this.adapter.platform;
+      if (plat === 'darwin') {
+        await this.adapter.launchApp('open', { url });
+      } else if (plat === 'linux') {
+        await this.adapter.launchApp('xdg-open', { url });
+      } else {
+        const exe = await this.resolveHttpHandler().catch(() => null);
+        await this.adapter.launchApp(exe ?? 'explorer.exe', { url });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warn('router.url_nav.launch_threw', { url, error: msg });
