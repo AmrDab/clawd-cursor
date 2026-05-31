@@ -509,6 +509,24 @@ export class GroundTruthVerifier implements Verifier {
         break;
       }
 
+      case 'copy': {
+        // A real copy leaves a NEW, non-empty clipboard value.
+        const beforeClip = opts.before.clipboard ?? '';
+        const afterClip = after.clipboard ?? '';
+        const changed = afterClip.length > 0 && afterClip !== beforeClip;
+        checks.push({ name: 'clipboard_populated', pass: changed });
+        // Provenance: the copied text should be visible in the source view
+        // (we copied it FROM there). Cheap substring check against OCR.
+        if (changed && after.ocrText) {
+          const probe = afterClip.toLowerCase().slice(0, 40);
+          checks.push({ name: 'clipboard_in_source', pass: after.ocrText.toLowerCase().includes(probe) });
+        }
+        // The decisive fabrication guard is the anti-pattern hard-fail
+        // (signalAntiPatterns) — using write_clipboard for a copy task is
+        // authoring, not copying — so it isn't repeated here.
+        break;
+      }
+
       case 'draw': {
         // Drawing tasks have no text-based proof. The cheapest signal is
         // "did meaningful pixels actually change?" — same as the pixel-diff
@@ -596,6 +614,16 @@ export class GroundTruthVerifier implements Verifier {
       if (pattern.test(after)) failures.push(label);
     }
 
+    // Fabrication guard for copy tasks: a genuine copy pulls text from the
+    // source with a ctrl+c; using write_clipboard to AUTHOR the clipboard is
+    // faking the result. This is a hard fail (anti_patterns=false), which is
+    // what blocked the live "We owe you an explanation." false positive — the
+    // agent gave up selecting and wrote the sentence to the clipboard itself.
+    const taskType = opts.taskType ?? this.inferTaskType(opts.task);
+    if (taskType === 'copy' && (opts.toolTrace ?? []).includes('write_clipboard')) {
+      failures.push('clipboard fabricated via write_clipboard (not copied from source)');
+    }
+
     const value = failures.length === 0;
     return {
       name: 'anti_patterns',
@@ -663,6 +691,9 @@ export class GroundTruthVerifier implements Verifier {
     // hint mapped from `'spatial'`.
     if (/\b(draw|sketch|annotate|illustrate|trace|color\s+in|drag\s+\w+\s+(?:to|onto))\b/.test(t)) return 'draw';
     if (/navigate|go to.*\.|visit.*\.|open\s+(?:https?:\/\/|www\.|[a-z0-9-]+\.[a-z]{2,})/.test(t)) return 'navigate_url';
+    // Copy-to-clipboard, but NOT a paste task (paste is type_text-ish). A copy
+    // subtask is "select and copy a sentence …"; "paste the copied text" is not.
+    if (/\bcopy\b/.test(t) && !/\bpaste\b/.test(t)) return 'copy';
     if (/type|enter.*text|write.*"|input/.test(t)) return 'type_text';
     if (/create.*file|save.*as|new\s+document/.test(t)) return 'create_file';
     if (/search|find|look up|google/.test(t)) return 'search';

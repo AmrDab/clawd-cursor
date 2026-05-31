@@ -831,6 +831,7 @@ export class Pipeline {
           before,
           capabilityToTaskType(decision.hints.capability),
           env,
+          attempt.toolsUsed,
         );
         // Always stash feedback for the next rung's hint injection.
         if (verdict.kind !== 'skipped' && verdict.feedback) {
@@ -968,6 +969,7 @@ export class Pipeline {
     before: StateSnapshot,
     taskType: TaskType | undefined,
     env: StrategyEnv,
+    toolsUsed?: string[],
   ): Promise<
     | { kind: 'verified'; confidence: number; reason: string; feedback?: ReflectionFeedback }
     | { kind: 'rejected'; confidence: number; reason: string; feedback?: ReflectionFeedback }
@@ -982,7 +984,7 @@ export class Pipeline {
       // plain `verify` for legacy doubles that only implement the old interface.
       let feedback: ReflectionFeedback | undefined;
       if (typeof this.verifier.verifyWithFeedback === 'function') {
-        feedback = await this.verifier.verifyWithFeedback({ task, before, after, taskType });
+        feedback = await this.verifier.verifyWithFeedback({ task, before, after, taskType, toolTrace: toolsUsed });
       }
 
       // Always log the structured feedback regardless of CLAWD_REFLECTOR flag —
@@ -998,7 +1000,7 @@ export class Pipeline {
         });
       } else {
         // Plain verify path (legacy test doubles).
-        const verdict = await this.verifier.verify({ task, before, after, taskType });
+        const verdict = await this.verifier.verify({ task, before, after, taskType, toolTrace: toolsUsed });
         env.log.debug('pipeline.verifier.verdict', {
           strategy: rung,
           pass: verdict.pass,
@@ -1305,8 +1307,11 @@ export class Pipeline {
       });
     }
 
+    // Tool names used this rung — verifier provenance (e.g. copy fabrication).
+    const toolsUsed = agentResult.steps.map(s => s.toolName);
+
     if (agentResult.success) {
-      return { success: true, text: agentResult.text, path, handoff };
+      return { success: true, text: agentResult.text, path, handoff, toolsUsed };
     }
 
     // Map exit → failureReason so the escalator can make intelligent
@@ -1398,6 +1403,9 @@ interface StrategyResult {
    *  asked to compose, not send), where the compose window is meant to stay
    *  OPEN, so the send_email "compose_closed" assertion would wrongly reject. */
   skipVerifier?: boolean;
+  /** Names of the tools this rung's agent invoked, for verifier provenance
+   *  checks (e.g. copy-task fabrication via write_clipboard). */
+  toolsUsed?: string[];
 }
 
 export type { TaskResult } from './pipeline-types';

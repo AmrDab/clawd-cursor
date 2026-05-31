@@ -60,6 +60,9 @@ OPERATING PRINCIPLES
 4. VERIFY before declaring done. The screen must actually show the result.
    Call done() only with specific evidence ("title bar says 'Untitled*' so
    file was saved"). The verifier independently checks.
+   – Do NOT fabricate a result to pass. For a COPY task, actually select the
+     text in the source and copy it (ctrl+c); never use write_clipboard to
+     author the clipboard yourself — that's faking it and the verifier rejects.
 4a. STAY IN YOUR WORKING WINDOW. Do the task in the window it belongs to. If a
    "WORKING WINDOW" is named in your context, that's where you operate; if focus
    drifts to an unrelated window, refocus your window (focus_window / open_app on

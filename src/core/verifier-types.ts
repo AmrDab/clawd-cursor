@@ -86,6 +86,11 @@ export interface VerifyOptions {
   after: StateSnapshot;
   /** Optional task-type hint to enable specialized assertions. */
   taskType?: TaskType;
+  /** Names of the tools the agent invoked, in order. Lets the verifier check
+   *  provenance — e.g. a "copy" task whose clipboard was set by write_clipboard
+   *  (fabrication) rather than a real source copy. Empty/undefined for legacy
+   *  callers → provenance checks degrade off (no false rejections). */
+  toolTrace?: string[];
 }
 
 export type TaskType =
@@ -105,6 +110,13 @@ export type TaskType =
    * inappropriate (no text appears, OCR-keyword check always fails).
    */
   | 'draw'
+  /**
+   * Copy-to-clipboard tasks ("copy a sentence from X"). Verified by a real
+   * clipboard mutation whose value traces back to the source view — and NOT
+   * fabricated via write_clipboard (which is treated as a hard-fail
+   * anti-pattern, since a genuine copy uses a source-window ctrl+c).
+   */
+  | 'copy'
   | 'generic';
 
 export interface Verifier {
