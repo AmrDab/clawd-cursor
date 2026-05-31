@@ -9,3 +9,8 @@ debug/
 .clawd-config.json
 qa-tests/
 .claude/
+
+# Local scratch artifacts (probes, captures, session notes) — never committed
+test-runs/
+TEST-FINDINGS.md
+docs/PHASE-A-DESIGN.md
