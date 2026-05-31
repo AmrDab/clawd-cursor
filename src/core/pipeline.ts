@@ -52,6 +52,10 @@ import type { Verifier, StateSnapshot, TaskType, ReflectionFeedback } from './ve
 import { GroundTruthVerifier } from './verifier';
 import type { Capability } from './classify/capability';
 import { decomposeWithLlm } from './decompose/llm-decomposer';
+import {
+  surveyDesktop, renderSurveyForPrompt, distinctOpenAppCount,
+  type DesktopSurvey,
+} from './desktop-survey';
 import { callLLMWithTools } from '../llm/client';
 import { OcrEngine } from '../platform/ocr-engine';
 import { PLAYBOOKS } from '../tools/playbooks';
@@ -122,6 +126,18 @@ const SEND_INTENT_PATTERN =
   /\b(send|sends|sent|sending|send off|send out|fire off|deliver|dispatch|shoot (?:it |this )?off)\b/i;
 function taskWantsSend(task: string): boolean {
   return SEND_INTENT_PATTERN.test(task);
+}
+
+/**
+ * A subtask that LAUNCHES or NAVIGATES changes which window is in front, so
+ * the "target window" emerges only after it runs — we don't pin the agent to
+ * the pre-launch foreground window for these. Everything else is assumed to
+ * operate in the already-focused window. OS/app-agnostic — pure verb match.
+ */
+const LAUNCH_TASK_PATTERN =
+  /^\s*(open|launch|start|run|go to|goto|navigate to|visit|browse to|switch to)\b/i;
+function isLaunchOrNavigate(task: string): boolean {
+  return LAUNCH_TASK_PATTERN.test(task);
 }
 
 const CONTINUOUS_SESSION_PATTERN =
@@ -235,7 +251,7 @@ export interface PipelineDeps {
    * tasks ("open notepad", "send email to ...") don't trigger it and
    * pay no extra latency.
    */
-  decomposer?: ((task: string) => Promise<string[] | null>) | null;
+  decomposer?: ((task: string, desktopContext?: string) => Promise<string[] | null>) | null;
 }
 
 export const PIPELINE_DEFAULTS: Required<Pick<PipelineDeps, 'disableVision' | 'maxTurnsPerRung' | 'maxEscalations' | 'disableVerifier'>> = {
@@ -264,7 +280,7 @@ export class Pipeline {
   private readonly maxTurnsPerRung: number;
   private readonly maxEscalations: number;
   private readonly verifier: Verifier | null;
-  private readonly decomposer: ((task: string) => Promise<string[] | null>) | null;
+  private readonly decomposer: ((task: string, desktopContext?: string) => Promise<string[] | null>) | null;
   /**
    * Lazy OCR engine for the verifier's `after`-snapshot. Constructed on
    * first use so tests that don't exercise verification pay no cost.
@@ -299,7 +315,7 @@ export class Pipeline {
       this.decomposer = deps.decomposer;
     } else if (deps.llm.text) {
       const textConfig = deps.llm.text;
-      this.decomposer = async (task: string) => {
+      this.decomposer = async (task: string, desktopContext?: string) => {
         const callTextLlm = async (system: string, user: string, opts?: { maxTokens?: number }) => {
           const result = await callLLMWithTools({
             baseUrl: textConfig.baseUrl,
@@ -315,7 +331,7 @@ export class Pipeline {
           });
           return result.text ?? '';
         };
-        return decomposeWithLlm(task, { callTextLlm });
+        return decomposeWithLlm(task, { callTextLlm }, desktopContext);
       };
     } else {
       this.decomposer = null;
@@ -336,11 +352,25 @@ export class Pipeline {
       ].join(' ');
       log.info(EVENTS.PIPELINE_START, { task: input.task, models: modelSummary });
 
+      // ── SURVEY the desktop ONCE: ground planning in what's actually open +
+      // which apps own which capabilities. Cheap (a11y window list + handler
+      // lookups, zero LLM), OS-agnostic, never throws.
+      const survey = await surveyDesktop({
+        listWindows: () => this.deps.adapter.listWindows(),
+      });
+      log.info('pipeline.survey', {
+        openWindows: survey.openWindows.length,
+        distinctApps: distinctOpenAppCount(survey),
+        browser: survey.handlers.browser?.name,
+        mail: survey.handlers.mail?.name,
+      });
+
       // ── PREPROCESS ONCE to decide whether this is a compound task.
       const outerActive = await this.safeActiveWindow();
       const outerDecision = preprocess(input.task, {
         activeWindowTitle: outerActive?.title,
         activeWindowProcessName: outerActive?.processName,
+        survey,
       });
       log.info(EVENTS.PIPELINE_PREPROCESS, {
         strategy: outerDecision.strategy,
@@ -413,7 +443,7 @@ export class Pipeline {
       if (this.decomposer && needsDecompose) {
         log.info('pipeline.decompose.refine_attempt', { task: input.task });
         try {
-          const refined = await this.decomposer(input.task);
+          const refined = await this.decomposer(input.task, renderSurveyForPrompt(survey));
           if (refined && refined.length > 0) {
             log.info('pipeline.decompose.refined', {
               originalSubtasks: subtasks.length,
@@ -467,10 +497,17 @@ export class Pipeline {
               activeWindowProcessName: subActive?.processName,
             });
 
+        // Pin the agent to its working window when one already exists and this
+        // subtask isn't itself a launch/navigate (which would change it). Keeps
+        // the agent from drifting to unrelated windows mid-subtask.
+        const targetWindow = !isLaunchOrNavigate(subtask) && subActive?.title?.trim()
+          ? subActive.title
+          : undefined;
+
         const subResult = await this.runOneSubtask(
           subtask,
           subDecision,
-          { costMeter, log, isAborted, trace: aggregateTrace },
+          { costMeter, log, isAborted, trace: aggregateTrace, targetWindow },
         );
 
         lastText = subResult.text;
@@ -1190,6 +1227,7 @@ export class Pipeline {
         isAborted: env.isAborted,
         reflectorHint: prevFeedback?.hint,
         priorHandoff,
+        targetWindow: env.targetWindow,
       },
       { adapter: this.deps.adapter, llm: llmDeps },
     );
@@ -1284,6 +1322,11 @@ interface StrategyEnv {
   log: ReturnType<typeof logger.with>;
   isAborted: () => boolean;
   trace: PipelineTaskResult['trace'];
+  /** Title of the window this subtask should be performed in, when known. The
+   *  agent is told to stay in / refocus it instead of thrashing to unrelated
+   *  apps. Undefined for launch/navigate subtasks (the target emerges after
+   *  the app opens) — the generic stay-in-window guidance still applies. */
+  targetWindow?: string;
 }
 
 interface StrategyResult {

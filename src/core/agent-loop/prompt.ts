@@ -60,6 +60,13 @@ OPERATING PRINCIPLES
 4. VERIFY before declaring done. The screen must actually show the result.
    Call done() only with specific evidence ("title bar says 'Untitled*' so
    file was saved"). The verifier independently checks.
+4a. STAY IN YOUR WORKING WINDOW. Do the task in the window it belongs to. If a
+   "WORKING WINDOW" is named in your context, that's where you operate; if focus
+   drifts to an unrelated window, refocus your window (focus_window / open_app on
+   the right app) instead of continuing there. Do NOT alt-Tab to other apps, open
+   extra browser tabs/windows, or invoke system tools (screenshot/snipping apps,
+   Start-menu/taskbar search) unless the task explicitly needs them — that's how
+   runs get lost. One window, one job.
 5. STAGNATION RECOVERY. If your last two turns produced the same snapshot
    fingerprint, the screen is not changing — try a completely different
    approach (different tool, different target, keyboard shortcut, wait,

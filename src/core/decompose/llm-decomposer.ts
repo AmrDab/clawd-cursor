@@ -120,12 +120,23 @@ export function extractJson(raw: string): unknown | null {
  * Decompose via LLM. Returns the subtasks array on success, null when the
  * response can't be parsed or is empty (caller falls through to one-shot
  * text-agent).
+ *
+ * `desktopContext` (optional) is a rendered DesktopSurvey block — the live
+ * list of open windows and resolved default handlers. When present it's
+ * prepended to the task so the model grounds decomposition in what's actually
+ * available (skip "open X" for an already-open app, route capabilities to the
+ * real default handler) instead of guessing. Passed as a plain string to keep
+ * this module decoupled from the survey type.
  */
 export async function decomposeWithLlm(
   task: string,
   deps: LlmDecomposerDeps,
+  desktopContext?: string,
 ): Promise<string[] | null> {
-  const raw = await deps.callTextLlm(DECOMPOSE_SYSTEM_PROMPT, task, { maxTokens: 400 });
+  const userPrompt = desktopContext && desktopContext.trim()
+    ? `${desktopContext.trim()}\n\nTASK:\n${task}`
+    : task;
+  const raw = await deps.callTextLlm(DECOMPOSE_SYSTEM_PROMPT, userPrompt, { maxTokens: 400 });
   const parsed = extractJson(raw);
   if (!parsed || typeof parsed !== 'object') return null;
   const subtasks = (parsed as { subtasks?: unknown }).subtasks;

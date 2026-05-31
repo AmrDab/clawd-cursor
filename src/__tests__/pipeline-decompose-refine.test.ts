@@ -123,7 +123,9 @@ describe('Pipeline LLM-decomposer refinement', () => {
     });
 
     expect(decomposer).toHaveBeenCalledTimes(1);
-    expect(decomposer).toHaveBeenCalledWith('open any wikipedia page and copy a sentence onto notepad');
+    // First arg is the task; a second arg now carries the desktop-survey
+    // context string (empty here — the test adapter has no real windows).
+    expect(decomposer.mock.calls[0][0]).toBe('open any wikipedia page and copy a sentence onto notepad');
     // The agent should have received the LLM-decomposed concrete subtasks,
     // NOT the regex split's "open any wikipedia page".
     expect(subtasksReceived.some(s => /Special:Random|Microsoft Edge/.test(s))).toBe(true);

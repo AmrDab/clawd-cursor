@@ -76,6 +76,14 @@ export interface PreprocessContext {
   /** Active window title / process — lets the preprocessor seed app-knowledge. */
   activeWindowTitle?: string;
   activeWindowProcessName?: string;
+  /**
+   * Live desktop survey (open windows + resolved default handlers). When
+   * present, downstream planning (esp. the LLM decomposer) grounds itself in
+   * what's actually available instead of guessing. Optional + opaque here so
+   * preprocess stays pure; the Pipeline performs the perception and passes the
+   * result in. Typed as `unknown`-friendly `DesktopSurvey` via structural use.
+   */
+  survey?: import('../desktop-survey').DesktopSurvey;
 }
 
 /**

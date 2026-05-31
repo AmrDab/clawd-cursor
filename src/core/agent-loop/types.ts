@@ -55,6 +55,14 @@ export interface AgentInput {
    * generic and task-agnostic. Injected into this agent's initial context.
    */
   priorHandoff?: string;
+  /**
+   * Title of the window this subtask should be performed in, when the pipeline
+   * could determine it (the foreground window at subtask start for non-launch
+   * subtasks). Injected into the prompt as a "stay in this window" anchor so
+   * the agent refocuses it instead of thrashing to unrelated apps/tools. The
+   * generic stay-in-window guidance applies even when this is undefined.
+   */
+  targetWindow?: string;
 }
 
 export interface AgentStep {
