@@ -1,0 +1,40 @@
+/**
+ * Pre-click foreground guarantee — shared by the granular pointer tools
+ * (tools.ts) and the compound `mouse` tool (compound.ts).
+ *
+ * A coordinate click is delivered by the OS to whatever window is TOPMOST at
+ * that pixel (SendInput is screen-global), which is decoupled from the window
+ * the agent reasoned about. When a target window is known (the subtask anchor)
+ * and the current foreground is a DIFFERENT process, we raise the target first
+ * so the click lands on it instead of an overlapping window (the recurring
+ * "click hit the Task Console" failure). No-op when no target is set or the
+ * target is already foreground — working single-window flows pay nothing.
+ */
+import type { AgentToolContext } from './types';
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+/** Compare two process names by basename, case-insensitively (handles ".exe"
+ *  and path prefixes — "C:\\...\\Notepad.exe" == "notepad"). */
+export function sameProcess(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  const norm = (s: string) => (s.replace(/\\/g, '/').split('/').pop() ?? s).replace(/\.exe$/i, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/**
+ * Raise the subtask's target window when the foreground drifted to a different
+ * process, so the imminent click lands on the intended window. Single attempt,
+ * never throws. Returns a short note for the tool-result text (empty when no-op).
+ */
+export async function ensureTargetForeground(
+  ctx: AgentToolContext,
+  foreground: { processName?: string } | null,
+): Promise<string> {
+  const t = ctx.targetWindow;
+  if (!t || !t.processName) return '';
+  if (foreground && sameProcess(foreground.processName, t.processName)) return '';
+  const ok = await ctx.platform.focusWindow({ processName: t.processName }).catch(() => false);
+  await sleep(120);
+  return ok ? ` ·raised ${t.processName}` : '';
+}

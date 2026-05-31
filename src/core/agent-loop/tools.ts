@@ -24,6 +24,7 @@ import type { Capability } from '../classify/capability';
 import { paletteFor } from './palettes';
 import { getCompoundTools, COMPOUND_REPLACES } from './compound';
 import { imageScale, scaleCoord } from './coord-scale';
+import { ensureTargetForeground } from './focus-guard';
 import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
 
@@ -409,12 +410,14 @@ export function buildUnifiedTools(
         const scale = space === 'image' ? imageScale(ctx) : 1;
         const x = scaleCoord(ix, scale);
         const y = scaleCoord(iy, scale);
-        const before = await ctx.platform.getActiveWindow().catch(() => null);
+        const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
+        const raised = await ensureTargetForeground(ctx, fg0);
+        const before = raised ? await ctx.platform.getActiveWindow().catch(() => null) : fg0;
         await ctx.platform.mouseClick(x, y, { button, count });
         await sleep(150);
         const after = await ctx.platform.getActiveWindow().catch(() => null);
         const note = warning ? ` (${warning})` : '';
-        return { success: true, text: `Clicked ${button} x${count} at ${coordBreadcrumb(ix, iy, x, y, space, scale, ctx)}${focusBreadcrumb(before, after)}${note}` };
+        return { success: true, text: `Clicked ${button} x${count} at ${coordBreadcrumb(ix, iy, x, y, space, scale, ctx)}${raised}${focusBreadcrumb(before, after)}${note}` };
       },
     },
 
@@ -444,11 +447,13 @@ export function buildUnifiedTools(
         const scale = space === 'image' ? imageScale(ctx) : 1;
         const sx = scaleCoord(start.x, scale), sy = scaleCoord(start.y, scale);
         const ex = scaleCoord(end.x, scale), ey = scaleCoord(end.y, scale);
-        const before = await ctx.platform.getActiveWindow().catch(() => null);
+        const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
+        const raised = await ensureTargetForeground(ctx, fg0);
+        const before = raised ? await ctx.platform.getActiveWindow().catch(() => null) : fg0;
         await ctx.platform.mouseDrag(sx, sy, ex, ey);
         await sleep(200);
         const after = await ctx.platform.getActiveWindow().catch(() => null);
-        return { success: true, text: `Dragged ${space} (${start.x},${start.y})→(${end.x},${end.y}) → screen (${sx},${sy})→(${ex},${ey}) [×${scale}]${focusBreadcrumb(before, after)}` };
+        return { success: true, text: `Dragged ${space} (${start.x},${start.y})→(${end.x},${end.y}) → screen (${sx},${sy})→(${ex},${ey}) [×${scale}]${raised}${focusBreadcrumb(before, after)}` };
       },
     },
 

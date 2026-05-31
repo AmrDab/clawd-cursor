@@ -28,6 +28,7 @@
 
 import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
 import { imageScale, scaleCoord as px } from './coord-scale';
+import { ensureTargetForeground } from './focus-guard';
 
 function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
@@ -101,27 +102,33 @@ export const mouseCompound: UnifiedTool = {
     const x = px(ix, s);
     const y = px(iy, s);
 
+    // For the click actions: raise the target window first (so the click lands
+    // on it, not an overlapping window) and report focus before→after so
+    // focus theft is visible in vision mode (was previously invisible here).
+    const clickWith = async (label: string, opts: { button: 'left' | 'right' | 'middle'; count?: number }) => {
+      const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
+      const raised = await ensureTargetForeground(ctx, fg0);
+      const before = raised ? await ctx.platform.getActiveWindow().catch(() => null) : fg0;
+      await ctx.platform.mouseClick(x, y, opts);
+      await sleep(150);
+      const after = await ctx.platform.getActiveWindow().catch(() => null);
+      const drift = (before?.title !== after?.title && after?.title)
+        ? ` · focus drifted to "${after.title}" — refocus your working window before the next action`
+        : '';
+      return { success: true, text: `${label} at (${ix}, ${iy})${raised}${drift}` };
+    };
+
     switch (action) {
       case 'click':
-        await ctx.platform.mouseClick(x, y, { button: btn });
-        await sleep(150);
-        return { success: true, text: `Clicked ${btn} at (${ix}, ${iy})` };
+        return clickWith('Clicked left', { button: 'left' });
       case 'double_click':
-        await ctx.platform.mouseClick(x, y, { button: 'left', count: 2 });
-        await sleep(150);
-        return { success: true, text: `Double-clicked at (${ix}, ${iy})` };
+        return clickWith('Double-clicked', { button: 'left', count: 2 });
       case 'right_click':
-        await ctx.platform.mouseClick(x, y, { button: 'right' });
-        await sleep(150);
-        return { success: true, text: `Right-clicked at (${ix}, ${iy})` };
+        return clickWith('Right-clicked', { button: 'right' });
       case 'middle_click':
-        await ctx.platform.mouseClick(x, y, { button: 'middle' });
-        await sleep(150);
-        return { success: true, text: `Middle-clicked at (${ix}, ${iy})` };
+        return clickWith('Middle-clicked', { button: 'middle' });
       case 'triple_click':
-        await ctx.platform.mouseClick(x, y, { button: 'left', count: 3 });
-        await sleep(150);
-        return { success: true, text: `Triple-clicked at (${ix}, ${iy})` };
+        return clickWith('Triple-clicked', { button: 'left', count: 3 });
       case 'move':
       case 'hover':
         await ctx.platform.mouseMove(x, y);

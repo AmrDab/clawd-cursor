@@ -662,6 +662,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           screen,
           screenshotsCaptured,
           activeApp,
+          targetWindow: input.targetWindow,
         };
 
         let result: Awaited<ReturnType<UnifiedTool['execute']>>;

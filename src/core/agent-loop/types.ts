@@ -138,6 +138,11 @@ export interface AgentToolContext {
   screenshotsCaptured: { n: number };
   /** Current active app name — used by SafetyLayer for sensitive-app elevation. */
   activeApp?: string;
+  /** The window this subtask should run in (the pipeline's resolved anchor).
+   *  Pointer tools use it to RAISE the target before a click when the
+   *  foreground drifted to a different process — so the click lands on the
+   *  intended window instead of whatever overlaps that pixel. */
+  targetWindow?: { title: string; processName: string };
 }
 
 /**

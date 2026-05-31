@@ -35,6 +35,9 @@ function makeCtx(physicalWidth: number, captured: Captured[]): AgentToolContext 
       mouseDrag: vi.fn(rec('drag')),
       mouseDown: vi.fn(async () => {}),
       mouseUp: vi.fn(async () => {}),
+      // The click path reads the foreground for the focus breadcrumb / raise.
+      getActiveWindow: vi.fn(async () => null),
+      focusWindow: vi.fn(async () => true),
     } as any,
     task: 'test',
     mode: 'vision',
