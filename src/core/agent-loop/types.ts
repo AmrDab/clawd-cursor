@@ -56,13 +56,14 @@ export interface AgentInput {
    */
   priorHandoff?: string;
   /**
-   * Title of the window this subtask should be performed in, when the pipeline
-   * could determine it (the foreground window at subtask start for non-launch
-   * subtasks). Injected into the prompt as a "stay in this window" anchor so
-   * the agent refocuses it instead of thrashing to unrelated apps/tools. The
-   * generic stay-in-window guidance applies even when this is undefined.
+   * The window this subtask should run in, when the pipeline resolved a safe,
+   * task-relevant one (grounded in the desktop survey — the browser for a web
+   * subtask, a named open app, etc. — never our own console or an OS shell
+   * surface). Injected as a "WORKING WINDOW" anchor telling the agent to
+   * refocus it (by process) instead of thrashing. The generic stay-in-window
+   * guidance applies even when this is undefined.
    */
-  targetWindow?: string;
+  targetWindow?: { title: string; processName: string };
 }
 
 export interface AgentStep {

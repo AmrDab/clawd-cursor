@@ -57,7 +57,7 @@ export interface SurveyDeps {
 }
 
 /** Strip a path down to its executable basename, sans extension. */
-function exeBasename(exePath: string): string {
+export function exeBasename(exePath: string): string {
   const base = exePath.replace(/\\/g, '/').split('/').pop() ?? exePath;
   return base.replace(/\.(exe|app)$/i, '');
 }

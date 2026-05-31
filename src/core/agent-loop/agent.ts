@@ -205,7 +205,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     // Anchor the agent to its working window (when the pipeline resolved one)
     // so it refocuses there instead of thrashing to unrelated apps/tools.
     const windowAnchor = input.targetWindow
-      ? `WORKING WINDOW: "${input.targetWindow}" — perform this task in that window. If focus has moved to an unrelated window, refocus this one rather than opening new apps, tabs, or tools.\n\n`
+      ? `WORKING WINDOW: the "${input.targetWindow.processName}" window ("${input.targetWindow.title}") — perform this task there. If focus drifts to another window, refocus it with focus_window(processName:"${input.targetWindow.processName}") rather than opening new apps, tabs, or tools.\n\n`
       : '';
     const initialBlocks: LLMUserBlock[] = [
       {
@@ -214,7 +214,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       },
     ];
     if (input.priorHandoff) log.info('agent.handoff.received', { mode: input.mode, chars: input.priorHandoff.length });
-    if (input.targetWindow) log.info('agent.window_anchor', { mode: input.mode, window: input.targetWindow });
+    if (input.targetWindow) log.info('agent.window_anchor', { mode: input.mode, window: input.targetWindow.title, process: input.targetWindow.processName });
 
     if (input.mode === 'vision') {
       const shot = await deps.adapter.screenshot({ maxWidth: 1280 });

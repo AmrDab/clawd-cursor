@@ -53,9 +53,10 @@ import { GroundTruthVerifier } from './verifier';
 import type { Capability } from './classify/capability';
 import { decomposeWithLlm } from './decompose/llm-decomposer';
 import {
-  surveyDesktop, renderSurveyForPrompt, distinctOpenAppCount,
+  surveyDesktop, renderSurveyForPrompt, distinctOpenAppCount, exeBasename,
   type DesktopSurvey,
 } from './desktop-survey';
+import type { WindowInfo } from '../platform/types';
 import { callLLMWithTools } from '../llm/client';
 import { OcrEngine } from '../platform/ocr-engine';
 import { PLAYBOOKS } from '../tools/playbooks';
@@ -137,6 +138,64 @@ const LAUNCH_TASK_PATTERN =
   /^\s*(open|launch|start|run|go to|goto|navigate to|visit|browse to|switch to)\b/i;
 function isLaunchOrNavigate(task: string): boolean {
   return LAUNCH_TASK_PATTERN.test(task);
+}
+
+/**
+ * Windows that must NEVER be a stay-in-window anchor: clawdcursor's own task
+ * console, terminals (the daemon usually runs in one), and OS shell surfaces.
+ * Anchoring the agent to any of these sabotages it (the v1.0.0 regression where
+ * a subtask got pinned to a stale "Settings" window and thrashed). Matched on
+ * the window TITLE; terminals are also matched on process. App-agnostic.
+ */
+const NON_TARGET_WINDOW_TITLE =
+  /clawd ?cursor|task console|^settings$|^start$|^search$|task view|program manager|^run$|snipping tool|^cortana$/i;
+const TERMINAL_PROCESS =
+  /^(windowsterminal|powershell|pwsh|cmd|conhost|wt|alacritty|wezterm|kitty|gnome-terminal|konsole|iterm2?|terminal)$/i;
+/** A subtask whose work happens on the web / in a browser. */
+const WEB_INTENT_PATTERN =
+  /\b(browser|web ?page|website|web|page|tab|url|https?:|www\.|\.com|\.org|\.net|wikipedia|google|youtube|search the web|online)\b/i;
+/** A subtask whose work happens in email/mail. */
+const MAIL_INTENT_PATTERN = /\b(email|e-?mail|mail|inbox|compose|message to)\b/i;
+
+function isTargetableWindow(w: WindowInfo | undefined): w is WindowInfo {
+  return !!w && !!w.title?.trim()
+    && !NON_TARGET_WINDOW_TITLE.test(w.title)
+    && !TERMINAL_PROCESS.test(exeBasename(w.processName ?? ''));
+}
+
+/**
+ * Resolve the window a subtask should be performed in — GROUNDED in the live
+ * survey, not the momentary foreground. Order:
+ *   1. web/mail intent → the OS-resolved default browser/mail window (we never
+ *      name an app; the handler came from the OS registry).
+ *   2. the subtask names an OPEN app (its process basename appears in the text).
+ *   3. the current foreground window — ONLY if it's targetable (not our own
+ *      console / a terminal / an OS shell surface).
+ * Returns undefined for launch/navigate subtasks and when nothing is a safe,
+ * relevant anchor (the agent then relies on the generic stay-in-window
+ * guidance instead of being pinned to the wrong window).
+ */
+export function resolveSubtaskTargetWindow(
+  subtask: string,
+  survey: DesktopSurvey,
+  foreground: WindowInfo | null,
+): WindowInfo | undefined {
+  if (isLaunchOrNavigate(subtask)) return undefined;
+
+  if (WEB_INTENT_PATTERN.test(subtask) && isTargetableWindow(survey.handlers.browser?.openWindow)) {
+    return survey.handlers.browser!.openWindow;
+  }
+  if (MAIL_INTENT_PATTERN.test(subtask) && isTargetableWindow(survey.handlers.mail?.openWindow)) {
+    return survey.handlers.mail!.openWindow;
+  }
+  const lower = subtask.toLowerCase();
+  const named = survey.openWindows.find(
+    w => isTargetableWindow(w) && lower.includes(exeBasename(w.processName).toLowerCase()),
+  );
+  if (named) return named;
+
+  if (isTargetableWindow(foreground ?? undefined)) return foreground!;
+  return undefined;
 }
 
 const CONTINUOUS_SESSION_PATTERN =
@@ -496,12 +555,12 @@ export class Pipeline {
               activeWindowProcessName: subActive?.processName,
             });
 
-        // Pin the agent to its working window when one already exists and this
-        // subtask isn't itself a launch/navigate (which would change it). Keeps
-        // the agent from drifting to unrelated windows mid-subtask.
-        const targetWindow = !isLaunchOrNavigate(subtask) && subActive?.title?.trim()
-          ? subActive.title
-          : undefined;
+        // Anchor the agent to the window this subtask should run in — GROUNDED
+        // in the survey (browser/mail/named app), never the stale foreground or
+        // our own console/terminal/Settings. undefined → generic guidance only.
+        const tw = resolveSubtaskTargetWindow(subtask, survey, subActive);
+        const targetWindow = tw ? { title: tw.title, processName: tw.processName } : undefined;
+        if (tw) log.info('pipeline.target_window', { title: tw.title, process: tw.processName });
 
         const subResult = await this.runOneSubtask(
           subtask,
@@ -1311,11 +1370,11 @@ interface StrategyEnv {
   log: ReturnType<typeof logger.with>;
   isAborted: () => boolean;
   trace: PipelineTaskResult['trace'];
-  /** Title of the window this subtask should be performed in, when known. The
-   *  agent is told to stay in / refocus it instead of thrashing to unrelated
-   *  apps. Undefined for launch/navigate subtasks (the target emerges after
-   *  the app opens) — the generic stay-in-window guidance still applies. */
-  targetWindow?: string;
+  /** The window this subtask should run in, when grounded resolution found a
+   *  safe, relevant one. The agent is told to refocus it (by process) instead
+   *  of thrashing. Undefined for launch/navigate subtasks or when no safe
+   *  anchor exists — the generic stay-in-window guidance still applies. */
+  targetWindow?: { title: string; processName: string };
 }
 
 interface StrategyResult {
