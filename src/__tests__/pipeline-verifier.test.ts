@@ -171,6 +171,39 @@ describe('Pipeline ground-truth verifier wiring', () => {
     expect(m.captureState).toHaveBeenCalledTimes(2); // before + after
   });
 
+  it('NON-IDEMPOTENT task + verifier REJECT → ladder does NOT retry (no duplicate send)', async () => {
+    // Live bug: a "send email" task sent multiple emails because the verifier
+    // false-rejected the first send and the ladder re-composed on each climb.
+    // For a one-shot action the ladder must STOP after the first attempt.
+    agentResultByRung.clear();
+    agentResultByRung.set('blind', { success: true, exit: 'done' });   // "sends", claims done
+    agentResultByRung.set('hybrid', { success: true, exit: 'done' });  // would re-send IF reached
+    agentResultByRung.set('vision', { success: true, exit: 'done' });
+    const m = makeMockVerifier('reject');  // verifier can't confirm the send
+
+    const { runAgent } = await import('../core/agent-loop/agent');
+    (runAgent as any).mockClear();
+
+    const pipeline = new Pipeline({
+      adapter: makeAdapter(),
+      llm: {
+        text: { baseUrl: 'x', model: 'm', apiKey: 'k', isAnthropic: false },
+        vision: { baseUrl: 'x', model: 'v', apiKey: 'k', isAnthropic: false },
+      },
+      verifier: m.verifier,
+    });
+
+    const result = await pipeline.run({ task: 'open outlook and send an email to a@b.com' });
+
+    // The send was attempted ONCE (blind) and NOT retried — hybrid/vision must
+    // not run. (Contrast: the idempotent 'test task' above climbs to hybrid.)
+    // This is THE fix: no re-attempt → no duplicate send.
+    expect((runAgent as any).mock.calls.length).toBe(1);
+    // The user is told it was attempted but unverified — so they can check
+    // (rather than the pipeline silently sending again).
+    expect(result.text ?? '').toMatch(/not retrying|one-shot|verify the result/i);
+  });
+
   it('agent success + verifier REJECT → ladder climbs to hybrid', async () => {
     agentResultByRung.clear();
     // Blind claims done, but the verifier will reject it.

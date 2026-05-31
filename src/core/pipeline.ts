@@ -93,6 +93,24 @@ const COMPOUND_TASK_PATTERN = /\b(?:and|then|,)\b/i;
  * collapsed to 1/14 when the LLM decomposer fragmented it into 8 subtasks.
  * When this matches, keep the task whole and skip decomposition entirely.
  */
+/**
+ * NON-IDEMPOTENT / single-shot actions — performing them twice is harmful
+ * (a duplicate email, a double purchase, a re-submitted form). When a rung
+ * CLAIMS it did one of these but the verifier can't confirm, the ladder must
+ * NOT retry: the action may already have taken effect (verifiers are unreliable
+ * on WebView2/canvas surfaces), and a retry would do it again. Observed live:
+ * one "send an email" task sent multiple emails because the verifier
+ * false-rejected the first send and the ladder re-composed on each climb.
+ *
+ * Generic + task-agnostic + OS-agnostic — pure language pattern, like the
+ * idempotent classifier in verifier.ts (which covers the SAFE-to-retry verbs).
+ */
+const NON_IDEMPOTENT_PATTERN =
+  /\b(send|sends|sending|submit|submits|publish|purchase|buy|pay|order|checkout|transfer|wire|tweet|reply|forward)\b/i;
+function isLikelyNonIdempotent(task: string): boolean {
+  return NON_IDEMPOTENT_PATTERN.test(task);
+}
+
 const CONTINUOUS_SESSION_PATTERN =
   /\b(keep going|until you (see|reach)|do ?n[o']?t stop until|auto-?advanc|one continuous|single (continuous )?session|each (challenge|step|screen|round)|through (all|every|each) (the )?(challenge|step|round)|results? (page|screen)|grade page)\b/i;
 
@@ -507,6 +525,10 @@ export class Pipeline {
             if (isAgentSideFailure) subtaskAgentFails += 1;
             // Don't update lastText with a failure message — the next
             // subtask should see "what came before" as the agent's claim.
+            // EXCEPTION: when we deliberately STOPPED a non-idempotent action
+            // (to avoid a duplicate send/purchase), the user must SEE the
+            // "attempted but unverified — please check" note, so surface it.
+            if (reason === 'non_idempotent_unverified') lastText = subResult.text;
           } else {
             log.warn('pipeline.subtask.failed_chain_abort', {
               index: i + 1, subtask, path: subResult.path, reason: subResult.failureReason,
@@ -718,6 +740,20 @@ export class Pipeline {
           attempt.verifierConfidence = verdict.confidence;
           attempt.text = `${attempt.text} (verifier rejected: ${verdict.reason})`;
           last = attempt;
+          // NON-IDEMPOTENT GUARD: a one-shot/destructive action (send, submit,
+          // purchase, transfer…) may have ALREADY taken effect even though the
+          // verifier couldn't confirm it (pixel-diff is unreliable on WebView2 /
+          // canvas compose UIs). Retrying it across the ladder risks doing it
+          // TWICE — the live bug where one "send email" task sent several
+          // emails. Stop and report honestly instead of re-attempting.
+          if (isLikelyNonIdempotent(task)) {
+            env.log.warn('pipeline.non_idempotent.no_retry', {
+              strategy: rung, confidence: verdict.confidence,
+            });
+            attempt.failureReason = 'non_idempotent_unverified';
+            attempt.text = `Attempted via ${rung}, but could not independently verify completion. NOT retrying — this is a one-shot action (send/submit/purchase/…) and a retry could perform it twice. Please verify the result.`;
+            return attempt;
+          }
           // Continue the loop — try the next rung.
           continue;
         }

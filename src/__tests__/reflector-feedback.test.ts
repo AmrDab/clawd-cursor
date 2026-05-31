@@ -400,7 +400,12 @@ describe('Pipeline Reflector override (CLAWD_REFLECTOR=1)', () => {
       verifier: m.verifier,
     });
 
-    const result = await pipeline.run({ task: 'click submit in webview' });
+    // Use an IDEMPOTENT task here. The reflector escalation mechanism
+    // (webview_blind → vision) is what's under test; a NON-idempotent action
+    // (send/submit/purchase) is deliberately NOT auto-retried by the pipeline's
+    // non-idempotent guard (see pipeline-verifier.test.ts), so it would not
+    // climb to vision — that's correct safety behavior, just a different path.
+    const result = await pipeline.run({ task: 'open the dashboard view in a webview app' });
     expect(result.success).toBe(true);
     // verifyWithFeedback was called twice: once rejecting blind, once passing vision.
     expect(m.verifyWithFeedback).toHaveBeenCalledTimes(2);
