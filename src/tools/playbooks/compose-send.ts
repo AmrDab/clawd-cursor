@@ -67,6 +67,7 @@ function tabsAfterRecipient(): number {
 
 export async function composeSend(args: PlaybookArgs): Promise<PlaybookResult> {
   const { adapter, input } = args;
+  const send    = args.send ?? true;
   const to      = input.to ?? input.recipient ?? '';
   const subject = input.subject ?? '';
   const body    = input.body ?? input.text ?? '';
@@ -117,16 +118,23 @@ export async function composeSend(args: PlaybookArgs): Promise<PlaybookResult> {
   // confirmation dialog intercepted, whether the message stuck in Outbox,
   // or whether anything was actually delivered. That judgement now belongs
   // to the pipeline's ground-truth verifier (v0.9.1 unbypass).
-  await adapter.keyPress('mod+Return');
-  steps.push({ type: 'key', key: 'mod+Return', description: 'submit (mod+Return)' });
-  await sleep(POST_SUBMIT_WAIT_MS);
+  //
+  // Skip the submit entirely for draft-only tasks (send=false): the user
+  // asked to compose, not send, so leave the filled form for review.
+  if (send) {
+    await adapter.keyPress('mod+Return');
+    steps.push({ type: 'key', key: 'mod+Return', description: 'submit (mod+Return)' });
+    await sleep(POST_SUBMIT_WAIT_MS);
+  } else {
+    steps.push({ type: 'wait', description: 'draft-only: left compose filled, did NOT submit' });
+  }
 
   return {
     // success=true here just means "we executed the choreography without
     // throwing." The pipeline's verifier is the ground-truth gate that
     // decides whether the chain advances. See pipeline.ts.
     success: true,
-    text: `compose-send: to=${to || '(none)'} subject=${subject || '(none)'} body=${body.length}ch tabs-after-to=${tabsToSubject}`,
+    text: `compose-send: to=${to || '(none)'} subject=${subject || '(none)'} body=${body.length}ch tabs-after-to=${tabsToSubject} ${send ? 'sent' : 'draft-only'}`,
     steps,
   };
 }

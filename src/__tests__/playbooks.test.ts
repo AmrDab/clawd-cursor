@@ -175,6 +175,40 @@ describe('compose-send keystroke sequence', () => {
     } finally { restorePlatform(); }
   });
 
+  it('draft-only (send:false) fills the form but does NOT press mod+Return', async () => {
+    // Intent-driven send: when the task asked to compose/draft (not send),
+    // the playbook leaves the filled compose window for the user to review.
+    setPlatform('win32');
+    try {
+      const { adapter, calls } = makeAdapter('win32');
+      const r = await composeSend({
+        adapter,
+        input: { to: 'bob@acme.com', subject: 'hi', body: 'body text' },
+        send: false,
+      });
+      expect(r.success).toBe(true);
+      const keys = calls.filter(c => c.kind === 'key').map(c => c.combo);
+      expect(keys).toContain('mod+n');           // still opens compose
+      expect(keys).not.toContain('mod+Return');  // but never submits
+      // fields still typed so the draft is ready to review/send
+      const types = calls.filter(c => c.kind === 'type').map(c => c.text);
+      expect(types).toEqual(['bob@acme.com', 'hi', 'body text']);
+      expect(r.text).toMatch(/draft-only/);
+    } finally { restorePlatform(); }
+  });
+
+  it('send defaults to true (backward-compatible) — submits when unspecified', async () => {
+    setPlatform('win32');
+    try {
+      const { adapter, calls } = makeAdapter('win32');
+      const r = await composeSend({ adapter, input: { to: 'a@b.c', body: 'x' } });
+      expect(r.success).toBe(true);
+      const keys = calls.filter(c => c.kind === 'key').map(c => c.combo);
+      expect(keys[keys.length - 1]).toBe('mod+Return');
+      expect(r.text).toMatch(/sent/);
+    } finally { restorePlatform(); }
+  });
+
   it('summary text reports parsed fields explicitly (debug aid)', async () => {
     setPlatform('darwin');
     try {

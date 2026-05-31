@@ -111,6 +111,19 @@ function isLikelyNonIdempotent(task: string): boolean {
   return NON_IDEMPOTENT_PATTERN.test(task);
 }
 
+/**
+ * Does the task explicitly ask to SEND (fire the message), or only to
+ * compose/draft it? "send/email/fire off/deliver" → send; "compose/draft/
+ * write/prepare" with no send verb → stop at the pre-filled draft for the
+ * user to review. Lets compose-send avoid auto-firing a one-shot Send when
+ * the user only asked to draft. Generic + OS-agnostic — pure language.
+ */
+const SEND_INTENT_PATTERN =
+  /\b(send|sends|sent|sending|send off|send out|fire off|deliver|dispatch|shoot (?:it |this )?off)\b/i;
+function taskWantsSend(task: string): boolean {
+  return SEND_INTENT_PATTERN.test(task);
+}
+
 const CONTINUOUS_SESSION_PATTERN =
   /\b(keep going|until you (see|reach)|do ?n[o']?t stop until|auto-?advanc|one continuous|single (continuous )?session|each (challenge|step|screen|round)|through (all|every|each) (the )?(challenge|step|round)|results? (page|screen)|grade page)\b/i;
 
@@ -714,6 +727,7 @@ export class Pipeline {
         attempt.success
         && this.verifier
         && rung !== 'router'
+        && !attempt.skipVerifier
         && before
       ) {
         const verdict = await this.runVerifier(
@@ -1041,15 +1055,31 @@ export class Pipeline {
       return { success: false, text: 'compose-send: could not extract recipient email from task', path: 'playbook', failureReason: 'playbook_miss' };
     }
 
+    // Send only when the task explicitly asks to SEND; otherwise stop at the
+    // pre-filled draft for the user to review (no auto-firing a one-shot Send).
+    const wantsSend = taskWantsSend(task);
+
     // Strategy 1: mailto: URI — pre-fill everything in one shot.
     if (process.platform === 'win32') {
       const uri = buildMailtoUri(fields);
-      env.log.info('pipeline.playbook.compose_send.try_mailto', { recipient: fields.recipient, hasSubject: !!fields.subject, hasBody: !!fields.body });
+      env.log.info('pipeline.playbook.compose_send.try_mailto', { recipient: fields.recipient, hasSubject: !!fields.subject, hasBody: !!fields.body, send: wantsSend });
       try {
         const exe = await resolveSchemeHandlerExecutable('mailto');
         if (exe) {
           const launchResult = await launchHandlerAndVerify(exe, uri, { waitMs: 5000 });
           if (launchResult.success && launchResult.windowOpened) {
+            if (!wantsSend) {
+              // Draft-only: compose opened pre-filled, leave it for review.
+              env.log.info('pipeline.playbook.compose_send.draft_via_mailto', {
+                recipient: fields.recipient, composeTitle: launchResult.hwndLabel,
+              });
+              return {
+                success: true,
+                skipVerifier: true,
+                text: `compose-send (mailto): opened a pre-filled draft to ${fields.recipient} in "${launchResult.hwndLabel ?? '(unknown)'}". NOT sent — task asked to compose, not send. Review and send when ready.`,
+                path: 'playbook',
+              };
+            }
             // Compose appeared with everything pre-filled. Send it.
             await this.deps.adapter.keyPress('mod+Return');
             await new Promise(r => setTimeout(r, 600));
@@ -1073,15 +1103,19 @@ export class Pipeline {
       }
     }
 
-    // Strategy 2: in-app keyboard choreography fallback.
+    // Strategy 2: in-app keyboard choreography fallback. Pass the send intent
+    // through so a draft-only task stops before the mod+Return submit.
     try {
       const result = await composeSendPlaybook({
         adapter: this.deps.adapter,
         input: { to: fields.recipient, subject: fields.subject, body: fields.body },
+        send: wantsSend,
       });
-      env.log.info('pipeline.playbook.compose_send.in_app', { success: result.success, steps: result.steps.length });
+      env.log.info('pipeline.playbook.compose_send.in_app', { success: result.success, steps: result.steps.length, send: wantsSend });
       return {
         success: result.success,
+        // Draft-only succeeds the moment the form is filled — no send to verify.
+        skipVerifier: result.success && !wantsSend,
         text: result.text,
         path: 'playbook',
         failureReason: result.success ? undefined : 'playbook_miss',
@@ -1267,6 +1301,12 @@ interface StrategyResult {
   /** Handoff note from this rung's agent, carried to the NEXT rung so text and
    *  vision agents continue each other's work instead of restarting. */
   handoff?: string;
+  /** Skip the ground-truth verifier for this attempt and treat success as
+   *  terminal. Set when the rung's success is self-evident and the verifier's
+   *  task-type assertions would mis-fire — e.g. a compose-send DRAFT (the user
+   *  asked to compose, not send), where the compose window is meant to stay
+   *  OPEN, so the send_email "compose_closed" assertion would wrongly reject. */
+  skipVerifier?: boolean;
 }
 
 export type { TaskResult } from './pipeline-types';

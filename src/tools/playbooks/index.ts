@@ -40,6 +40,10 @@ export interface PlaybookArgs {
   adapter: PlatformAdapter;
   /** Free-form args (recipient, subject, body, findText, etc.). */
   input: Record<string, string | undefined>;
+  /** Whether to fire the submit/send keystroke at the end. Defaults to true
+   *  (backward-compatible). compose-send passes false for draft-only tasks
+   *  (the user asked to compose, not send) so the form is left for review. */
+  send?: boolean;
 }
 
 export type Playbook = (args: PlaybookArgs) => Promise<PlaybookResult>;
