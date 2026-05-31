@@ -92,6 +92,20 @@ export class GroundTruthVerifier implements Verifier {
       // when the goal state already holds. task_assertions + anti-pattern
       // carry the verdict; pixel/window/focus are advisory only.
       // (No additional hard gate.)
+    } else if (inferredTaskType === 'type_text' || inferredTaskType === 'compose_message') {
+      // Text-content tasks: typing/pasting into an already-focused field changes
+      // little structurally (no window/focus change, sub-threshold pixel diff),
+      // so the structural-change gate would false-reject a successful paste (the
+      // live "paste the copied sentence" bug). POSITIVE text evidence (the field
+      // gained the content) is authoritative — accept it even with no structural
+      // change. But a FAILED text assertion is NOT decisive (the literal
+      // extractor is heuristic and can misfire on "type a sentence about X"), so
+      // fall back to the normal structural gate rather than hard-failing.
+      if (taskSig.value) {
+        pass = antiSig.value;
+      } else if (!pixel.value && !windowSig.value && !focus.value) {
+        pass = false;
+      }
     } else {
       if (!pixel.value && !windowSig.value && !focus.value) pass = false;
     }
@@ -269,7 +283,7 @@ export class GroundTruthVerifier implements Verifier {
     const primary = causes[0];
     switch (primary.kind) {
       case 'no_pixel_change':
-        return 'No pixel change after click — target may not have been hit.';
+        return 'No significant pixel change — the action may not have taken effect (or had no visible result).';
       case 'wrong_window_focused':
         return `Wrong window in focus: expected "${primary.expected ?? 'original'}", got "${primary.actual}".`;
       case 'modal_intercept':
@@ -498,6 +512,23 @@ export class GroundTruthVerifier implements Verifier {
           const visible = after.ocrText.toLowerCase().includes(text.toLowerCase().slice(0, 25))
                        || (after.focusedElement?.value?.toLowerCase().includes(text.toLowerCase().slice(0, 25)) ?? false);
           checks.push({ name: 'text_appeared', pass: visible });
+        } else {
+          // No literal in the task (a PASTE, or "type a sentence about X"). The
+          // proof is that the focused field GAINED text, or the clipboard's
+          // content is now visible in the field/screen. Pasting changes little
+          // structurally (no window/focus change, tiny pixel diff), so this
+          // value-delta — not the structural vote — is the real signal.
+          const beforeVal = opts.before.focusedElement?.value ?? '';
+          const afterVal = after.focusedElement?.value ?? '';
+          const grew = afterVal.length > beforeVal.length;
+          const clip = (after.clipboard ?? '').trim();
+          const pastedVisible = clip.length > 0 && (
+            afterVal.toLowerCase().includes(clip.toLowerCase().slice(0, 30)) ||
+            after.ocrText.toLowerCase().includes(clip.toLowerCase().slice(0, 30))
+          );
+          // Only push a PASS when we have positive evidence; absence of evidence
+          // leaves the assertion unrun (weight 0) rather than a false reject.
+          if (grew || pastedVisible) checks.push({ name: 'text_entered', pass: true });
         }
         break;
       }
@@ -694,7 +725,7 @@ export class GroundTruthVerifier implements Verifier {
     // Copy-to-clipboard, but NOT a paste task (paste is type_text-ish). A copy
     // subtask is "select and copy a sentence …"; "paste the copied text" is not.
     if (/\bcopy\b/.test(t) && !/\bpaste\b/.test(t)) return 'copy';
-    if (/type|enter.*text|write.*"|input/.test(t)) return 'type_text';
+    if (/type|paste|enter.*text|write.*"|input/.test(t)) return 'type_text';
     if (/create.*file|save.*as|new\s+document/.test(t)) return 'create_file';
     if (/search|find|look up|google/.test(t)) return 'search';
     return 'generic';
