@@ -52,6 +52,13 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'set_field_value',
     'focus_element',
     'read_screen',
+    // Launch escape hatch: a "type/paste into X" subtask runs in isolation and
+    // has no guarantee X is open or focused. Without these the agent can't open
+    // the target app and improvises badly (e.g. Run-dialog typed into the wrong
+    // window). open_app + focus_window are OS- and app-agnostic.
+    'open_app',
+    'focus_window',
+    'list_windows',
     // OS protocol-handler escape route — single primitive for any
     // "open the right app to do X" intent (mailto, tel, sms, slack,
     // vscode, obsidian, spotify, zoommtg, https, ...).
@@ -67,6 +74,8 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'focus_window',
     'switch_tab_os',
     'open_url',
+    'open_app',      // launch escape hatch — "switch to X" may need to open X first
+    'list_windows',
     'done',
     'give_up',
     'cannot_read',
@@ -91,6 +100,8 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     // open_uri + build_uri skip the form entirely.
     'open_uri',
     'build_uri',
+    // Launch escape hatch — the form's app may not be open/focused yet.
+    'open_app',
     'done',
     'give_up',
     'cannot_read',

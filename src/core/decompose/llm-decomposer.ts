@@ -60,6 +60,14 @@ Rules:
   Only emit a "create new X" step when the user EXPLICITLY says they're
   working in an already-open instance (e.g. "in my open Word doc, start a
   new section" — that's a real new-section step, not scaffolding).
+- NEVER bundle an app LAUNCH with an in-app ACTION in one subtask string.
+  "open X" must be its OWN subtask, separate from what you do inside X. A
+  bundled "open X and <do Y>" is both un-routable (looks compound) and gets
+  mis-handled (the launch never happens cleanly).
+    Bad:  ["open Notepad and paste the copied text"]
+    Good: ["open Notepad", "paste the copied text"]
+    Bad:  ["open Calculator and compute 5*7"]
+    Good: ["open Calculator", "compute 5*7"]
 - Verbs to prefer: open, focus, click, type, press, navigate, select, scroll, save, send.
   Avoid: wait (redundant — see above), check, verify (the verifier handles those).
 - Do NOT invent information the task didn't provide. If an email address or value is missing, leave the subtask at the level of "type the recipient email".
