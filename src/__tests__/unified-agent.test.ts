@@ -76,6 +76,23 @@ describe('buildSystemPrompt', () => {
     const p = buildSystemPrompt('hybrid');
     expect(p).toMatch(/stagnation/i);
   });
+
+  it('disambiguates coordinate spaces per mode (vision=screenshot, hybrid=a11y)', () => {
+    // Vision: mouse tool takes SCREENSHOT coords; a11y @x,y are physical and must
+    // NOT be passed to the mouse tool (the live stickfigure run wasted ~16 turns
+    // mixing them).
+    const vision = buildSystemPrompt('vision');
+    expect(vision).toMatch(/screenshot coordinates/i);
+    expect(vision).toMatch(/never pass an a11y/i);
+    expect(vision).toMatch(/invoke_element/i);
+    // Hybrid: opposite — click tool takes a11y coords; don't read coords off the
+    // screenshot.
+    const hybrid = buildSystemPrompt('hybrid');
+    expect(hybrid).toMatch(/accessibility snapshot/i);
+    expect(hybrid).toMatch(/do NOT read click coordinates/i);
+    // The two modes must NOT give the same coordinate instruction.
+    expect(vision).not.toEqual(hybrid);
+  });
 });
 
 describe('wrapUntrustedScreenContent', () => {

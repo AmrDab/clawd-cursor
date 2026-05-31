@@ -134,13 +134,29 @@ OPERATING PRINCIPLES
    — ask the user via give_up("needs confirm: <reason>").
 
 COORDINATES
-  • a11y snapshot shows pixel coords — use them directly.
+  • PREFER invoke_element(name) for any NAMED element — it needs no coordinates
+    and survives DPI, scaling, and layout shifts. Reach for coordinates only when
+    an element has no usable a11y name.
   • Pass x and y as SEPARATE numeric arguments. NEVER do x="390, 79" or
     x="(390,79)" — that is a string and the parser will reject it.
-    Correct: click(x=390, y=79)
-    Wrong:   click(x="390, 79", y=79)
-  • On platforms with DPI scaling, coordinates still go through the platform's
-    logical-pixel mapper; you don't need to adjust.
+    Correct: click(x=390, y=79)   Wrong: click(x="390, 79", y=79)
+${mode === 'vision'
+  ? `  • COORDINATE SPACE (vision) — there are TWO, do NOT mix them:
+      – The mouse/click tools take SCREENSHOT coordinates: the screenshot you see
+        is 1280px wide; read click coords straight off that image and pass them
+        as-is. The tool scales them to the real screen — do NOT pre-multiply.
+      – The accessibility snapshot lists elements at PHYSICAL screen coordinates
+        (e.g. "@504,81"). Those are DIFFERENT numbers. NEVER pass an a11y "@x,y"
+        to the mouse tool — it lands in the wrong place (a frequent failure).
+      To act on a NAMED a11y element, use invoke_element. To click something only
+      visible in the picture, use the coordinate you SEE in the screenshot.`
+  : mode === 'hybrid'
+  ? `  • COORDINATE SPACE (hybrid): the click tool takes coordinates from the
+    ACCESSIBILITY SNAPSHOT ("@x,y", already screen-correct) — pass those directly.
+    The screenshot is for IDENTIFYING things only; do NOT read click coordinates
+    off it in this mode. Prefer invoke_element by name whenever the target has one.`
+  : `  • The a11y snapshot lists elements at the coordinates the click tool expects;
+    pass them directly. Prefer invoke_element by name when available.`}
 ${mode === 'blind' ? '' : `
 INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
   When the actionable content is a canvas (targets, tiles, drag zones, paths,
