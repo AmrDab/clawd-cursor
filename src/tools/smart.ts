@@ -282,7 +282,7 @@ export function getSmartTools(): ToolDefinition[] {
               const scorePhrase = (phrase: string, tokenCount: number) => {
                 if (!phrase) return 0;
                 if (phrase === targetNorm) return 1.0;
-                let raw = 0;
+                let raw: number;
                 if (phrase.includes(targetNorm) || targetNorm.includes(phrase)) {
                   raw = Math.min(phrase.length, targetNorm.length) / Math.max(phrase.length, targetNorm.length) * 0.9;
                 } else {
