@@ -59,7 +59,6 @@ import {
 import { callLLMWithTools } from '../llm/client';
 import { OcrEngine } from '../platform/ocr-engine';
 import { PLAYBOOKS } from '../tools/playbooks';
-import { composeSend as composeSendPlaybook } from '../tools/playbooks/compose-send';
 import { extractComposeFields } from '../tools/playbooks/extract-compose';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../platform/uri-handler';
 
@@ -1068,22 +1067,21 @@ export class Pipeline {
   }
 
   /**
-   * compose-send specialized path. Two execution strategies, in order:
+   * compose-send specialized path — app-agnostic + OS-agnostic.
    *
-   *   1. mailto: URI dispatch — single OS call pre-fills To/Subject/Body.
-   *      Confirmed working for New Outlook via the resolved-handler path
-   *      (commit 740ead8). If a new compose window appears AND fields
-   *      could be extracted, this is ~1.5 seconds end-to-end with one
-   *      mod+Return to send.
+   * Single strategy: `mailto:` URI dispatch. One OS call pre-fills
+   * To/Subject/Body in whatever the user's default mail app is (we never name
+   * or assume an app), then one mod+Return sends it — unless the task only
+   * asked to compose/draft, in which case we leave the pre-filled draft.
    *
-   *   2. In-app keyboard choreography — PLAYBOOKS['compose-send']. Used
-   *      when the URI dispatch fails (no registered handler, or the
-   *      target app ignores the dispatch). Drives the app's native
-   *      compose UI with mod+n + Tab + type, finished with mod+Return.
-   *
-   * Returns failureReason='playbook_miss' on either path failure so the
-   * ladder escalates to blind. Doesn't mark the chain as hard-failed —
-   * the agent ladder is a legitimate recovery mode.
+   * The former Strategy 2 (an in-app keyboard choreography that hard-coded
+   * per-app Tab counts — Outlook=3, Mail.app=1) was retired: any blind
+   * keystroke sequence must assume a specific app's field layout, which is
+   * exactly the app-coupling we avoid. When the mailto path can't run (no
+   * handler / no compose window), we return failureReason='playbook_miss' so
+   * the agent ladder takes over and fills the REAL form by perceiving it
+   * (and it can dispatch mailto via open_uri on any OS). Not a hard chain
+   * failure — the ladder is a legitimate recovery mode.
    */
   private async runComposeSendPlaybook(task: string, env: StrategyEnv): Promise<StrategyResult> {
     const fields = extractComposeFields(task);
@@ -1096,72 +1094,63 @@ export class Pipeline {
     // pre-filled draft for the user to review (no auto-firing a one-shot Send).
     const wantsSend = taskWantsSend(task);
 
-    // Strategy 1: mailto: URI — pre-fill everything in one shot.
-    if (process.platform === 'win32') {
-      const uri = buildMailtoUri(fields);
-      env.log.info('pipeline.playbook.compose_send.try_mailto', { recipient: fields.recipient, hasSubject: !!fields.subject, hasBody: !!fields.body, send: wantsSend });
-      try {
-        const exe = await resolveSchemeHandlerExecutable('mailto');
-        if (exe) {
-          const launchResult = await launchHandlerAndVerify(exe, uri, { waitMs: 5000 });
-          if (launchResult.success && launchResult.windowOpened) {
-            if (!wantsSend) {
-              // Draft-only: compose opened pre-filled, leave it for review.
-              env.log.info('pipeline.playbook.compose_send.draft_via_mailto', {
-                recipient: fields.recipient, composeTitle: launchResult.hwndLabel,
-              });
-              return {
-                success: true,
-                skipVerifier: true,
-                text: `compose-send (mailto): opened a pre-filled draft to ${fields.recipient} in "${launchResult.hwndLabel ?? '(unknown)'}". NOT sent — task asked to compose, not send. Review and send when ready.`,
-                path: 'playbook',
-              };
-            }
-            // Compose appeared with everything pre-filled. Send it.
-            await this.deps.adapter.keyPress('mod+Return');
-            await new Promise(r => setTimeout(r, 600));
-            env.log.info('pipeline.playbook.compose_send.sent_via_mailto', {
-              recipient: fields.recipient,
-              handlerExe: exe,
-              composeTitle: launchResult.hwndLabel,
+    // Single strategy: the OS `mailto:` handler — app-agnostic and OS-agnostic.
+    // One URI pre-fills To/Subject/Body in whatever the user's default mail app
+    // is; we never name or assume an app. `resolveSchemeHandlerExecutable`
+    // self-guards to null where it can't resolve (non-Windows today), so there's
+    // no platform branch here. On ANY miss we defer to the agent ladder, which
+    // perceives the real compose form (and can dispatch mailto via open_uri on
+    // any OS) — far more robust than a blind, app-layout-assuming keystroke
+    // choreography (the retired Strategy 2 hard-coded per-app Tab counts).
+    const uri = buildMailtoUri(fields);
+    env.log.info('pipeline.playbook.compose_send.try_mailto', { recipient: fields.recipient, hasSubject: !!fields.subject, hasBody: !!fields.body, send: wantsSend });
+    try {
+      const exe = await resolveSchemeHandlerExecutable('mailto');
+      if (exe) {
+        const launchResult = await launchHandlerAndVerify(exe, uri, { waitMs: 5000 });
+        if (launchResult.success && launchResult.windowOpened) {
+          if (!wantsSend) {
+            // Draft-only: compose opened pre-filled, leave it for review.
+            env.log.info('pipeline.playbook.compose_send.draft_via_mailto', {
+              recipient: fields.recipient, composeTitle: launchResult.hwndLabel,
             });
             return {
               success: true,
-              text: `compose-send (mailto): opened compose "${launchResult.hwndLabel ?? '(unknown)'}" and sent to ${fields.recipient}.`,
+              skipVerifier: true,
+              text: `compose-send (mailto): opened a pre-filled draft to ${fields.recipient} in "${launchResult.hwndLabel ?? '(unknown)'}". NOT sent — task asked to compose, not send. Review and send when ready.`,
               path: 'playbook',
             };
           }
-          env.log.info('pipeline.playbook.compose_send.mailto_no_window', { handlerExe: exe });
-        } else {
-          env.log.info('pipeline.playbook.compose_send.no_handler', {});
+          // Compose appeared with everything pre-filled. Send it.
+          await this.deps.adapter.keyPress('mod+Return');
+          await new Promise(r => setTimeout(r, 600));
+          env.log.info('pipeline.playbook.compose_send.sent_via_mailto', {
+            recipient: fields.recipient,
+            handlerExe: exe,
+            composeTitle: launchResult.hwndLabel,
+          });
+          return {
+            success: true,
+            text: `compose-send (mailto): opened compose "${launchResult.hwndLabel ?? '(unknown)'}" and sent to ${fields.recipient}.`,
+            path: 'playbook',
+          };
         }
-      } catch (err) {
-        env.log.warn('pipeline.playbook.compose_send.mailto_threw', { error: err instanceof Error ? err.message : String(err) });
+        env.log.info('pipeline.playbook.compose_send.mailto_no_window', { handlerExe: exe });
+      } else {
+        env.log.info('pipeline.playbook.compose_send.no_handler', {});
       }
+    } catch (err) {
+      env.log.warn('pipeline.playbook.compose_send.mailto_threw', { error: err instanceof Error ? err.message : String(err) });
     }
 
-    // Strategy 2: in-app keyboard choreography fallback. Pass the send intent
-    // through so a draft-only task stops before the mod+Return submit.
-    try {
-      const result = await composeSendPlaybook({
-        adapter: this.deps.adapter,
-        input: { to: fields.recipient, subject: fields.subject, body: fields.body },
-        send: wantsSend,
-      });
-      env.log.info('pipeline.playbook.compose_send.in_app', { success: result.success, steps: result.steps.length, send: wantsSend });
-      return {
-        success: result.success,
-        // Draft-only succeeds the moment the form is filled — no send to verify.
-        skipVerifier: result.success && !wantsSend,
-        text: result.text,
-        path: 'playbook',
-        failureReason: result.success ? undefined : 'playbook_miss',
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      env.log.warn('pipeline.playbook.compose_send.in_app_threw', { error: msg });
-      return { success: false, text: `compose-send (in-app): ${msg}`, path: 'playbook', failureReason: 'playbook_miss' };
-    }
+    // No mailto handler / compose window — defer to the agent ladder, which
+    // fills the actual form by perceiving it (a11y/vision) and reasoning.
+    return {
+      success: false,
+      text: 'compose-send: no mailto handler or compose window — deferring to the perception agent.',
+      path: 'playbook',
+      failureReason: 'playbook_miss',
+    };
   }
 
   /**

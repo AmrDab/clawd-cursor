@@ -25,7 +25,6 @@
  */
 
 import type { PlatformAdapter } from '../../platform/types';
-import { composeSend } from './compose-send';
 import { findReplace } from './find-replace';
 
 export interface PlaybookResult {
@@ -40,10 +39,6 @@ export interface PlaybookArgs {
   adapter: PlatformAdapter;
   /** Free-form args (recipient, subject, body, findText, etc.). */
   input: Record<string, string | undefined>;
-  /** Whether to fire the submit/send keystroke at the end. Defaults to true
-   *  (backward-compatible). compose-send passes false for draft-only tasks
-   *  (the user asked to compose, not send) so the form is left for review. */
-  send?: boolean;
 }
 
 export type Playbook = (args: PlaybookArgs) => Promise<PlaybookResult>;
@@ -54,8 +49,12 @@ export type Playbook = (args: PlaybookArgs) => Promise<PlaybookResult>;
  * playbooks that name an app are an antipattern and should be merged
  * into a capability-keyed sibling.
  */
+// NOTE: 'compose-send' is intentionally NOT in this registry. matchPlaybook
+// still routes mail intents to the 'compose-send' KEY, but the pipeline
+// special-cases that key to its OS-`mailto:` path (app-agnostic) and, on miss,
+// defers to the perception agent — there is no in-app keyboard choreography to
+// register here. Registry-dispatched playbooks must be genuinely app-agnostic.
 export const PLAYBOOKS: Record<string, Playbook> = {
-  'compose-send': composeSend,
   'find-replace': findReplace,
 };
 
@@ -87,4 +86,4 @@ export function matchPlaybook(task: string, _activeApp: string): string | null {
   return null;
 }
 
-export { composeSend, findReplace };
+export { findReplace };
