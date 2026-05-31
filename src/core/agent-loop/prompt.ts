@@ -158,10 +158,16 @@ ${mode === 'vision'
       To act on a NAMED a11y element, use invoke_element. To click something only
       visible in the picture, use the coordinate you SEE in the screenshot.`
   : mode === 'hybrid'
-  ? `  • COORDINATE SPACE (hybrid): the click tool takes coordinates from the
-    ACCESSIBILITY SNAPSHOT ("@x,y", already screen-correct) — pass those directly.
-    The screenshot is for IDENTIFYING things only; do NOT read click coordinates
-    off it in this mode. Prefer invoke_element by name whenever the target has one.`
+  ? `  • COORDINATE SPACE (hybrid): the click/drag tools default to ACCESSIBILITY
+    SNAPSHOT coords ("@x,y", already screen-correct) — pass those directly.
+    Prefer invoke_element by name whenever the target has one.
+    – If the a11y snapshot is EMPTY/sparse (a webview or canvas) and the target
+      is only visible in the SCREENSHOT, read its x,y off the screenshot (which
+      is 1280px wide) and pass space:"image" — the tool scales it to the real
+      screen. Do NOT pre-multiply, and do NOT pass screenshot coords without
+      space:"image" (they would land at a fraction of the position, on the
+      wrong window). If clicks keep landing on the wrong window, you are likely
+      omitting space:"image".`
   : `  • The a11y snapshot lists elements at the coordinates the click tool expects;
     pass them directly. Prefer invoke_element by name when available.`}
 ${mode === 'blind' ? '' : `

@@ -23,6 +23,7 @@ import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
 import type { Capability } from '../classify/capability';
 import { paletteFor } from './palettes';
 import { getCompoundTools, COMPOUND_REPLACES } from './compound';
+import { imageScale, scaleCoord } from './coord-scale';
 import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
 
@@ -381,7 +382,7 @@ export function buildUnifiedTools(
     // ─── INPUT (mouse) ──────────────────────────────────────────
     {
       name: 'click',
-      description: 'Click at logical-pixel (x,y). Use coords from the a11y snapshot. Falls back from invoke_element when an element has no a11y name.',
+      description: 'Click at (x,y). Default coords come from the a11y snapshot (already screen-correct). If you read the target off the SCREENSHOT instead, pass space:"image" so the tool scales it. Prefer invoke_element when the target has an a11y name.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -389,22 +390,31 @@ export function buildUnifiedTools(
           y: { type: 'number' },
           button: { type: 'string', enum: ['left', 'right'] },
           count: { type: 'number', description: '1=single, 2=double' },
+          space: COORD_SPACE_SCHEMA,
         },
         required: ['x', 'y'],
         additionalProperties: false,
       },
       changesScreen: true,
       async execute(args, ctx) {
-        const { x, y, warning } = coerceCoord(args.x, args.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        const { x: ix, y: iy, warning } = coerceCoord(args.x, args.y);
+        if (!Number.isFinite(ix) || !Number.isFinite(iy)) {
           return { success: false, isError: true, text: `click: x/y must be finite numbers, got x=${JSON.stringify(args.x)} y=${JSON.stringify(args.y)}` };
         }
         const button = args.button === 'right' ? 'right' : 'left';
         const count = args.count === 2 ? 2 : 1;
+        // SCALE: 'image' coords (read off the 1280-wide screenshot) → physical;
+        // 'screen'/default (a11y coords, already physical) → pass through.
+        const space = args.space === 'image' ? 'image' : 'screen';
+        const scale = space === 'image' ? imageScale(ctx) : 1;
+        const x = scaleCoord(ix, scale);
+        const y = scaleCoord(iy, scale);
+        const before = await ctx.platform.getActiveWindow().catch(() => null);
         await ctx.platform.mouseClick(x, y, { button, count });
         await sleep(150);
+        const after = await ctx.platform.getActiveWindow().catch(() => null);
         const note = warning ? ` (${warning})` : '';
-        return { success: true, text: `Clicked ${button} x${count} at (${x},${y})${note}` };
+        return { success: true, text: `Clicked ${button} x${count} at ${coordBreadcrumb(ix, iy, x, y, space, scale, ctx)}${focusBreadcrumb(before, after)}${note}` };
       },
     },
 
@@ -418,6 +428,7 @@ export function buildUnifiedTools(
           startY: { type: 'number' },
           endX: { type: 'number' },
           endY: { type: 'number' },
+          space: COORD_SPACE_SCHEMA,
         },
         required: ['startX', 'startY', 'endX', 'endY'],
         additionalProperties: false,
@@ -429,9 +440,15 @@ export function buildUnifiedTools(
         if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) {
           return { success: false, isError: true, text: `drag: startX/startY/endX/endY must be finite numbers, got ${JSON.stringify(args)}` };
         }
-        await ctx.platform.mouseDrag(start.x, start.y, end.x, end.y);
+        const space = args.space === 'image' ? 'image' : 'screen';
+        const scale = space === 'image' ? imageScale(ctx) : 1;
+        const sx = scaleCoord(start.x, scale), sy = scaleCoord(start.y, scale);
+        const ex = scaleCoord(end.x, scale), ey = scaleCoord(end.y, scale);
+        const before = await ctx.platform.getActiveWindow().catch(() => null);
+        await ctx.platform.mouseDrag(sx, sy, ex, ey);
         await sleep(200);
-        return { success: true, text: `Dragged (${start.x},${start.y})→(${end.x},${end.y})` };
+        const after = await ctx.platform.getActiveWindow().catch(() => null);
+        return { success: true, text: `Dragged ${space} (${start.x},${start.y})→(${end.x},${end.y}) → screen (${sx},${sy})→(${ex},${ey}) [×${scale}]${focusBreadcrumb(before, after)}` };
       },
     },
 
@@ -445,6 +462,7 @@ export function buildUnifiedTools(
           y: { type: 'number' },
           direction: { type: 'string', enum: ['up', 'down'] },
           amount: { type: 'number', description: 'Wheel ticks (default 3)' },
+          space: COORD_SPACE_SCHEMA,
         },
         required: ['direction'],
         additionalProperties: false,
@@ -455,11 +473,13 @@ export function buildUnifiedTools(
         const amount = typeof args.amount === 'number' ? args.amount : 3;
         // Default to screen-center when x/y missing; coerce strings via the helper.
         const hasXY = args.x !== undefined || args.y !== undefined;
-        let x = Math.floor(ctx.screen.logicalWidth / 2);
-        let y = Math.floor(ctx.screen.logicalHeight / 2);
+        const space = args.space === 'image' ? 'image' : 'screen';
+        const scale = space === 'image' ? imageScale(ctx) : 1;
+        let x = Math.floor(ctx.screen.physicalWidth / 2);
+        let y = Math.floor(ctx.screen.physicalHeight / 2);
         if (hasXY) {
           const c = coerceCoord(args.x, args.y);
-          if (Number.isFinite(c.x) && Number.isFinite(c.y)) { x = c.x; y = c.y; }
+          if (Number.isFinite(c.x) && Number.isFinite(c.y)) { x = scaleCoord(c.x, scale); y = scaleCoord(c.y, scale); }
         }
         await ctx.platform.mouseScroll(x, y, dir, amount);
         await sleep(150);
@@ -1329,6 +1349,41 @@ function buildWinQuery(args: Record<string, unknown>): { processName?: string; p
   if (typeof args.processId === 'number') q.processId = args.processId;
   if (typeof args.title === 'string') q.title = args.title;
   return Object.keys(q).length ? q : undefined;
+}
+
+/** Shared `space` arg schema for the granular pointer tools (click/drag/scroll). */
+const COORD_SPACE_SCHEMA = {
+  type: 'string',
+  enum: ['screen', 'image'],
+  description:
+    'Coordinate space of the x/y you pass. "screen" (default) = accessibility-snapshot coords, already correct for the real screen. "image" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use "image" ONLY when the target is not in the a11y snapshot and you read it off the picture.',
+} as const;
+
+/** One-line coordinate breadcrumb for tool-result text: makes the input space,
+ *  the scaled screen coords, and the scale factor visible so a wrong-window
+ *  click is diagnosable from logs alone (no screenshot needed). */
+function coordBreadcrumb(
+  ix: number, iy: number, sx: number, sy: number,
+  space: string, scale: number, ctx: AgentToolContext,
+): string {
+  const scaled = scale !== 1 ? ` → screen (${sx},${sy})` : '';
+  return `${space} (${ix},${iy})${scaled} [×${scale}, screen ${ctx.screen.physicalWidth}×${ctx.screen.physicalHeight}]`;
+}
+
+/** Foreground-window before→after, so focus theft (clicks landing on the wrong
+ *  window) is visible in the result text. Empty when focus didn't change. */
+function focusBreadcrumb(
+  before: { title?: string } | null,
+  after: { title?: string } | null,
+): string {
+  const b = before?.title ?? '?';
+  const a = after?.title ?? '?';
+  if (b === a) return '';
+  return ` · focus "${truncateTitle(b)}"→"${truncateTitle(a)}"`;
+}
+
+function truncateTitle(s: string): string {
+  return s.length > 32 ? s.slice(0, 31) + '…' : s;
 }
 
 function sleep(ms: number): Promise<void> {

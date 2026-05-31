@@ -27,6 +27,7 @@
  */
 
 import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
+import { imageScale, scaleCoord as px } from './coord-scale';
 
 function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
@@ -44,28 +45,11 @@ const MOUSE_ACTIONS = [
   'scroll', 'drag', 'drag_stepped',
 ] as const;
 
-/**
- * Downsample target width the vision screenshot is resized to. Mirrors
- * LLM_TARGET_WIDTH in the platform adapters / native-desktop — keep in sync.
- */
-const LLM_TARGET_WIDTH = 1280;
-
-/**
- * Vision-mode coordinates arrive in IMAGE space: the model only ever sees a
- * screenshot downsampled to <=1280px wide, so it picks coordinates in that
- * space. The platform mouse layer expects REAL screen pixels. Scale by the
- * exact factor every adapter applies when it downsamples — physicalWidth /
- * min(physicalWidth, 1280) — which is also what the MCP mouse_click path does
- * via getMouseScaleFactor(). Without this, on a 2× display a click meant for
- * image (649,546) lands at screen (649,546) — half-way to the target, on
- * whatever window happens to be there. Stays OS-agnostic: the only input is
- * the adapter-reported physical width.
- */
-function imageScale(ctx: { screen?: { physicalWidth?: number } }): number {
-  const w = ctx.screen?.physicalWidth ?? 0;
-  return w > LLM_TARGET_WIDTH ? w / LLM_TARGET_WIDTH : 1;
-}
-const px = (v: number, scale: number): number => Math.round(v * scale);
+// Vision-mode coordinates arrive in IMAGE space (the model only ever sees a
+// screenshot downsampled to <=1280px wide). imageScale()/scaleCoord() convert
+// to REAL screen pixels — shared with the granular tools via coord-scale.ts so
+// the two paths can never drift. Without this, on a 2× display a click meant for
+// image (649,546) lands at screen (649,546) — half-way to the target.
 
 export const mouseCompound: UnifiedTool = {
   name: 'mouse',

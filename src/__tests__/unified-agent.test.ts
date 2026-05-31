@@ -85,11 +85,13 @@ describe('buildSystemPrompt', () => {
     expect(vision).toMatch(/screenshot coordinates/i);
     expect(vision).toMatch(/never pass an a11y/i);
     expect(vision).toMatch(/invoke_element/i);
-    // Hybrid: opposite — click tool takes a11y coords; don't read coords off the
-    // screenshot.
+    // Hybrid: click tool DEFAULTS to a11y coords; when the a11y tree is empty
+    // and the target is read off the screenshot, the model must pass space:"image"
+    // so the tool scales it (the empty-webview wrong-window failure mode).
     const hybrid = buildSystemPrompt('hybrid');
     expect(hybrid).toMatch(/accessibility snapshot/i);
-    expect(hybrid).toMatch(/do NOT read click coordinates/i);
+    expect(hybrid).toMatch(/space:"image"/i);
+    expect(hybrid).toMatch(/wrong window/i);
     // The two modes must NOT give the same coordinate instruction.
     expect(vision).not.toEqual(hybrid);
   });

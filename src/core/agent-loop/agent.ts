@@ -38,6 +38,7 @@ import {
   type LLMAssistantBlock,
 } from '../../llm/client';
 import { buildSystemPrompt, renderSnapshot, renderHistory, wrapUntrustedScreenContent } from './prompt';
+import { LLM_TARGET_WIDTH } from './coord-scale';
 import { buildUnifiedTools } from './tools';
 import type {
   AgentInput,
@@ -188,13 +189,26 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     // when looking at the screenshot — passing image coords straight
     // through is correct. Spelled out here because models that DO
     // know about DPI sometimes try to "help" by pre-scaling.
-    const ssScale = screen.physicalWidth > 0 && screen.logicalWidth > 0
-      ? (screen.physicalWidth / screen.logicalWidth).toFixed(2)
-      : '1.00';
+    // The TRUE screenshot scale is physical→1280-image (what the model sees),
+    // NOT physicalWidth/logicalWidth — on a 2560-wide screen with dpiRatio 1
+    // those differ: physical/logical is 1.0 but the screenshot is still
+    // downsampled 2× (2560→1280). Use the real image scale so the note matches
+    // what the tools actually do.
+    const imgScaleNum = screen.physicalWidth > LLM_TARGET_WIDTH
+      ? screen.physicalWidth / LLM_TARGET_WIDTH
+      : 1;
+    const ssScale = imgScaleNum.toFixed(2);
     const dpiNote =
       input.mode === 'vision'
-        ? `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, DPI scale ${ssScale}×. Screenshots are downsampled to 1280px wide. Pass screenshot pixel coords DIRECTLY to mouse_* tools — they scale internally. Do NOT pre-multiply.`
-        : `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, DPI scale ${ssScale}×.`;
+        ? `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical. Screenshots are downsampled to ${LLM_TARGET_WIDTH}px wide (×${ssScale}). Pass screenshot pixel coords DIRECTLY to mouse_* tools — they scale internally. Do NOT pre-multiply.`
+        : `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, screenshot ${LLM_TARGET_WIDTH}px wide (×${ssScale} to screen).`;
+    log.info('agent.coordinate_space', {
+      mode: input.mode,
+      physical: `${screen.physicalWidth}×${screen.physicalHeight}`,
+      screenshotScale: ssScale,
+      snapshotSpace: 'screen',
+      note: 'a11y coords = screen space (pass-through); screenshot coords = image space (need space:image)',
+    });
 
     // Cross-rung handoff: if a previous agent (the morph's other half) worked
     // this same task and escalated to us, lead with its note so we continue
@@ -664,7 +678,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           tool: call.name,
           success: result.success,
           ms: toolMs,
-          text: truncate(result.text, 120),
+          // 200 (was 120) so the click/drag coordinate-space + focus breadcrumb
+          // survives — that line is what makes wrong-window clicks diagnosable.
+          text: truncate(result.text, 200),
         });
 
         // 5c. Re-capture perception if the tool changed the screen. We do
