@@ -827,9 +827,22 @@ export function buildUnifiedTools(
         const u = String(args.url ?? '');
         if (!/^https?:\/\//i.test(u)) return { success: false, text: 'open_url: URL must start with http(s)://' };
         try {
-          if (ctx.platform.platform === 'darwin') await ctx.platform.launchApp('open', { url: u });
-          else if (ctx.platform.platform === 'linux') await ctx.platform.launchApp('xdg-open', { url: u });
-          else await ctx.platform.launchApp('explorer.exe', { url: u });
+          if (ctx.platform.platform === 'darwin') {
+            await ctx.platform.launchApp('open', { url: u });
+          } else if (ctx.platform.platform === 'linux') {
+            await ctx.platform.launchApp('xdg-open', { url: u });
+          } else {
+            // Windows: launch the REGISTERED https handler directly (e.g.
+            // msedge.exe), not `explorer.exe <url>`. explorer drops the URL in a
+            // background tab and opens no explorer window, so launchApp's
+            // window-find misses and falls back to a Start-menu search that
+            // presses Win and types — spurious "searching" that derails the run.
+            // The resolved browser exe HAS a findable window, so launchApp
+            // foregrounds it cleanly with no fallback.
+            const { resolveSchemeHandlerExecutable } = await import('../../platform/uri-handler');
+            const exe = await resolveSchemeHandlerExecutable('https').catch(() => null);
+            await ctx.platform.launchApp(exe ?? 'explorer.exe', { url: u });
+          }
           await sleep(800);
           return { success: true, text: `Opened URL: ${u}` };
         } catch (err) {

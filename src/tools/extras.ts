@@ -534,7 +534,14 @@ export function getExtraTools(): ToolDefinition[] {
           } else if (ctx.platform.platform === 'linux') {
             await ctx.platform.launchApp('xdg-open', { url: u });
           } else {
-            await ctx.platform.launchApp('explorer.exe', { url: u });
+            // Windows: launch the REGISTERED https handler directly rather than
+            // `explorer.exe <url>` — the latter opens no explorer window, so
+            // launchApp's window-find misses and falls back to a Start-menu
+            // search (presses Win and types). The resolved browser exe has a
+            // findable window and foregrounds cleanly. See agent-loop open_url.
+            const { resolveSchemeHandlerExecutable } = await import('../platform/uri-handler');
+            const exe = await resolveSchemeHandlerExecutable('https').catch(() => null);
+            await ctx.platform.launchApp(exe ?? 'explorer.exe', { url: u });
           }
           return { text: `Opened URL: ${u}` };
         } catch (err) {
