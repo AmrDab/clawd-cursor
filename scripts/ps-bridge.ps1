@@ -424,6 +424,54 @@ function Cmd-FindElement {
     return ,$results
 }
 
+# ── Resolve a matched element to the EDITABLE control it represents ───────────
+# Name/label matching often lands on a static label (e.g. the Win11 Save dialog's
+# "File name:" is a Text label, not the editable field) or on a ComboBox wrapping
+# an Edit. Walk to the real editable target so set-value writes somewhere writable.
+# App-agnostic: relies only on UIA control types and the LabeledBy relationship.
+function Resolve-EditableTarget {
+    param($el)
+    if ($null -eq $el) { return $null }
+    $EDIT  = [System.Windows.Automation.ControlType]::Edit
+    $DOC   = [System.Windows.Automation.ControlType]::Document
+    $COMBO = [System.Windows.Automation.ControlType]::ComboBox
+    $editCond  = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $EDIT)
+    $editable  = New-Object System.Windows.Automation.OrCondition(
+        $editCond,
+        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $DOC)),
+        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $COMBO)))
+    $ct = $el.Current.ControlType
+    # 1) Already editable.
+    if ($ct -eq $EDIT -or $ct -eq $DOC) { return $el }
+    if ($ct -eq $COMBO) { try { $i = $el.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCond); if ($i) { return $i } } catch {}; return $el }
+    # 2) Editable descendant (matched a group/pane wrapping the field).
+    try { $d = $el.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editable); if ($d) { if ($d.Current.ControlType -eq $COMBO) { try { $i = $d.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCond); if ($i) { return $i } } catch {} }; return $d } } catch {}
+    # 3) Matched a label: find the editable control it labels among its siblings.
+    try {
+        $parent = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($el)
+        if ($parent) {
+            $cands = $parent.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editable)
+            $fallback = $null
+            for ($k = 0; $k -lt $cands.Count; $k++) {
+                $cand = $cands.Item($k)
+                if ($null -eq $fallback) { $fallback = $cand }
+                try {
+                    $lb = $cand.GetCurrentPropertyValue([System.Windows.Automation.AutomationElement]::LabeledByProperty)
+                    if ($lb -and $lb.Current.Name -eq $el.Current.Name) {
+                        if ($cand.Current.ControlType -eq $COMBO) { try { $i = $cand.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCond); if ($i) { return $i } } catch {} }
+                        return $cand
+                    }
+                } catch {}
+            }
+            if ($fallback) {
+                if ($fallback.Current.ControlType -eq $COMBO) { try { $i = $fallback.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCond); if ($i) { return $i } } catch {} }
+                return $fallback
+            }
+        }
+    } catch {}
+    return $el
+}
+
 # ── Command: invoke-element (fuzzy name match) ────────────────────────────────
 function Cmd-InvokeElement {
     param($cmd)
@@ -503,12 +551,37 @@ function Cmd-InvokeElement {
         }
         "set-value" {
             if ($value -eq "") { return @{ success=$false; error="value required for set-value" } }
+            # App-agnostic set-value. The named element is often NOT the editable field
+            # itself — e.g. the Win11 Save dialog's "File name:" is a read-only Text
+            # label, and other fields are a ComboBox wrapping an Edit. Resolve to the
+            # real editable target, set it via ValuePattern, VERIFY, then fall back to
+            # keyboard entry. Verification catches silent no-ops (wrong-name saves).
+            $readVal = { param($el) try { return $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { return $null } }
+            $target = Resolve-EditableTarget $element
+
+            # 1) Writable ValuePattern on the resolved target, verified.
             try {
-                $p = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-                $p.SetValue($value)
-                return @{ success=$true; action="set-value"; value=$value }
+                $vp = $target.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                if (-not $vp.Current.IsReadOnly) {
+                    $vp.SetValue($value)
+                    if ((& $readVal $target) -eq $value) { return @{ success=$true; action="set-value"; value=$value; method="ValuePattern" } }
+                }
+            } catch { }
+
+            # 2) Keyboard fallback: focus the resolved target, select-all, type. Last
+            #    resort for controls with no usable (writable) ValuePattern.
+            try {
+                Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+                $target.SetFocus()
+                Start-Sleep -Milliseconds 60
+                $esc = [regex]::Replace($value, '([+^%~(){}\[\]])', '{$1}')
+                [System.Windows.Forms.SendKeys]::SendWait("^a"); Start-Sleep -Milliseconds 30
+                [System.Windows.Forms.SendKeys]::SendWait($esc); Start-Sleep -Milliseconds 60
+                $after = & $readVal $target
+                if ($after -eq $value -or $null -eq $after) { return @{ success=$true; action="set-value"; value=$value; method="keyboard" } }
+                return @{ success=$false; error="set-value did not stick (got '$after')" }
             } catch {
-                return @{ success=$false; error="ValuePattern not supported: $($_.Exception.Message)" }
+                return @{ success=$false; error="set-value failed (ValuePattern + keyboard): $($_.Exception.Message)" }
             }
         }
         "get-value" {
