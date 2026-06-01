@@ -189,17 +189,21 @@ export function resolveSubtaskTargetWindow(
 ): WindowInfo | undefined {
   if (isLaunchOrNavigate(subtask)) return undefined;
 
+  // An explicitly-named open app ALWAYS wins over the web/mail intent heuristic —
+  // "play a video in VLC" must target VLC, not the browser, even though "video"
+  // reads as web intent. (Named check first fixes that over-correction.)
+  const lower = subtask.toLowerCase();
+  const named = survey.openWindows.find(
+    w => isTargetableWindow(w) && lower.includes(exeBasename(w.processName).toLowerCase()),
+  );
+  if (named) return named;
+
   if (WEB_INTENT_PATTERN.test(subtask) && isTargetableWindow(survey.handlers.browser?.openWindow)) {
     return survey.handlers.browser!.openWindow;
   }
   if (MAIL_INTENT_PATTERN.test(subtask) && isTargetableWindow(survey.handlers.mail?.openWindow)) {
     return survey.handlers.mail!.openWindow;
   }
-  const lower = subtask.toLowerCase();
-  const named = survey.openWindows.find(
-    w => isTargetableWindow(w) && lower.includes(exeBasename(w.processName).toLowerCase()),
-  );
-  if (named) return named;
 
   if (isTargetableWindow(foreground ?? undefined)) return foreground!;
   return undefined;

@@ -180,6 +180,11 @@ export class Router {
         // the agent. Fail-SAFE: when unsure, the agent does it.
         const rest = navMatch[1]
           .replace(urlTok, ' ')
+          // Strip a trailing LOCATION qualifier ("in/on/using/via <phrase>",
+          // e.g. "in Microsoft Edge", "using Chrome") — app-agnostic, no browser
+          // names enumerated. A real second STEP joins with "and"/"then"/","; the
+          // lookaheads keep "in incognito and search" from being stripped.
+          .replace(/\s+(?:in|on|using|via)\s+(?![^,]*\b(?:and|then)\b)[^,]+$/i, ' ')
           .replace(/\b(in|on|at|to|the|a|an|my|its|using|via|with|from|default|new|incognito|private|browser|tab|window|page|please)\b/gi, ' ')
           .replace(/[^\p{L}\p{N}]+/gu, ' ')
           .trim();

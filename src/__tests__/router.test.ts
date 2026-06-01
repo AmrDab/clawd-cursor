@@ -276,6 +276,22 @@ describe('Router.route — URL nav with verification', () => {
     expect((await r.route('go to github.com in a new tab')).handled).toBe(true);
     expect(adapter.launchApp.mock.calls[0][1].url).toBe('https://github.com');
   });
+
+  it('REGRESSION: handles "navigate to X in Microsoft Edge" (browser-name qualifier)', async () => {
+    // Run 0a0dbd8d: this was wrongly refused because "Microsoft Edge" survived the
+    // benign strip. "in <app/browser>" is a location qualifier, not a 2nd step.
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [], platform: 'win32' });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    expect((await r.route('navigate to https://www.youtube.com in Microsoft Edge')).handled).toBe(true);
+    expect(adapter.launchApp.mock.calls[0][1].url).toBe('https://www.youtube.com');
+  });
+
+  it('still REFUSES "navigate to X in incognito and search" (real 2nd step after qualifier)', async () => {
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [] });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    expect((await r.route('navigate to youtube.com in incognito and search for adele')).handled).toBe(false);
+    expect(adapter.launchApp).not.toHaveBeenCalled();
+  });
 });
 
 describe('Router.route — web-service redirect (v0.9.0 fix)', () => {

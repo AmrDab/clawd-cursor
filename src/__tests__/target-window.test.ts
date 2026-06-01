@@ -60,6 +60,13 @@ describe('resolveSubtaskTargetWindow', () => {
     expect(resolveSubtaskTargetWindow('upvote the post', s, null)?.processName).toBe('msedge.exe');
   });
 
+  it('a NAMED open app beats the web-intent heuristic (video/channel/post nouns)', () => {
+    const vlc = win('VLC media player', 'vlc.exe');
+    const s = survey([vlc, edge], { browser: { name: 'msedge', openWindow: edge } });
+    // "video" reads as web intent, but VLC is named → target VLC, not the browser.
+    expect(resolveSubtaskTargetWindow('play a video in vlc', s, null)?.processName).toBe('vlc.exe');
+  });
+
   it('anchors to an open app the subtask names by process', () => {
     const s = survey([settings, notepad]);
     expect(resolveSubtaskTargetWindow('paste the text into notepad and save', s, settings)?.processName)
