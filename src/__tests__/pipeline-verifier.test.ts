@@ -202,6 +202,10 @@ describe('Pipeline ground-truth verifier wiring', () => {
     // The user is told it was attempted but unverified — so they can check
     // (rather than the pipeline silently sending again).
     expect(result.text ?? '').toMatch(/not retrying|one-shot|verify the result/i);
+    // HONEST REPORTING: an unverified one-shot action must NOT report clean
+    // success — the user is told to check, not shown "✅ done".
+    expect(result.success).toBe(false);
+    expect(result.text ?? '').toMatch(/unverified|could not be verified|please (check|verify)/i);
   });
 
   it('agent success + verifier REJECT → ladder climbs to hybrid', async () => {

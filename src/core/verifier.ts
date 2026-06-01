@@ -508,10 +508,15 @@ export class GroundTruthVerifier implements Verifier {
       case 'type_text': {
         const text = this.extractQuotedContent(opts.task);
         if (text) {
-          // Either the text appears on screen, or it's in the focused element value, or in clipboard.
-          const visible = after.ocrText.toLowerCase().includes(text.toLowerCase().slice(0, 25))
-                       || (after.focusedElement?.value?.toLowerCase().includes(text.toLowerCase().slice(0, 25)) ?? false);
-          checks.push({ name: 'text_appeared', pass: visible });
+          const probe = text.toLowerCase().slice(0, 25);
+          const inAfter = after.ocrText.toLowerCase().includes(probe)
+                       || (after.focusedElement?.value?.toLowerCase().includes(probe) ?? false);
+          // Require the literal to have NEWLY appeared — if the focused field
+          // already showed it before the action, typing was a no-op and must
+          // not false-pass (before.ocrText is empty by design, so this checks
+          // the focused-element value delta).
+          const inBefore = opts.before.focusedElement?.value?.toLowerCase().includes(probe) ?? false;
+          checks.push({ name: 'text_appeared', pass: inAfter && !inBefore });
         } else {
           // No literal in the task (a PASTE, or "type a sentence about X"). The
           // proof is that the focused field GAINED text, or the clipboard's

@@ -64,7 +64,13 @@ const READY_TIMEOUT_MS = 8_000;
  * decomposer is supposed to split them first; if the router sees "X and Y"
  * with action verbs on both sides it refuses rather than guess.
  */
-const COMPOUND_PATTERN = /\b(and|then)\b.*\b(type|click|press|open|save|send|scroll|navigate|go|visit|search|copy|paste|close|draw|sketch|paint|write|compute|calculate|fill|submit|enter|summarize|describe|read|select|focus|switch|minimize|maximize|check|uncheck|highlight|delete|move|rename|find|look)\b/i;
+// Action verbs that mark a SECOND step in a subtask. Single source of truth for
+// both the compound-task refusal and the url-nav trailing-action check, so the
+// two gates can't drift (a verb in one but not the other lets a multi-step task
+// slip through — the "navigate to youtube and play it dropped the play" class).
+const MULTI_STEP_ACTION_VERBS =
+  'type|click|press|open|save|send|scroll|navigate|go|visit|search|copy|paste|close|draw|sketch|paint|write|compute|calculate|fill|submit|enter|summarize|describe|read|select|focus|switch|minimize|maximize|check|uncheck|highlight|delete|move|rename|find|look|play|watch|stream|start|stop|pause|resume|upload|share|create|make|record|like|subscribe|follow|bookmark|toggle|enable|disable|attach|rate|sign\\s*in|log\\s*in|add|buy|download';
+const COMPOUND_PATTERN = new RegExp(`\\b(and|then)\\b.*\\b(${MULTI_STEP_ACTION_VERBS})\\b`, 'i');
 
 const OPEN_APP_PATTERN = /^\s*(?:open|launch|start|run)\s+(.+?)\s*$/i;
 const NAV_URL_PATTERN = /^\s*(?:go to|navigate to|visit|browse to|open)\s+(.+?)\s*$/i;
@@ -167,8 +173,9 @@ export class Router {
       if (urlTok) {
         const rest = navMatch[1].replace(urlTok, ' ');
         // A comma, or an action verb after the URL, means more than navigation.
+        // Shares MULTI_STEP_ACTION_VERBS with COMPOUND_PATTERN so the gates agree.
         const hasTrailingAction = /,/.test(navMatch[1])
-          || /\b(search|play|click|type|find|select|press|scroll|watch|sign\s*in|log\s*in|add|buy|send|download|then)\b/i.test(rest);
+          || new RegExp(`\\b(${MULTI_STEP_ACTION_VERBS})\\b`, 'i').test(rest);
         if (!hasTrailingAction) {
           return this.handleUrlNav(this.normalizeUrl(urlTok));
         }

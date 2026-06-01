@@ -132,9 +132,11 @@ export function renderSurveyForPrompt(survey: DesktopSurvey): string {
 
   if (!lines.length) return '';
   return [
-    'DESKTOP CONTEXT (ground your plan in what is ACTUALLY available — do NOT',
-    'emit an "open X" subtask for an app already open; route capabilities to',
-    'the real default handler; act in the windows that already exist):',
+    'DESKTOP CONTEXT — the windows currently open. Use this ONLY to avoid an',
+    '"open X" subtask for an app already running, and to route to the real',
+    'default handler. These window titles are BACKGROUND STATE, not targets:',
+    'do NOT reference a title in a subtask unless the user\'s task explicitly',
+    'names it (a leftover window from a prior, unrelated task is NOT your target):',
     ...lines,
   ].join('\n');
 }

@@ -449,6 +449,12 @@ export class Pipeline {
       // agent-side failures so the v0.8.0 "agent reports, caller decides"
       // contract still applies to verifier-doubt cases.
       let subtaskAgentFails = 0;
+      // Subtasks where a ONE-SHOT action (send/submit/…) ran but couldn't be
+      // verified, so we deliberately did NOT retry. These are genuinely
+      // UNCERTAIN — not clean successes — so they must not render as "✅ done".
+      // (Distinct from benign idempotent no-op verifier doubt, which stays a
+      // success per the "agent reports, caller decides" contract.)
+      let subtaskUnverified = 0;
 
       let subtasks = outerDecision.subtasks.length > 0
         ? outerDecision.subtasks
@@ -635,8 +641,12 @@ export class Pipeline {
             // subtask should see "what came before" as the agent's claim.
             // EXCEPTION: when we deliberately STOPPED a non-idempotent action
             // (to avoid a duplicate send/purchase), the user must SEE the
-            // "attempted but unverified — please check" note, so surface it.
-            if (reason === 'non_idempotent_unverified') lastText = subResult.text;
+            // "attempted but unverified — please check" note, so surface it,
+            // and mark the run UNVERIFIED so it isn't reported as clean success.
+            if (reason === 'non_idempotent_unverified') {
+              lastText = subResult.text;
+              subtaskUnverified += 1;
+            }
           } else {
             log.warn('pipeline.subtask.failed_chain_abort', {
               index: i + 1, subtask, path: subResult.path, reason: subResult.failureReason,
@@ -679,14 +689,27 @@ export class Pipeline {
       // gave callers (CLI, MCP clients, the user) a false positive every
       // time anything soft-failed, e.g. the Outlook send-email run that
       // hit max_turns on subtask 2 yet showed up as `done`.
-      const aggregateSuccess = subtaskAgentFails === 0;
+      // Honest aggregate: an UNVERIFIED one-shot action (send/submit that we
+      // couldn't confirm and didn't retry) is NOT a clean success — better to
+      // tell the user "please verify" than to flash ✅ done on something that
+      // may not have happened. Agent-side failures also demote. Benign
+      // idempotent verifier-doubt does NOT demote (the work was done; the
+      // verifier just couldn't measure a zero-change no-op).
+      const aggregateSuccess = subtaskAgentFails === 0 && subtaskUnverified === 0;
+      const text = subtasks.length > 1
+        ? (aggregateSuccess
+            ? `All ${subtasks.length} subtasks completed${subtaskSoftFails ? ` (${subtaskSoftFails} verifier-doubt continued)` : ''}. Last: ${lastText}`
+            : subtaskUnverified > 0 && subtaskAgentFails === 0
+              ? `${subtasks.length - subtaskUnverified}/${subtasks.length} subtasks done; ${subtaskUnverified} could NOT be verified — please check. Last: ${lastText}`
+              : `${subtasks.length - subtaskAgentFails}/${subtasks.length} subtasks completed by the agent; ${subtaskAgentFails} agent-side failures. Last: ${lastText}`)
+        : (aggregateSuccess
+            ? lastText
+            : subtaskUnverified > 0
+              ? `Attempted but UNVERIFIED — please check: ${lastText}`
+              : `Subtask did not finish: ${lastText}`);
       const result = this.buildResult({
         success: aggregateSuccess, path: lastPath, costMeter, startedAt, correlationId,
-        text: subtasks.length > 1
-          ? (aggregateSuccess
-              ? `All ${subtasks.length} subtasks completed${subtaskSoftFails ? ` (${subtaskSoftFails} verifier-doubt continued)` : ''}. Last: ${lastText}`
-              : `${subtasks.length - subtaskAgentFails}/${subtasks.length} subtasks completed by the agent; ${subtaskAgentFails} agent-side failures. Last: ${lastText}`)
-          : (aggregateSuccess ? lastText : `Subtask did not finish: ${lastText}`),
+        text,
         trace: aggregateTrace,
       });
       log.info(EVENTS.PIPELINE_DONE, {
@@ -800,23 +823,18 @@ export class Pipeline {
 
       // Verifier post-check. Only runs when:
       //   • a verifier is active (not disabled)
-      //   • the rung claims success
       //   • the rung was NOT the router (router has its own window-list-diff
       //     evidence — it only reports success when a new matching window
       //     was observed after launch. The pre-v0.9 pixel-diff verifier
       //     used to overrule that and escalate a successful 2-second mailto
-      //     into 20 wasted LLM turns; the router exemption survives.)
+      //     into 20 wasted LLM turns; the router exemption survives.) The
+      //     fire-and-forget router paths (url_nav/shortcut/type) are instead
+      //     guarded at the GATE — COMPOUND/trailing-action refusal sends
+      //     multi-step tasks to the verified agent — and the honest-reporting
+      //     layer never shows "done" for a soft-failed subtask.
       //   • playbooks are NO LONGER exempt (v0.9.1). The deterministic
       //     keyboard choreography in compose-send returns success=true
-      //     unconditionally — it cannot tell from inside whether a "no
-      //     subject" dialog intercepted, whether the message stuck in
-      //     Outbox, or whether Send fired at all. Real user report on
-      //     macOS Mail showed subject + body collapsing into one field
-      //     with the playbook still claiming success. The send_email task
-      //     assertions in verifier.ts (compose_closed via window-list,
-      //     recipient_visible, not_just_saved_as_draft) catch exactly this
-      //     class of bug — but only if we let them run. Verifier is <500ms;
-      //     soft-fail on low confidence already exists for idempotent ops.
+      //     unconditionally — the send_email assertions catch a no-op send.
       //   • we managed to capture a `before` state earlier
       if (
         attempt.success
