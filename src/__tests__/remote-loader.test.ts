@@ -140,7 +140,7 @@ describe('fetchIndex', () => {
     const idx = {
       schemaVersion: 1,
       generatedAt: '2026-01-01T00:00:00Z',
-      guides: { reddit: { version: '1.0.0', trust: 'verified', upvotes: 5, downvotes: 0 } },
+      guides: { reddit: { version: '3.2.1', trust: 'verified', upvotes: 5, downvotes: 0 } },
     };
     mockFetchOk(idx);
     const out = await fetchIndex();
@@ -152,7 +152,7 @@ describe('fetchIndex', () => {
     const idx = {
       schemaVersion: 1,
       generatedAt: '2026-01-01T00:00:00Z',
-      guides: { reddit: { version: '1.0.0', trust: 'verified' } },
+      guides: { reddit: { version: '3.2.1', trust: 'verified' } },
     };
     mockFetchOk(idx);
     await fetchIndex();
