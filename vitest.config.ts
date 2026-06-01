@@ -5,6 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/__tests__/**/*.test.ts', 'tests/**/*.test.ts'],
+    setupFiles: ['tests/vitest.setup.ts'],
     testTimeout: 15000,
     fakeTimers: {
       // Tests that need real timers opt out with vi.useRealTimers()

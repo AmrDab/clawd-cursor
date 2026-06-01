@@ -99,6 +99,11 @@ const ACCESSIBILITY_ACTIONS: ActionRoute[] = [
   { action: 'state',          delegate: 'get_element_state' },
   { action: 'list_children',  delegate: 'a11y_list_children', argRemap: { name: 'parentName' } },
   { action: 'wait_for',       delegate: 'wait_for_element' },
+  // Smart auto-fallback (OCR → a11y → CDP, by element text — no coordinates).
+  // Restores the smart_* ergonomics to the recommended compound surface.
+  { action: 'smart_click',    delegate: 'smart_click' },
+  { action: 'smart_type',     delegate: 'smart_type' },
+  { action: 'smart_read',     delegate: 'smart_read' },
 ];
 
 const WINDOW_ACTIONS: ActionRoute[] = [
@@ -137,6 +142,13 @@ const SYSTEM_ACTIONS: ActionRoute[] = [
   { action: 'detect_app',      delegate: 'detect_app' },
   { action: 'classify_task',   delegate: 'classify_task' },
   { action: 'system_prompt',   delegate: 'get_system_prompt' },
+  // URI escape hatches — accomplish an intent WITHOUT driving UI by dispatching
+  // a registered URI scheme (mailto:, tel:, slack:, vscode:, spotify:, file:, …).
+  // Cross-OS: macOS `open`, Linux `xdg-open`, Windows registered-handler resolve.
+  { action: 'build_uri',       delegate: 'build_uri' },
+  { action: 'open_uri',        delegate: 'open_uri' },
+  // Persist a learned app guide (write companion to `app_guide`, which reads).
+  { action: 'learn_app',       delegate: 'learn_app' },
 ];
 
 const BROWSER_ACTIONS: ActionRoute[] = [

@@ -209,12 +209,38 @@ try {
                 [Console]::Out.Write((@{ success = $false; error = "Value parameter required for set-value action" } | ConvertTo-Json -Compress))
                 exit 0
             }
+            # Try ValuePattern directly on the located element first.
+            # If it fails (common for ComboBox composites where the ValuePattern
+            # lives on the inner Edit child, not the ComboBox wrapper), fall back
+            # to the first Edit child — this covers the Win11 Save-As filename
+            # field which is a ComboBox containing an Edit (automation-id 1001).
+            $targetElement = $element
+            $setError = $null
             try {
-                $pattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                $pattern = $targetElement.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
                 $pattern.SetValue($Value)
-                [Console]::Out.Write((@{ success = $true; action = "set-value"; value = $Value } | ConvertTo-Json -Compress))
             } catch {
-                [Console]::Out.Write((@{ success = $false; error = "ValuePattern not supported on this element: $($_.Exception.Message)" } | ConvertTo-Json -Compress))
+                $setError = $_.Exception.Message
+                # Fallback: locate the first Edit child and try there.
+                try {
+                    $editCond = New-Object System.Windows.Automation.PropertyCondition(
+                        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                        [System.Windows.Automation.ControlType]::Edit
+                    )
+                    $editChild = $targetElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $editCond)
+                    if ($null -ne $editChild) {
+                        $childPattern = $editChild.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                        $childPattern.SetValue($Value)
+                        $setError = $null   # success via child
+                    }
+                } catch {
+                    $setError = "ValuePattern not supported on element or inner Edit child: $($_.Exception.Message)"
+                }
+            }
+            if ($null -eq $setError) {
+                [Console]::Out.Write((@{ success = $true; action = "set-value"; value = $Value } | ConvertTo-Json -Compress))
+            } else {
+                [Console]::Out.Write((@{ success = $false; error = $setError } | ConvertTo-Json -Compress))
             }
         }
         "get-value" {

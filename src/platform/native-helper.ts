@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as readline from 'readline';
+import * as crypto from 'crypto';
 import { getPackageRoot } from '../paths';
 
 const IS_MACOS = process.platform === 'darwin';
@@ -551,13 +552,20 @@ export async function stopHostApp(): Promise<void> {
 function getOrCreateHostToken(): string {
   const dir = path.join(os.homedir(), '.clawdcursor');
   const tokenPath = path.join(dir, 'host-token');
-  if (fs.existsSync(tokenPath)) {
-    return fs.readFileSync(tokenPath, 'utf-8').trim();
-  }
   fs.mkdirSync(dir, { recursive: true });
-  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 18)}`;
-  fs.writeFileSync(tokenPath, token, { mode: 0o600 });
-  return token;
+  // Cryptographically-random token (Math.random is not secure for auth), written
+  // with an exclusive create ('wx') so a concurrent caller can't clobber/race the
+  // file between a check and write — if it already exists, read the existing one.
+  const token = crypto.randomBytes(24).toString('hex');
+  try {
+    fs.writeFileSync(tokenPath, token, { mode: 0o600, flag: 'wx' });
+    return token;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      return fs.readFileSync(tokenPath, 'utf-8').trim();
+    }
+    throw err;
+  }
 }
 
 /**

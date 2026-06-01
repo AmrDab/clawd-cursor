@@ -8,6 +8,97 @@
 import type { ToolDefinition, ToolContext } from './types';
 import { a11yToMouse } from './types';
 import type { UiElement, WindowInfo } from '../platform/types';
+import { getBrowserProcessNames } from '../llm/browser-config';
+
+/**
+ * Query Chrome DevTools Protocol DOM for interactive elements when UIA returns
+ * empty for a browser window. Edge's UIA tree stops at chrome — for canvas/web
+ * content we have to ask the renderer directly.
+ *
+ * Returns `null` when ineligible (no active browser window / CDP not connected
+ * / no page), an empty array when CDP responded but had no matches, or an
+ * array of UiElement-shaped results synthesized from DOM nodes. The caller
+ * decides how to surface "(no elements found)" vs the legitimate empty case.
+ *
+ * Note: bounding rects come back in CSS pixels; the existing `formatElement`
+ * helper already expects unscaled coords, so no conversion is needed.
+ */
+async function queryCdpDom(
+  ctx: ToolContext,
+  query: { name?: string; limit?: number },
+): Promise<UiElement[] | null> {
+  let activeWin: any;
+  try {
+    activeWin = ctx.platform
+      ? await ctx.platform.getActiveWindow()
+      : await ctx.a11y.getActiveWindow();
+  } catch {
+    return null;
+  }
+  const appName = activeWin?.processName?.toLowerCase() || '';
+  if (!getBrowserProcessNames().includes(appName)) return null;
+
+  let connected = false;
+  try { connected = await ctx.cdp.isConnected(); } catch { /* not connected */ }
+  if (!connected) return null;
+
+  const page = ctx.cdp.getPage?.();
+  if (!page) return null;
+
+  const limit = query.limit ?? 50;
+  const needle = query.name?.toLowerCase() || null;
+  try {
+    const hits: Array<{ name: string; controlType: string; bounds: { x: number; y: number; width: number; height: number } }> =
+      await page.evaluate(
+        // The callback body is serialized by the SDK and executed in the
+        // browser's V8 context via CDP `Runtime.evaluate` — `document` and
+        // `HTMLElement` are live there. ESLint runs in the Node project
+        // context and would mark them as no-undef without this block-scoped
+        // override.
+        /* eslint-disable no-undef */
+        ({ needle, limit }: { needle: string | null; limit: number }) => {
+          const selector =
+            'a, button, input, textarea, select, [role], [aria-label], [contenteditable="true"], [tabindex]';
+          const out: any[] = [];
+          for (const el of document.querySelectorAll(selector)) {
+            const h = el as HTMLElement;
+            const name =
+              (h.getAttribute('aria-label') ||
+                h.getAttribute('alt') ||
+                h.getAttribute('title') ||
+                h.getAttribute('placeholder') ||
+                (h as any).value ||
+                h.textContent ||
+                '').trim().slice(0, 120);
+            if (needle && !name.toLowerCase().includes(needle)) continue;
+            const r = h.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) continue;
+            const role = h.getAttribute('role') || h.tagName.toLowerCase();
+            out.push({
+              name,
+              controlType: `web.${role}`,
+              bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+            });
+            if (out.length >= limit) break;
+          }
+          return out;
+        },
+        /* eslint-enable no-undef */
+        { needle, limit },
+      );
+    return hits.map(h => ({
+      name: h.name || '',
+      controlType: h.controlType,
+      bounds: h.bounds,
+      // The CSS-pixel rect is already in viewport coordinates relative to the
+      // browser content area. We don't have absolute screen coords here — the
+      // formatted output flags this with a [via CDP DOM] prefix so callers
+      // know to translate before clicking. smart_click already handles this.
+    } as UiElement));
+  } catch {
+    return null;
+  }
+}
 
 function formatWindow(w: WindowInfo): string {
   return `${w.isMinimized ? '[MIN]' : '[OK]'} [${w.processName}] "${w.title}" pid:${w.processId}` +
@@ -47,7 +138,7 @@ export function getA11yTools(): ToolDefinition[] {
   return [
     {
       name: 'read_screen',
-      description: 'Read the accessibility tree of the screen. Returns structured text showing: WINDOWS (all open windows), FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT (keyboard focus). This is fast, small, and structured — prefer this over screenshots.',
+      description: 'Read the accessibility tree of the screen. Returns structured text showing: WINDOWS, FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT (keyboard focus). When the focused window is a browser with CDP attached, also appends a BROWSER DOM section with interactive page elements (UIA stops at chrome — this is how to see canvas / SPA content). Fast, small, and structured — prefer this over screenshots.',
       parameters: {
         processId: { type: 'number', description: 'Focus on a specific process ID (optional — reads foreground window by default)', required: false },
       },
@@ -56,6 +147,7 @@ export function getA11yTools(): ToolDefinition[] {
       safetyTier: 0,
       handler: async ({ processId }, ctx) => {
         await ctx.ensureInitialized();
+        let baseText: string;
         if (ctx.platform) {
           const [windows, activeWindow, focused] = await Promise.all([
             ctx.platform.listWindows().catch(() => []),
@@ -64,7 +156,7 @@ export function getA11yTools(): ToolDefinition[] {
           ]);
           const active = processId ?? activeWindow?.processId;
           const tree = await ctx.platform.getUiTree(active);
-          const sections = [
+          baseText = [
             'WINDOWS',
             windows.length ? windows.map(formatWindow).join('\n') : '(no windows found)',
             '',
@@ -73,12 +165,26 @@ export function getA11yTools(): ToolDefinition[] {
             '',
             'FOCUSED ELEMENT',
             focused ? formatElement(focused) : '(no focused element)',
-          ];
-          return { text: sections.join('\n') };
+          ].join('\n');
+        } else {
+          const active = await getActivePid(ctx, processId);
+          baseText = await ctx.a11y.getScreenContext(active);
         }
-        const active = await getActivePid(ctx, processId);
-        const context = await ctx.a11y.getScreenContext(active);
-        return { text: context };
+        // For a browser window the UIA tree stops at chrome — append a CDP
+        // DOM digest so an agent can see actual page content (canvas apps,
+        // single-page apps that bypass MSAA, etc.) without escalating to a
+        // screenshot. Viewport-relative coords are flagged in the section
+        // header so callers don't accidentally treat them as screen-absolute.
+        const cdpHits = await queryCdpDom(ctx, { limit: 80 });
+        if (cdpHits) {
+          const cdpLines = cdpHits.length
+            ? cdpHits.map(formatElement).join('\n')
+            : '(no interactive DOM elements)';
+          return {
+            text: `${baseText}\n\nBROWSER DOM (via CDP, viewport-relative coords)\n${cdpLines}`,
+          };
+        }
+        return { text: baseText };
       },
     },
 
@@ -297,7 +403,7 @@ export function getA11yTools(): ToolDefinition[] {
 
     {
       name: 'find_element',
-      description: 'Search for UI elements by name, control type, or automation ID within a process. Returns matching elements with bounds.',
+      description: 'Search for UI elements by name, control type, or automation ID within a process. Returns matching elements with bounds. For browser windows with CDP attached, falls back to a DOM query when UIA returns empty so canvas / SPA content is reachable too (results are flagged with a "via CDP DOM" header and use viewport-relative coords).',
       parameters: {
         name: { type: 'string', description: 'Element name to search for', required: false },
         controlType: { type: 'string', description: 'UI Automation control type (e.g. "ControlType.Button")', required: false },
@@ -309,24 +415,33 @@ export function getA11yTools(): ToolDefinition[] {
       safetyTier: 0,
       handler: async ({ name, controlType, automationId, processId }, ctx) => {
         await ctx.ensureInitialized();
+        let uiaHits: UiElement[];
         if (ctx.platform) {
           const elements = await ctx.platform.findElements({ name, controlType, processId });
-          const filtered = automationId
+          uiaHits = automationId
             ? elements.filter((el: UiElement) => el.automationId === automationId)
             : elements;
-          if (!filtered?.length) return { text: '(no elements found)' };
-          const lines = filtered.slice(0, 20).map(formatElement);
-          if (filtered.length > 20) lines.push(`... and ${filtered.length - 20} more`);
+        } else {
+          const elements = await ctx.a11y.findElement({ name, controlType, automationId, processId });
+          uiaHits = (elements || []).map((el: any) => ({ ...el, enabled: el.enabled ?? el.isEnabled }));
+        }
+        if (uiaHits.length) {
+          const lines = uiaHits.slice(0, 20).map(formatElement);
+          if (uiaHits.length > 20) lines.push(`... and ${uiaHits.length - 20} more`);
           return { text: lines.join('\n') };
         }
-        const elements = await ctx.a11y.findElement({ name, controlType, automationId, processId });
-        if (!elements?.length) return { text: '(no elements found)' };
-        const lines = elements.slice(0, 20).map((el: any) => formatElement({
-          ...el,
-          enabled: el.enabled ?? el.isEnabled,
-        }));
-        if (elements.length > 20) lines.push(`... and ${elements.length - 20} more`);
-        return { text: lines.join('\n') };
+        // UIA returned nothing. For a browser window with CDP attached, ask
+        // the renderer directly — Edge/Chrome UIA stops at chrome and never
+        // surfaces canvas or in-page DOM elements. Without this fallback an
+        // agent calling find_element on a web app sees "(no elements found)"
+        // and either gives up or escalates straight to screenshots.
+        const cdpHits = await queryCdpDom(ctx, { name, limit: 20 });
+        if (cdpHits && cdpHits.length) {
+          const lines = ['(no UIA matches — falling back to CDP DOM; coords are viewport-relative)'];
+          lines.push(...cdpHits.map(formatElement));
+          return { text: lines.join('\n') };
+        }
+        return { text: '(no elements found)' };
       },
     },
 

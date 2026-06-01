@@ -10,12 +10,16 @@ import { VERSION } from './version';
 
 export function mountDashboard(app: Express, getToken?: () => string): void {
   app.get('/', (_req, res) => {
-    // Inject auth token into dashboard so client-side JS can authenticate API calls.
-    // SECURITY: Token injected into page JS is acceptable for localhost-only binding.
-    // If remote access is ever added, switch to httpOnly cookie auth.
     const token = getToken?.() ?? '';
-    const html = DASHBOARD_HTML.replace('__CLAWD_TOKEN_PLACEHOLDER__', token);
-    res.type('html').send(html);
+    if (token) {
+      res.cookie('clawdcursor_token', token, {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: false,
+        path: '/',
+      });
+    }
+    res.type('html').send(DASHBOARD_HTML);
   });
 }
 
@@ -648,10 +652,8 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 
 <script>
 (function() {
-  // Auth token injected by server — used for all API calls
-  var __TOKEN = '__CLAWD_TOKEN_PLACEHOLDER__';
   function authHeaders(extra) {
-    var h = { 'Authorization': 'Bearer ' + __TOKEN };
+    var h = {};
     if (extra) { for (var k in extra) h[k] = extra[k]; }
     return h;
   }

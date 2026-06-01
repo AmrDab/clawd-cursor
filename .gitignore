@@ -12,5 +12,6 @@ qa-tests/
 
 # Local scratch artifacts (probes, captures, session notes) — never committed
 test-runs/
+observe/
 TEST-FINDINGS.md
 docs/PHASE-A-DESIGN.md

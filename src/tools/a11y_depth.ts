@@ -135,19 +135,67 @@ export function getA11yDepthTools(): ToolDefinition[] {
         await ctx.ensureInitialized();
         if (!ctx.platform) return needPlatform('set_field_value');
         if (ctx.platform.platform === 'linux') return notSupportedOnLinux('set_field_value');
+        const safeNameStr = String(name ?? '');
+        const safeValue = String(value ?? '');
         const pid = await resolveProcessId(ctx, processId);
         const res = await ctx.platform.invokeElement({
-          name: String(name),
+          name: safeNameStr,
           controlType,
           processId: pid,
           action: 'set-value',
-          value: String(value),
+          value: safeValue,
         });
-        if (!res.success) {
-          return { text: `set_field_value failed for "${name}".`, isError: true };
+        if (res.success) {
+          const preview = safeValue.length > 40 ? safeValue.slice(0, 40) + '…' : safeValue;
+          return { text: `Set "${safeNameStr}" = "${preview}".` };
         }
-        const preview = String(value).length > 40 ? String(value).slice(0, 40) + '…' : String(value);
-        return { text: `Set "${name}" = "${preview}".` };
+
+        // ValuePattern not available on this element (common for Win11 XAML
+        // controls such as the Save As filename ComboBox+Pane composite).
+        // Fall back: focus the element, select-all existing text, type the
+        // new value. We first try a UIA focus(), then fall back to clicking
+        // the element's bounding-rect centre if focus() didn't work.
+        if (ctx.platform.platform === 'win32') {
+          // Try UIA focus first (brings keyboard to element without a click)
+          const focusRes = await ctx.platform.invokeElement({
+            name: safeNameStr,
+            controlType,
+            processId: pid,
+            action: 'focus',
+          });
+
+          // If we have bounds (either from focus result or from a find),
+          // click the element centre to ensure it really has keyboard focus.
+          // When multiple elements share the same name (e.g. a Text label
+          // and a ComboBox input both named "File name:"), prefer the widest
+          // one — the actual input is always wider than its label.
+          let bounds = focusRes.bounds;
+          if (!bounds) {
+            const found = await ctx.platform.findElements({
+              name: safeNameStr,
+              controlType,
+              processId: pid,
+            });
+            if (found.length > 0) {
+              const widest = found.reduce((best, el) =>
+                (el.bounds?.width ?? 0) > (best.bounds?.width ?? 0) ? el : best, found[0]);
+              bounds = widest.bounds;
+            }
+          }
+          if (bounds && bounds.width > 0) {
+            const cx = Math.round(bounds.x + bounds.width / 2);
+            const cy = Math.round(bounds.y + bounds.height / 2);
+            await ctx.platform.mouseClick(cx, cy);
+          }
+
+          // Select all existing content, then type the replacement value.
+          await ctx.platform.keyPress('ctrl+a');
+          await ctx.platform.typeText(safeValue);
+          const preview = safeValue.length > 40 ? safeValue.slice(0, 40) + '…' : safeValue;
+          return { text: `Set "${safeNameStr}" = "${preview}" (via keyboard fallback).` };
+        }
+
+        return { text: `set_field_value failed for "${safeNameStr}".`, isError: true };
       },
     },
 

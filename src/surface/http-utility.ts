@@ -98,13 +98,24 @@ function timingSafeTokenEqual(received: string, expected: string): boolean {
 }
 
 let loggedTokenDrift = false;
+function readCookieToken(req: express.Request): string {
+  const raw = req.headers.cookie;
+  if (!raw) return '';
+  for (const part of raw.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === 'clawdcursor_token') return decodeURIComponent(rest.join('='));
+  }
+  return '';
+}
 export function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const authHeader = req.headers['authorization'] || '';
-  const received = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const cookieToken = readCookieToken(req);
+  const received = headerToken || cookieToken;
 
   const memoryOk = timingSafeTokenEqual(received, SERVER_TOKEN);
   let diskOk = false;
-  if (!memoryOk) {
+  if (!memoryOk && process.env.CLAWD_ALLOW_DISK_TOKEN_DRIFT === '1') {
     const diskToken = currentDiskToken();
     if (diskToken && diskToken !== SERVER_TOKEN) {
       if (!loggedTokenDrift) {

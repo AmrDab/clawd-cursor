@@ -119,6 +119,9 @@ const KEY_ALIASES: Record<string, string> = {
  * Returns the input unchanged if no alias is found (e.g. single characters).
  */
 export function normalizeKey(key: string): string {
+  if (!key || typeof key !== 'string') {
+    throw new Error(`normalizeKey: expected non-empty string, got ${typeof key}: ${JSON.stringify(key)}`);
+  }
   return KEY_ALIASES[key.toLowerCase()] || key;
 }
 

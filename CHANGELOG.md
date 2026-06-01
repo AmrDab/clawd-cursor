@@ -2,6 +2,459 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [0.9.9] - 2026-05-24 — security hardening + registry perf
+
+### Security — AppleScript backslash escaping + crypto host token (PR #136)
+
+From a full triage of the open CodeQL alerts (only 2 were genuine; the
+other 20 were by-design for a local single-user tool and were dismissed
+with justifications):
+
+- **AppleScript injection (CodeQL #61–64, HIGH).**
+  `buildMacWindowTargetClause` escaped `"` but not `\` before embedding
+  `processName`/`title` into an `osascript -e` double-quoted string. `\` is
+  an AppleScript escape character and these fields are LLM/screen-supplied,
+  so a value containing a backslash could break out of the string literal.
+  Now escapes `\` then `"` at all four sites (macOS-only path).
+- **Host-helper token (CodeQL #77, HIGH).** Replaced `Math.random()` (not
+  cryptographically secure) with `crypto.randomBytes(24)`, and the
+  check-then-write with an exclusive create (`flag: 'wx'`) that reads the
+  existing token on `EEXIST` — closing a TOCTOU window.
+
+### Performance — memoize the granular tool registry (PR #116)
+
+`getTool(name)` resolved via `getAllTools().find(...)` and `getTools()`
+re-spread all 14 `get*Tools()` sources on every call, so every single-tool
+lookup (the dispatch hot path) rebuilt the entire registry. The granular
+definitions are static, so they're now assembled once and cached;
+`getTools()`/`getAllTools()` still return fresh copies (mutation-safe), and
+`getTool()` searches the cache directly. No behavior change.
+
+## [0.9.8] - 2026-05-24 — complete the Toolbox + registry metadata + site refresh
+
+### Added — smart_* and URI escape hatches reach the compound Toolbox (PR #135)
+
+Three useful granular tools were orphaned from the recommended 6-tool
+compound surface; they're now wired in (cross-OS — each underlying tool was
+already cross-platform, this only changes dispatch):
+
+- **`accessibility`** gains `smart_click` / `smart_type` / `smart_read` —
+  auto-fallback OCR → a11y → CDP by element text, no coordinates.
+- **`system`** gains `open_uri` / `build_uri` / `learn_app` — the URI escape
+  hatches (`mailto:` `tel:` `slack:` `vscode:` `spotify:` `file:` …) that
+  accomplish an intent without driving UI, plus a guide-write companion to
+  `app_guide`. `open_uri` dispatches via macOS `open`, Linux `xdg-open`, and
+  Windows registered-handler resolution.
+
+Safety: `safety.ts` gains matching `publicCompoundMap` + `TOOL_TIER` entries
+so the new actions gate correctly on the compound path (`open_uri` /
+`learn_app` → destructive, `build_uri` → read), not the `input` default.
+
+### Changed — npm registry metadata (PR #132)
+
+Added `mcpName: io.github.AmrDab/clawdcursor` (for the official MCP
+registry), refreshed the stale package description to the current
+local-MCP-server / fallback-layer positioning, and added `mcp-server` /
+`gui-automation` keywords.
+
+### Changed — website refresh (PR #134)
+
+Hero headline restored to "A cursor and a keyboard for any AI agent";
+install section rebuilt as a segmented tab bar (`npm` · Windows · macOS/Linux
+· Source) with npm a first-class option; tool-surface labels aligned to the
+README's Toolbox / Tools naming.
+
+### Fixed — CI: mcp-orphan-teardown flake on Windows (PR #133)
+
+The test is no longer skipped on Windows (the platform the orphan bug it
+guards lived on). It runs with a 20s exit budget instead of 5s — tolerating
+slow native-module teardown on windows runners while still catching a
+genuine hang. The earlier Node-20-only skip wrongly assumed Node 22 was
+immune.
+
+## [0.9.7] - 2026-05-23 — GUI reliability + safety/efficiency tuning + npm install
+
+First release published to **npm** — `npm i -g clawdcursor` now works on
+any OS. Bundles the fixes that landed on `main` after v0.9.6.
+
+### Fixed — Save As dialog reliability on Windows (PR #128, #122 + #123)
+
+- **`set_field_value` on a ComboBox+Edit composite** (e.g. the Save As
+  filename field) returned `set_field_value failed for 'undefined'`. Fixed
+  with a PS-level inner-Edit-child retry plus a TS keyboard fallback that
+  targets the widest-bounds element sharing the name (the input, not the
+  label) when ValuePattern is absent (Win11 XAML dialogs).
+- **Clicks could land on a background window** when a dialog sat over
+  another window (focus/DPI race). `WindowsAdapter.mouseClick` now calls
+  `ensureForegroundAtPoint(x, y)` first — `WindowFromPoint` →
+  `GetAncestor(GA_ROOT)`, a no-op fast path when already foreground, else
+  the `AttachThreadInput` + `SetForegroundWindow` dance to beat the
+  Windows foreground lock.
+- #121 (triple_click in Save As) was reviewed and intentionally **not**
+  changed: `mouse_triple_click` is documented as "selects a paragraph",
+  so rerouting it to Ctrl+A globally would break that contract elsewhere.
+
+### Fixed — safety gate no longer flags typed prose (PR #127, #124)
+
+The destructive-label patterns (`\bsend\b`, `\bconfirm\b`, …) are meant
+for the label of a control being *activated* (clicked/invoked), but the
+MCP gate also matched them against the `text` payload of typing tools.
+Typing "…verification to confirm reliable automation" tripped a confirm
+gate. Fixed by skipping the patterns for typing canonical tools
+(`type_text`, `cdp_type`) via a `TYPING_TOOLS` denylist — click/invoke
+label safety (incl. `cdp_click` by visible text) is fully preserved.
+
+### Added — explicit token-cost hierarchy in the agent prompt (PR #129)
+
+`buildSystemPrompt` (also served to external agents via
+`get_system_prompt`) now states the cost ladder so any agent climbs
+cheap→expensive deliberately: act (click/type/key) < inspect
+(find_element/get_element) < read a11y tree / OCR (read_screen) <
+screenshot. Reinforces "read the attached a11y snapshot before spending
+a screenshot."
+
+### Security — qs DoS bump (PR #126)
+
+`qs` 6.14.2 → 6.15.2 (transitive via express/supertest) — patches a
+remotely-triggerable `qs.stringify` DoS.
+
+### Added — npm install + website/README npm one-liner
+
+`clawdcursor` is now published to npm. README Quickstart and the website
+Install section lead with `npm i -g clawdcursor` (with the macOS
+native-helper note); the OS installer scripts remain for the
+clone-build-link path that handles the macOS native build automatically.
+
+## [0.9.6] - 2026-05-22 — key_press crash fix + auth-hardening + docs catchup + CI stabilization
+
+### Fixed — `key_press` crashed on non-printable keys (PR #125, fixes #120)
+
+A live test driving the compact MCP surface end-to-end (Outlook email +
+Paint drawing, tools only) surfaced that `computer.key` /
+`key_press` threw `Cannot read properties of undefined (reading
+'toLowerCase')` on `Backspace`, `Enter`, `Tab`, `Delete`, and `Ctrl+*`
+combos. Root cause: `normalizeKey()` in `src/platform/keys.ts`
+called `.toLowerCase()` on its argument without guarding against
+non-string / empty input, so any code path that reached it with an
+unexpected value crashed instead of degrading gracefully.
+
+`normalizeKey()` now validates its input and throws a clear,
+debuggable error (`expected a non-empty string`) instead of a cryptic
+`TypeError`; `native-desktop.ts` guards the parsed-key path the same
+way. The fix sits on the shared `NativeDesktop` path that
+`computer.key` traverses on **all three platforms** (Windows, macOS,
+Linux). Test coverage: 9 cases at
+`src/__tests__/keys-normalization.test.ts` covering valid combos plus
+empty/undefined/non-string inputs. Thanks to first-time contributor
+@xxiaoxiong.
+
+### Docs — `Toolbox` / `Tools` naming + restored action-enum tables (PR #111)
+
+The repositioning in #93 inadvertently stripped the per-toolbox action
+enum tables that v0.9.3 shipped. Readers landing on the post-v0.9.4
+README saw vague descriptions like *"computer — Mouse, keyboard,
+screenshot. Raw I/O."* with no way to discover the ~70 verbs each
+compound tool actually exposes short of querying `tools/list`. The
+tables are restored verbatim from v0.9.3, and the two sections are
+labeled **`Toolbox` — 6 compound tools (recommended)** and **`Tools`
+— 97 granular primitives** to make the catalog choice unambiguous.
+
+### Security — dashboard cookie auth instead of inline-JS token injection
+
+The dashboard at `/` no longer injects the bearer token into client
+JS. The previous flow set `var __TOKEN = '__CLAWD_TOKEN_PLACEHOLDER__'`
+in the served HTML so dashboard JS could send `Authorization: Bearer`
+on `/mcp` calls — which meant any future XSS, a malicious browser
+extension, or a host misbind to a non-loopback address could exfiltrate
+the live token and execute the full MCP tool catalog.
+
+The server now sets `clawdcursor_token` as a `httpOnly` + `sameSite:
+strict` cookie when serving `/`. Dashboard JS no longer carries the
+token at all; `fetch('/mcp', …)` relies on the browser auto-attaching
+the cookie on same-origin requests. The auth gate at
+`src/surface/http-utility.ts` accepts both `Authorization: Bearer`
+headers (used by external tooling) and the cookie (used by the
+dashboard) — backward-compatible for any script that authenticates by
+header.
+
+### Security — `requireAuth` no longer silently accepts on-disk token rotation by default
+
+`requireAuth` previously fell back to reading `~/.clawdcursor/token`
+when the incoming token didn't match the in-memory token. That allowed
+any process with write access to that file to rotate the auth token
+and gain MCP access immediately without restarting the daemon.
+
+Drift acceptance is now opt-in via `CLAWD_ALLOW_DISK_TOKEN_DRIFT=1`.
+The default is fail-closed: a request whose token doesn't match the
+in-memory token is rejected, regardless of what's on disk.
+
+**Backward-incompatible** for any tooling that rotated the disk token
+to authenticate against a running daemon. Set
+`CLAWD_ALLOW_DISK_TOKEN_DRIFT=1` to restore the previous behavior.
+
+### CI — global nut-js mock for Linux runners
+
+`tests/vitest.setup.ts` wires a global mock for `@nut-tree-fork/nut-js`
+so vitest can boot on Linux CI runners that don't have libXtst /
+libxdo installed. Existing per-file `vi.mock('@nut-tree-fork/nut-js',
+…)` declarations continue to override the global, so no existing
+test behavior changes. Method names in the global mock match
+production usage in `src/platform/native-desktop.ts` (`mouse.click`,
+`screen.grabRegion`, etc.) so the global is a usable fallback for
+new tests.
+
+### CI — skip `mcp-orphan-teardown` on Windows + Node 20.x (PR #118)
+
+`tests/mcp-orphan-teardown.test.ts` failed intermittently on the
+`windows-latest / Node 20.x` matrix slot — always with `process did
+not exit within 5000ms`, always passing on rerun. Same failure family
+as the existing headless-Linux skip: `clawdcursor mcp` loads heavy
+native modules (nut-js, sharp's libvips, playwright) whose teardown
+doesn't finish within the 5s exit budget on Node 20 specifically
+(Node 22.x tightened process-exit semantics, so the contract holds
+there). The test now skips on Windows + Node 20.x, preserving coverage
+on macOS, Linux-with-display, and Windows + Node 22.x.
+
+
+## [0.9.5] - 2026-05-21 — repositioning + compact `task` fix + macOS Tahoe silent screenshots + npm publish prep
+
+Three threads landed: a documentation reframe so the README finally
+matches what the product actually is, a real ship-bug fix for one of
+the six headline compact tools, and a macOS 26 Tahoe compatibility
+fix. Also: package metadata is now npm-publish-ready.
+
+### Added — README + homepage repositioning (PR #93)
+
+After v0.9.4's live tests confirmed external LLMs (Sonnet driving the
+compact MCP surface) consistently passed real tasks via the MCP
+catalog, the documentation now leads with that fact instead of the
+"skill, not an app" framing.
+
+- Old tagline: *"A cursor and a keyboard for any AI agent on a real desktop."*
+- New tagline: **"The local MCP server that gives any agent safe desktop control."**
+
+Above-the-fold opening triplet now names the three defensible
+architectural claims: **no cloud / no telemetry by default**, **single
+`safety.evaluate()` chokepoint** every tool call routes through, and
+**bearer-token auth on every HTTP request**. Homepage (docs/index.html)
+mirrors the README changes.
+
+### Fixed — compact `task` compound returns `success: false` on success (PR #110)
+
+The compact `task` action — one of the six headline tools — routes
+through `delegate_to_agent`, which polls `agent_status` until idle
+and then reads `data.lastResult` to report `{success, verified, steps,
+lastAction}` to the caller.
+
+But `AgentState` had no `lastResult` field (`src/types.ts:80`). After
+`executeTask()` finished, the result was returned to the direct caller
+but never written onto state. The poll-then-read path saw `undefined`
+and reported `{success: false, steps: 0}` on every completed task —
+including the successful ones. One of the six headline tools was
+silently broken in v0.9.4.
+
+Fix: `AgentState` now has `lastResult?: TaskResult`. `executeTask()`
+snapshots the result onto `state.lastResult` immediately before
+resolving. Cleared at task start so pollers can't read stale data
+while a new task is in flight. Test coverage: 4 new tests at
+`src/__tests__/agent-last-result.test.ts`.
+
+### Fixed — silent screenshots on macOS 14+ via ScreenCaptureKit (PR #109)
+
+macOS 26 Tahoe added a "screen captured" white-flash animation that
+fires whenever any process hits the screencapture coordinator daemon —
+including the deprecated `CGWindowListCreateImage` API our
+`ScreenshotHelper` was using. For an agent tool that screenshots
+dozens of times per session, every flash was both visually disruptive
+and a privacy signal users didn't need to see for legitimate
+automation.
+
+New `captureFullScreenSCK` + `captureWindowSCK` functions use
+ScreenCaptureKit (macOS 14+) which Tahoe's flash hook does NOT
+intercept. JSON output shape preserved byte-for-byte; deployment
+target stays `.macOS(.v12)` via runtime version gate. Falls back to
+the existing CG path on macOS 12-13 where CG is still silent.
+
+### Added — `prepare` script for clean npm publish
+
+`package.json` now has `prepare: tsc && node dist/postbuild.js`. The
+npm `prepare` lifecycle runs on `npm pack` / `npm publish`, so the
+published tarball always reflects the current source rather than
+shipping a stale `dist/` from the developer's last `npm run build`.
+
+### Fixed — installer no longer destroys user state on dirty tree (PR #108, backfilled to v0.9.5)
+
+The `irm https://clawdcursor.com/install.ps1 | iex` and equivalent
+`curl … | bash` paths previously did a `git checkout && git pull` and,
+on any non-zero exit, ran `rm -rf $INSTALL_DIR` and re-cloned from
+scratch. Any uncommitted work in the user's tree — feature branches,
+dirty edits, untracked scratch files — was destroyed with no consent
+and no recovery path. The error message also lied about the cause: a
+dirty tree, a missing ref, or a diverged branch all surfaced as
+"Download failed. Check your internet and try again."
+
+Both installers now refuse to update a dirty tree, surface the real
+`git` stderr on failure, and never delete `$INSTALL_DIR` without
+explicit user action. `install.ps1` also dropped UTF-8 em-dashes in
+comments to fix a Windows-PowerShell-5.1 ANSI-decoding parser issue.
+
+### Notes
+
+- **macOS users installing via `npm i -g clawdcursor`**: the Swift
+  native helper (ClawdCursor.app) isn't pre-built in the npm tarball.
+  After install, run `cd $(npm root -g)/clawdcursor && bash native/build.sh && clawdcursor grant`
+  to build it. Or use the existing `irm | iex` installer which handles
+  this automatically. Fixing the npm-direct macOS path is on the
+  v0.9.6 list.
+- Closed PR #94 (diagram improvements) — its scope was a subset of
+  #93's; the diagram updates folded in via the rebase.
+
+
+## [0.9.4] - 2026-05-20 — external-agent reliability + browser DOM reachability
+
+Two threads of work landed: a batch of reliability fixes surfaced by
+an end-to-end live test (Sonnet driving clawdcursor over MCP-HTTP
+against the public benchmark exam at clawdcursor.com/tests), and the
+first round of fixes to the external-agent UX gap that test exposed.
+
+### Live test summary
+
+The exam at `192.168.1.127:8000` (14 desktop-control tasks: clicks,
+drags, hover, double/right-click, typing, scroll-to-find, bezier path,
+keyboard combo, multi-step workflow) was passed end-to-end by Sonnet
+driving the compact MCP surface. Three runs:
+
+- baseline (no hierarchy prompt): grade A, 39 screenshots, 2 a11y calls
+- hierarchy prompted (no CDP fallback yet): grade A, 39 screenshots, 0 a11y successes — proved the underlying tools were canvas-blind
+- post-CDP-fallback + `--compact`: ~20 CDP DOM hits including ★TARGET in the scroll-to-find task (saved ~285 wheel-scroll calls)
+
+### Added — `clawdcursor agent --compact` (PR #106)
+
+Previously the 6-compound MCP surface (`computer`, `accessibility`,
+`window`, `system`, `browser`, `task`) was only reachable via
+`clawdcursor mcp --compact` (stdio, for editor integrations). The
+HTTP-MCP daemon at `:3847/mcp` was hard-coded to serve all 97 granular
+tools — which silently broke the README's "6 compact tools" pitch for
+any external agent connecting over HTTP. `clawdcursor agent --compact`
+(or `CLAWD_MCP_COMPACT=1`) now exposes the same compound surface over
+HTTP. Default stays granular because the daemon dashboard at `/` calls
+9 granular tool names directly (`scheduled_task_*`, `agent_status`,
+`submit_task`, `favorites_*`, `logs_recent`) — flipping the default
+will follow once those calls migrate to the compound `system` action
+vocabulary.
+
+### Added — CDP DOM fallback in `find_element` + `read_screen` (PR #107)
+
+Edge / Chrome UIA trees stop at browser chrome — single-page apps and
+in-page DOM widgets are invisible to pure UIA queries. When the focused
+window is a recognised browser and clawdcursor's CDP driver is
+connected, `find_element` and `read_screen` now also query the DOM via
+`document.querySelectorAll('a, button, input, …, [aria-label], [role]')`
+and fold the matches into the response. `find_element` flags CDP
+results with a `(via CDP DOM; coords are viewport-relative)` header;
+`read_screen` appends a `BROWSER DOM` section side-by-side with the
+UIA tree. The smart-layer (`smart_click` / `smart_read` / `smart_type`)
+already had this fallback; the granular tools that external agents
+prefer when explicitly told "a11y first" did not. Now they do.
+
+**Known limit.** CDP DOM only sees standard HTML elements. Canvas-
+rendered content (shapes drawn via 2D context or WebGL) remains
+vision-only and requires `computer.screenshot` + pixel coordinates.
+This is a platform limit, not a tool limit — `querySelectorAll` cannot
+enumerate pixels.
+
+### Fixed — pipeline ladder climbs past rung LLM errors (PR #104)
+
+`src/core/pipeline.ts` previously treated any "aborted" failure string
+as a hard user-abort, so a transient LLM timeout on the blind rung
+collapsed the whole chain — vision was effectively dead code on slow
+or flaky providers. Replaced the stringly-typed branch with a
+`RungFailureCategory` tagged-union (`user_abort` / `rung_llm_error` /
+`agent_gave_up` / `verifier_rejected` / `config_missing` /
+`anti_pattern` / `infra_error`) and a `categorizeFailureReason` mapper
+as the single source of truth. Chain-abort gate hard-aborts only on
+`user_abort`, `infra_error`, `anti_pattern`, or high-confidence
+`verifier_rejected`; everything else escalates to the next rung.
+
+Verified live: pointing the daemon at an unreachable LLM URL produced
+`blind → hybrid → vision` rung attempts where the previous chain-abort
+gate stopped after rung 1. Also fixed a related phantom-success bug
+where aggregate accounting could mark a task `success: true` when every
+rung had failed with `rung_llm_error`. 4 integration tests +
+7 mapper unit tests added at `src/__tests__/pipeline-chain-abort.test.ts`.
+
+### Fixed — blind-mode coordinate-click guardrail (PR #103)
+
+The autonomous agent's blind rung (a11y-only, no screenshots) was
+emitting raw `mouse_click(x, y)` calls with hallucinated coordinates
+when the a11y tree didn't contain the LLM's target — a live test
+observed it walking through an exam UI by guessing positions until the
+verifier's 0.65-confidence rejection finally fired. New block at
+`src/core/agent-loop/agent.ts:531-587`: when `mode === 'blind'` and no
+a11y-aware selector (`invoke_element`, `set_field_value`,
+`focus_element`, `a11y_select`, `a11y_toggle`, `a11y_expand`,
+`a11y_collapse`, `wait_for_element`, `find_element`) succeeded in the
+prior 2 turns, raw coordinate clicks are refused with a structured
+tool-result that points the LLM at the recovery options
+(`cannot_read` or `screenshot`). 4 regression tests at
+`src/__tests__/blind-coord-click-guard.test.ts`.
+
+### Fixed — CLI `--text-model` / `--api-key` / `--base-url` ignored (PR #105)
+
+The boot banner read these flags through `resolveConfig`
+(`src/llm/config.ts:203`) and proudly printed
+`Using externally configured models: text=X`, but the runtime agent
+loop read from `loadPipelineConfig` (`src/surface/doctor.ts:1636`)
+which only consulted `.clawdcursor-config.json` — so the very next log
+line was `pipeline.start … models=text=off`. `loadPipelineConfig` now
+accepts an optional `ResolvedConfig` overlay; fields tagged
+`source === 'cli'` override disk values. Precedence preserved
+(CLI > project > user > env > autodetect > default). The contradictory
+double banner (`No AI providers found` immediately followed by
+`Using externally configured models`) is also gone — the
+auto-detection branch is skipped when CLI flags already supply LLM
+wiring. 5 regression tests at
+`src/__tests__/load-pipeline-config-overlay.test.ts`.
+
+### Fixed — `smart_click` candidates + macOS multi-window + open_url tier + a11y description fallback (PR #102, closes #101)
+
+Four issues from issue #101:
+
+- `smart_click` now returns a structured failure payload
+  `{error, reason, target, candidates, tried, elapsedMs, isError: true}`
+  instead of bare timeout strings. Callers that hit an ambiguous target
+  can disambiguate from the candidate list; deadline-aware budget
+  replaces the bare `Promise.race` that previously swallowed diagnostic
+  state. New tests at `src/__tests__/smart-tools.test.ts`.
+
+- macOS `focus_window` now disambiguates among multiple windows of the
+  same process by title — `scripts/mac/_window-picker.jxa` plus a
+  `scoreWindow()` heuristic that deprioritises tray-style popovers
+  (Xcode "Downloads", etc.).
+
+- `open_url` was filtered out of the act-only safety tier; the
+  `safetyTier: 2 → 1` change in `src/tools/extras.ts:523` restores it.
+
+- A11y element labels now fall back through `name → description →
+  value → ''` so macOS apps that put their visible text in
+  `AXDescription` (Xcode, others) render with something meaningful
+  instead of `"missing value"`. `formatElement()` helper in
+  `src/tools/a11y.ts:25-30`.
+
+### Repo hygiene
+
+Closed security-audit issue #13 with the per-commit fix-mapping comment.
+Rejected SafeSkill scanner PR #92 (the 20/100 "Blocked" badge was
+based on a heuristic that flags ANSI terminal color escapes as
+obfuscated content — see `src/surface/cli.ts`, `src/surface/doctor.ts`,
+etc. for the 58+ legitimate ANSI escapes). Closed issue #101.
+
+Five dependabot bumps landed: `tsx` 4.21→4.22, `ws` 8.20.0→8.20.1
+(security patch), `croner` 9→10 (major, breaking change does not
+affect this codebase — only `?` wildcard semantics changed),
+`eslint` group +3 updates, `@types/node` 25.7→25.9.
+
+
 ## [0.9.3] - 2026-05-16 — tool-layer fixes + live-test report
 
 Three critical tool-layer fixes surfaced by a deep audit + a Windows

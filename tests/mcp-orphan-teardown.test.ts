@@ -108,7 +108,18 @@ function waitForReady(proc: ChildProcessWithoutNullStreams, timeoutMs: number): 
 // at all is a bonus, not a requirement. Skip cleanly on headless CI
 // rather than paper over a native-module segfault that's unrelated to
 // the logic we care about.
+//
+// On Windows we KEEP this test — Windows is the platform the orphan bug
+// lived on — but give the exit wait a generous budget. Native-module
+// teardown (nut-js + sharp's libvips + playwright) is slow on
+// `windows-latest` runners: it completes, just not within a tight 5s
+// window, regardless of Node version. (An earlier Node-20-only skip
+// wrongly assumed Node 22 was immune — it flaked on Win + Node 22 too.)
+// A 20s budget tolerates slow-but-fine teardown while still catching a
+// genuine hang; the primary assertion (lockfile unlinked) runs and guards
+// the bug on Windows either way.
 const isHeadlessLinux = process.platform === 'linux' && !process.env.DISPLAY;
+const EXIT_BUDGET_MS = process.platform === 'win32' ? 20_000 : 5_000;
 
 describe.skipIf(isHeadlessLinux)('mcp orphan-teardown stdin handler', () => {
   it('exits cleanly and releases its lockfile when stdin closes', async () => {
@@ -159,7 +170,7 @@ describe.skipIf(isHeadlessLinux)('mcp orphan-teardown stdin handler', () => {
     // handler in cli.ts calls releasePidFile('mcp') + process.exit(0).
     child.stdin.end();
 
-    const { code, signal } = await waitForExit(child, 5_000);
+    const { code, signal } = await waitForExit(child, EXIT_BUDGET_MS);
 
     // PRIMARY assertion — the logic we actually care about: the orphan
     // handler ran and unlinked the lockfile. If this is false, the
@@ -182,5 +193,5 @@ describe.skipIf(isHeadlessLinux)('mcp orphan-teardown stdin handler', () => {
       expect(signal, 'process should exit cleanly via process.exit(0), not via signal').toBeNull();
       expect(code, 'process exit code should be 0').toBe(0);
     }
-  }, 30_000);
+  }, 45_000);
 });

@@ -53,9 +53,16 @@ OPERATING PRINCIPLES
    the blind agent hit a wall the screenshot can solve, or vice versa). Read what
    it already accomplished, do NOT redo those steps, and continue from that state
    toward the goal using your strengths.
-2. PREFER a11y over clicks. invoke_element / set_field_value act by name and
-   survive DPI, window resize, and layout shifts. Use them when the snapshot
-   shows a named target.
+2. CHEAPEST TOOL THAT WORKS. Tools cost different amounts of tokens — climb
+   this ladder only when the rung below cannot answer the question:
+     act (click / type / key — near-free) <
+     inspect (find_element / get_element — small) <
+     read a11y tree or OCR (read_screen / read_text — medium) <
+     screenshot (an image — most expensive).
+   The ranked a11y snapshot is already attached every turn — read IT before
+   spending a screenshot. As a corollary, PREFER a11y over clicks:
+   invoke_element / set_field_value act by name and survive DPI, window
+   resize, and layout shifts. Use them when the snapshot shows a named target.
 3. PREFER keyboard over mouse. key("mod+s") beats clicking a Save icon.
 4. VERIFY before declaring done. The screen must actually show the result.
    Call done() only with specific evidence ("title bar says 'Untitled*' so

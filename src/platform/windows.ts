@@ -600,6 +600,32 @@ export class WindowsAdapter implements PlatformAdapter {
   /** Cursor cache for mouseMoveRelative — last known target. */
   private lastCursor: { x: number; y: number } | null = null;
 
+  /**
+   * Ensure the window at (x, y) is the foreground window before clicking.
+   *
+   * Problem: On Windows, nut-js sends mouse input via SendInput which
+   * delivers to whatever window is topmost at those coordinates — not
+   * necessarily the foreground window. When a Save As dialog sits over a
+   * File Explorer window (or any background window), a click intended for
+   * the dialog's filename field can land on the Explorer window if the
+   * dialog's owning process lost foreground between the screenshot and the
+   * click (race) or if the click coords are slightly outside the dialog rect
+   * due to DPI-related rounding.
+   *
+   * Fix: use Win32 WindowFromPoint (via the warm psRunner bridge) to
+   * identify the window at the target coords. If it is not the current
+   * foreground window, call SetForegroundWindow to bring it forward before
+   * the click lands. Non-fatal — if the PS call fails we proceed anyway.
+   */
+  private async ensureForegroundAtPoint(x: number, y: number): Promise<void> {
+    try {
+      await psRunner.run({ cmd: 'activate-at-point', x, y });
+    } catch {
+      // Non-fatal — click proceeds regardless. We do not want to block
+      // mouse input if the foreground check fails.
+    }
+  }
+
   private toNutButton(button?: MouseButton): Button {
     if (button === 'right') return Button.RIGHT;
     if (button === 'middle') return Button.MIDDLE;
@@ -607,11 +633,17 @@ export class WindowsAdapter implements PlatformAdapter {
   }
 
   async mouseClick(x: number, y: number, opts?: { button?: MouseButton; count?: number }): Promise<void> {
+    // Bring the window at (x, y) to the foreground before sending any
+    // button events. Without this, a click intended for a Save As dialog
+    // can land on a background Explorer window when the dialog lost focus
+    // between the screenshot and the click (z-order / activation race).
+    await this.ensureForegroundAtPoint(x, y);
     await mouse.setPosition(new Point(x, y));
     this.lastCursor = { x, y };
     await this.delay(40);
     const count = opts?.count ?? 1;
     const btn = this.toNutButton(opts?.button);
+
     for (let i = 0; i < count; i++) {
       if (btn === Button.RIGHT) await mouse.rightClick();
       else if (btn === Button.MIDDLE) {

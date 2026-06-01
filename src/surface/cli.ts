@@ -194,6 +194,7 @@ interface AgentModeOpts {
   noVision?: boolean;
   noLlm?: boolean;
   skipConsent?: boolean;
+  compact?: boolean;
 }
 
 async function runAgentMode(opts: AgentModeOpts): Promise<void> {
@@ -425,9 +426,16 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   }
 
   // Mount /mcp behind the same Bearer-auth gate the legacy REST routes used.
+  // Compact-over-HTTP: default granular for backward compatibility (the
+  // dashboard at / calls 9 granular tool names — see dashboard.ts). External
+  // agent hosts can opt into the 6-compound public surface via
+  // `clawdcursor agent --compact` or `CLAWD_MCP_COMPACT=1`.
+  const compactSurface = opts.compact === true || process.env.CLAWD_MCP_COMPACT === '1';
+  let mcpToolCount = 0;
   try {
     const { createMcpServer, startMcpHttp } = await import('./mcp-server');
-    const { server: mcpServer } = await createMcpServer({ ctx: toolCtx });
+    const { server: mcpServer, toolCount } = await createMcpServer({ compact: compactSurface, ctx: toolCtx });
+    mcpToolCount = toolCount;
     app.use('/mcp', requireAuth);
     await startMcpHttp(mcpServer, app, '/mcp');
   } catch (err) {
@@ -445,8 +453,11 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
     console.log(`  GET  /health   — Readiness probe (no auth)`);
     console.log(`  POST /stop     — Graceful shutdown (auth, localhost only)`);
     console.log(`\nMCP endpoint (the only protocol):`);
-    console.log(`  POST /mcp      — JSON-RPC tools/call & tools/list (auth)`);
+    console.log(`  POST /mcp      — JSON-RPC tools/call & tools/list (auth) — ${compactSurface ? 'compact' : 'granular'} surface, ${mcpToolCount} tools`);
     console.log(`  GET  /mcp      — SSE notifications (auth)`);
+    if (!compactSurface) {
+      console.log(pc.gray(`   (tip: pass --compact or set CLAWD_MCP_COMPACT=1 to expose the 6-compound public surface)`));
+    }
     console.log(`\nAll mutating endpoints require: ${pc.cyan('Authorization: Bearer <token>')}`);
 
     if (llmAvailable) {
@@ -563,6 +574,7 @@ program
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .option('--skip-consent', 'Skip consent prompt (requires NODE_ENV=development)')
+  .option('--compact', 'Expose the 6-compound MCP surface (computer/accessibility/window/system/browser/task) over HTTP /mcp instead of the 97 granular tools (also CLAWD_MCP_COMPACT=1)')
   .action(async (opts) => {
     await runAgentMode(opts);
   });
@@ -581,6 +593,7 @@ program
   .option('--accept', 'Accept desktop control consent non-interactively and start')
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
+  .option('--compact', 'Expose the 6-compound MCP surface over HTTP /mcp (also CLAWD_MCP_COMPACT=1)')
   .action(async (opts) => {
     // v0.9 PR7.4 — `start` is now a thin deprecation alias for `agent`.
     // The legacy /task /favorites /execute REST surface was deleted; callers
