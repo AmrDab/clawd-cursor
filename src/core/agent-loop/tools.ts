@@ -27,6 +27,16 @@ import { imageScale, scaleCoord } from './coord-scale';
 import { ensureTargetForeground } from './focus-guard';
 import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
+import { OcrEngine, type OcrElement } from '../../platform/ocr-engine';
+
+/** Lazy OCR singleton for the agent-loop perception tools (read_text, smart_click).
+ *  Mirrors the pattern in src/tools/smart.ts. Construction never throws; the real
+ *  availability check happens in isAvailable(). */
+let _agentOcr: OcrEngine | null = null;
+function getAgentOcr(): OcrEngine {
+  if (!_agentOcr) _agentOcr = new OcrEngine();
+  return _agentOcr;
+}
 
 /**
  * Hedging-language phrases that indicate the agent is GUESSING about
@@ -1218,6 +1228,80 @@ export function buildUnifiedTools(
       },
     },
 
+    // ─── OCR PERCEPTION (webview / canvas, cheap — no vision model) ──────
+    // When the a11y tree is empty (browser page, Electron, canvas, game), OCR
+    // reads the visible TEXT so the TEXT model can keep driving — no screenshot
+    // bytes, no escalation to the vision model. This is the cheap path: it keeps
+    // haiku as the brain instead of handing the whole subtask to sonnet.
+    {
+      name: 'read_text',
+      description: 'OCR the screen and return visible text + positions. Use when the a11y snapshot is empty/sparse (webview, canvas, PDF, game) to READ on-screen content. Cheaper than a screenshot (no image bytes). May take 1–3s.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filter: { type: 'string', description: 'Optional: keep only lines containing this text (case-insensitive).' },
+        },
+        additionalProperties: false,
+      },
+      changesScreen: false,
+      async execute(args, _ctx) {
+        const ocr = getAgentOcr();
+        if (!ocr.isAvailable()) return { success: false, text: 'read_text: OCR not available on this platform — fall back to screenshot/vision.' };
+        const result = await ocr.recognizeScreen();
+        if (result.elements.length === 0) return { success: true, text: '(read_text: OCR found no text — screen may be blank, or OCR unavailable.)' };
+        const lineMap = new Map<number, OcrElement[]>();
+        for (const el of result.elements) {
+          const arr = lineMap.get(el.line) ?? [];
+          arr.push(el); lineMap.set(el.line, arr);
+        }
+        const filter = typeof args.filter === 'string' ? args.filter.toLowerCase() : null;
+        const lines: string[] = [];
+        for (const [, toks] of [...lineMap.entries()].sort((a, b) => a[0] - b[0])) {
+          const sorted = [...toks].sort((a, b) => a.x - b.x);
+          const lineText = sorted.map(t => t.text).join(' ');
+          if (filter && !lineText.toLowerCase().includes(filter)) continue;
+          const minX = Math.min(...sorted.map(t => t.x));
+          const minY = Math.min(...sorted.map(t => t.y));
+          lines.push(`@${minX},${minY} "${lineText}"`);
+        }
+        if (lines.length === 0) return { success: true, text: `(read_text: no lines match "${filter}")` };
+        return { success: true, text: `OCR (${result.elements.length} words, ${result.durationMs}ms):\n${lines.join('\n')}` };
+      },
+    },
+    {
+      name: 'smart_click',
+      description: 'OCR-locate visible text on screen and click its center. Use when the a11y tree is empty and invoke_element fails (webview/canvas). Pass the exact visible text (e.g. "Search", a video title, "Sign in").',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: 'The visible text to click.' },
+          button: { type: 'string', enum: ['left', 'right'] },
+        },
+        required: ['target'],
+        additionalProperties: false,
+      },
+      changesScreen: true,
+      async execute(args, ctx) {
+        const target = String(args.target ?? '').trim();
+        if (!target) return { success: false, isError: true, text: 'smart_click: target required.' };
+        const button = args.button === 'right' ? 'right' : 'left';
+        const ocr = getAgentOcr();
+        if (!ocr.isAvailable()) return { success: false, text: 'smart_click: OCR not available — escalate to vision.' };
+        const result = await ocr.recognizeScreen();
+        if (result.elements.length === 0) return { success: false, text: 'smart_click: OCR found no text — escalate to vision.' };
+        const hit = locateByOcr(target, result.elements);
+        if (!hit) return { success: false, text: `smart_click: no match for "${target}". Call read_text to see visible text, then retry with exact text.` };
+        // OCR coords are screen-space — pass straight to mouseClick, same as the
+        // `click` tool does with a11y coords (no imageScale; that's image-space only).
+        const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
+        const raised = await ensureTargetForeground(ctx, fg0);
+        await ctx.platform.mouseClick(hit.x, hit.y, { button, count: 1 });
+        await sleep(150);
+        getAgentOcr().invalidateCache();
+        return { success: true, text: `smart_click: clicked "${hit.label}" (score ${hit.score.toFixed(2)}) at (${hit.x},${hit.y})${raised}`, targetLabel: hit.label };
+      },
+    },
+
     // ─── TERMINAL ACTIONS ──────────────────────────────────────
     {
       name: 'done',
@@ -1406,6 +1490,72 @@ function focusBreadcrumb(
 
 function truncateTitle(s: string): string {
   return s.length > 32 ? s.slice(0, 31) + '…' : s;
+}
+
+/**
+ * Locate a target string among OCR elements and return the click point (center
+ * of the best-matching contiguous span) in SCREEN pixels. Ported from the
+ * proven scoring in src/tools/smart.ts: exact > substring-ratio > token-overlap,
+ * with a penalty for a single token matching a multi-word target (stops "begin"
+ * in body text beating the "Begin Exam" button). Null when nothing scores ≥0.4.
+ */
+function locateByOcr(
+  target: string,
+  elements: OcrElement[],
+): { x: number; y: number; label: string; score: number } | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const targetNorm = norm(target);
+  const targetWords = targetNorm.split(' ').filter(Boolean);
+  const targetWordSet = new Set(targetWords);
+  const lineMap = new Map<number, OcrElement[]>();
+  for (const el of elements) {
+    if (!el.text) continue;
+    const a = lineMap.get(el.line) ?? [];
+    a.push(el); lineMap.set(el.line, a);
+  }
+  let best: { x: number; y: number; label: string; score: number } | null = null;
+  let bestScore = 0;
+  const MAX_N = Math.min(8, targetWords.length + 2);
+  for (const toks of lineMap.values()) {
+    const sorted = [...toks].sort((a, b) => a.x - b.x);
+    for (let i = 0; i < sorted.length; i++) {
+      for (let n = 1; n <= MAX_N && i + n <= sorted.length; n++) {
+        const span = sorted.slice(i, i + n);
+        let contiguous = true;
+        for (let k = 1; k < span.length; k++) {
+          const gap = span[k].x - (span[k - 1].x + span[k - 1].width);
+          if (gap > Math.max(span[k - 1].height * 1.5, 30)) { contiguous = false; break; }
+        }
+        if (!contiguous) continue;
+        const phrase = norm(span.map(t => t.text).join(' '));
+        let score = 0;
+        if (phrase === targetNorm) score = 1.0;
+        else if (phrase.includes(targetNorm) || targetNorm.includes(phrase)) {
+          score = Math.min(phrase.length, targetNorm.length) / Math.max(phrase.length, targetNorm.length) * 0.9;
+        } else {
+          const pw = phrase.split(' ').filter(Boolean);
+          const overlap = pw.filter(w => targetWordSet.has(w)).length;
+          const cov = overlap / Math.max(targetWords.length, 1);
+          if (cov >= 1) score = 0.85; else if (cov >= 0.5) score = 0.5 * cov;
+        }
+        if (targetWords.length > 1 && n === 1 && score < 0.95) score *= 0.55;
+        if (score > bestScore) {
+          bestScore = score;
+          const minX = Math.min(...span.map(t => t.x));
+          const minY = Math.min(...span.map(t => t.y));
+          const maxX = Math.max(...span.map(t => t.x + t.width));
+          const maxY = Math.max(...span.map(t => t.y + t.height));
+          best = {
+            x: Math.round((minX + maxX) / 2),
+            y: Math.round((minY + maxY) / 2),
+            label: span.map(t => t.text).join(' '),
+            score,
+          };
+        }
+      }
+    }
+  }
+  return best && bestScore >= 0.4 ? best : null;
 }
 
 function sleep(ms: number): Promise<void> {

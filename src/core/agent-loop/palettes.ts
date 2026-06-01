@@ -71,11 +71,17 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
 
   navigation: [
     'key',
+    'invoke_element',  // click the browser address bar by a11y name (it's in the
+    'read_screen',     // a11y tree even when the page DOM is not) — drive nav blind
     'focus_window',
     'switch_tab_os',
     'open_url',
     'open_app',      // launch escape hatch — "switch to X" may need to open X first
     'list_windows',
+    // Webview pages have an empty DOM a11y tree; OCR lets the TEXT model read the
+    // page + click by visible text WITHOUT escalating to the vision model.
+    'read_text',
+    'smart_click',
     'done',
     'give_up',
     'cannot_read',
@@ -95,6 +101,9 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'a11y_expand',
     'a11y_get_value',
     'get_element_state',
+    // Webview forms (browser-rendered) have no DOM a11y — OCR finds field labels.
+    'read_text',
+    'smart_click',
     // When the "form" is just a wrapper around a known semantic intent
     // (compose mail, place call, open file, open Slack channel, etc.),
     // open_uri + build_uri skip the form entirely.
@@ -118,6 +127,9 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'click',
     'drag',
     'read_screen',
+    // OCR gives the text agent eyes on a canvas without a vision-model screenshot.
+    'read_text',
+    'smart_click',
     'done',
     'give_up',
     'cannot_read',

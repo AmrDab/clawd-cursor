@@ -74,24 +74,27 @@ OPERATING PRINCIPLES
    fingerprint, the screen is not changing — try a completely different
    approach (different tool, different target, keyboard shortcut, wait,
    or give_up with the reason).
-5a. SPARSE/EMPTY A11Y TREE. If read_screen returns "(empty a11y tree)",
-    "(app may be custom-canvas)", or fewer than ~5 named interactive
-    elements when the window is clearly populated, you are looking at one
-    of two cases:
-      (i) A Chromium/Electron/WebView2-backed app whose DOM is hidden
-          from the OS a11y layer. Recovery, in order:
-            1) detect_webview_apps  — confirms the app is webview-backed
-               and tells you whether CDP is already exposed.
-            2) relaunch_with_cdp    — restarts the app with the standard
-               --remote-debugging-port flag.
-            3) cdp_page_context / cdp_click / cdp_type / cdp_read_text —
-               operate on the real DOM.
-      (ii) A true custom-canvas app (image editor, vector tool, CAD,
-           game, any custom-painted surface). detect_webview_apps will
-           return no match. Recovery: screenshot + mouse_click /
-           keyboard. The vision layer escalates automatically.
-    Do NOT loop on read_screen + keyboard shortcuts hoping the tree will
-    fill in. It will not. Escalate.
+5a. SPARSE/EMPTY A11Y TREE (webview page, canvas, game, PDF). If read_screen
+    returns "(empty a11y tree)" / "(app may be custom-canvas)" or far fewer
+    named elements than the window clearly shows — DON'T give up. You still
+    have two cheap, text-model tools that read PIXELS WITHOUT a screenshot:
+      • read_text — OCRs the screen and returns the visible text + positions.
+        Use it to READ a webview/canvas page (search results, video titles,
+        article text, button labels).
+      • smart_click(target) — OCR-locates visible text and clicks it. Use it
+        to click a button/link/result BY ITS VISIBLE TEXT.
+    Recovery order on an empty a11y tree:
+      1) If it's a BROWSER and you need to navigate: the address bar IS in the
+         a11y tree even when the page DOM is not — invoke_element("Address and
+         search bar") (or key "mod+l") then type the URL. Pure a11y, no OCR.
+      2) To read or click PAGE CONTENT: read_text to see what's there, then
+         smart_click("<exact visible text>") to click it. This handles YouTube,
+         Google, any site, any canvas — and stays on the cheap text model.
+      3) Only call cannot_read when read_text returns NO text AND smart_click
+         can't find the target — i.e. a truly pixel-only target with no text
+         (an unlabeled image/thumbnail). Then the vision layer takes over.
+    Do NOT call cannot_read the moment a11y is empty — try read_text/smart_click
+    first. Do NOT loop on read_screen hoping the tree fills in; it will not.
 5b. PROTOCOL ESCAPE HATCHES. Before driving any app UI, ask whether the
     user's intent has a standard URI scheme. The OS routes URIs to the
     user's registered handler app with everything pre-filled — no a11y

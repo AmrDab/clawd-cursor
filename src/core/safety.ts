@@ -207,6 +207,7 @@ const TOOL_TIER: Record<string, Tier> = {
   'scroll': 'input',
   'drag': 'input',
   'screenshot': 'read',
+  'read_text': 'read',     // OCR perception — no side effects (smart_click already mapped above)
   'done': 'read',
   'give_up': 'read',
   'cannot_read': 'read',
