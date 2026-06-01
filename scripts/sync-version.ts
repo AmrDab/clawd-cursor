@@ -43,6 +43,9 @@ interface SyncTarget {
   replacement: string;
   /** Human-readable description of what this target represents. */
   desc: string;
+  /** When true, a non-matching pattern is NOT an error (illustrative examples
+   *  that may be absent depending on the marketing-site layout). */
+  optional?: boolean;
 }
 
 const TARGETS: SyncTarget[] = [
@@ -85,12 +88,15 @@ const TARGETS: SyncTarget[] = [
     replacement: `$1${VERSION}`,
     desc: 'index.html footer brand',
   },
-  // The two installer-pin examples on the same line — PowerShell + bash.
+  // The installer-pin examples — PowerShell + bash. These are illustrative and
+  // the marketing site may render only one (or neither) depending on layout, so
+  // the PowerShell example is OPTIONAL: update it if present, don't error if not.
   {
     file: 'docs/index.html',
     pattern: /(\$env:VERSION='v)\d+\.\d+\.\d+(')/g,
     replacement: `$1${VERSION}$2`,
     desc: 'index.html PowerShell install-pin example',
+    optional: true,
   },
   {
     file: 'docs/index.html',
@@ -132,7 +138,7 @@ for (const t of TARGETS) {
     // Either already at the right version, or the pattern didn't match — both
     // are non-fatal but the second case is interesting. We can't distinguish
     // cleanly without re-scanning, so just print a quiet status line.
-    if (!t.pattern.test(after)) {
+    if (!t.pattern.test(after) && !t.optional) {
       errors.push(`✗ ${t.desc} pattern did not match in ${t.file}`);
     }
     continue;
