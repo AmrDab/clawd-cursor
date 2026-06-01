@@ -505,9 +505,26 @@ export function buildUnifiedTools(
       changesScreen: true,
       async execute(args, ctx) {
         const text = String(args.text ?? '');
-        await ctx.platform.typeText(text);
-        await sleep(200);
-        return { success: true, text: `Typed ${text.length} chars: "${truncate(text, 60)}"` };
+        if (!text) return { success: true, text: 'Typed 0 chars' };
+        // FAST PATH: paste via the clipboard (one Ctrl/Cmd+V — instant) instead
+        // of per-keystroke typing, which is visibly slow on anything longer than
+        // a few chars (~20ms/char). This is the legacy smart_type mechanism.
+        // Save + restore the prior clipboard so a pending copy isn't clobbered
+        // (e.g. a copy→paste→type flow). mod+v is portable across OSes.
+        // Char-by-char is kept as a fallback for fields that reject paste.
+        try {
+          const prior = await ctx.platform.readClipboard().catch(() => '');
+          await ctx.platform.writeClipboard(text);
+          await sleep(40);
+          await ctx.platform.keyPress('mod+v');
+          await sleep(150);
+          await ctx.platform.writeClipboard(prior).catch(() => {});
+          return { success: true, text: `Typed ${text.length} chars (paste): "${truncate(text, 60)}"` };
+        } catch {
+          await ctx.platform.typeText(text);
+          await sleep(200);
+          return { success: true, text: `Typed ${text.length} chars: "${truncate(text, 60)}"` };
+        }
       },
     },
 
