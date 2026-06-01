@@ -258,6 +258,24 @@ describe('Router.route — URL nav with verification', () => {
     expect(res.handled).toBe(false);
     expect(adapter.launchApp).not.toHaveBeenCalled();
   });
+
+  it('refuses a trailing action with a verb in NO list (structural, not verb-deny-list)', async () => {
+    // "mute" / "zoom into" aren't in any action-verb list — the check is
+    // structural (anything substantive after the URL = a 2nd step), so this
+    // still refuses. Fail-SAFE: when unsure, the agent does the whole flow.
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [] });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    expect((await r.route('go to example.com and mute the audio')).handled).toBe(false);
+    expect((await r.route('navigate to example.com then zoom into the chart')).handled).toBe(false);
+    expect(adapter.launchApp).not.toHaveBeenCalled();
+  });
+
+  it('still handles pure nav with benign qualifiers (in a new tab / incognito)', async () => {
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [], platform: 'win32' });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    expect((await r.route('go to github.com in a new tab')).handled).toBe(true);
+    expect(adapter.launchApp.mock.calls[0][1].url).toBe('https://github.com');
+  });
 });
 
 describe('Router.route — web-service redirect (v0.9.0 fix)', () => {

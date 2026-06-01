@@ -51,6 +51,15 @@ describe('resolveSubtaskTargetWindow', () => {
     expect(resolveSubtaskTargetWindow('copy a sentence from the page', s, null)?.processName).toBe('msedge.exe');
   });
 
+  it('web intent uses GENERIC content nouns, not site names (article/video/post)', () => {
+    const s = survey([edge], { browser: { name: 'msedge', openWindow: edge } });
+    // No "wikipedia/youtube/reddit" needed — generic web-content nouns resolve
+    // to the OS-default browser for ANY site.
+    expect(resolveSubtaskTargetWindow('copy a sentence from the article', s, null)?.processName).toBe('msedge.exe');
+    expect(resolveSubtaskTargetWindow('like the video', s, null)?.processName).toBe('msedge.exe');
+    expect(resolveSubtaskTargetWindow('upvote the post', s, null)?.processName).toBe('msedge.exe');
+  });
+
   it('anchors to an open app the subtask names by process', () => {
     const s = survey([settings, notepad]);
     expect(resolveSubtaskTargetWindow('paste the text into notepad and save', s, settings)?.processName)

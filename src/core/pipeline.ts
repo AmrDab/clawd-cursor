@@ -141,26 +141,33 @@ function isLaunchOrNavigate(task: string): boolean {
 }
 
 /**
- * Windows that must NEVER be a stay-in-window anchor: clawdcursor's own task
- * console, terminals (the daemon usually runs in one), and OS shell surfaces.
- * Anchoring the agent to any of these sabotages it (the v1.0.0 regression where
- * a subtask got pinned to a stale "Settings" window and thrashed). Matched on
- * the window TITLE; terminals are also matched on process. App-agnostic.
+ * Processes that must NEVER be a stay-in-window anchor: terminals (the daemon
+ * and its Task Console run in one — process-based, so it catches our own UI
+ * generically without naming it) and the OS shell hosts (Start/Search/Task
+ * View live here). Process-based, not localized window titles. The shell-host
+ * set is the one genuinely OS-coupled piece (window managers differ); it lives
+ * here as data, like the rest of the English/OS regex layer. A real UWP app
+ * (Calculator) is still reachable by NAME via the positive path — only the
+ * blind foreground fallback excludes these.
  */
-const NON_TARGET_WINDOW_TITLE =
-  /clawd ?cursor|task console|^settings$|^start$|^search$|task view|program manager|^run$|snipping tool|^cortana$/i;
 const TERMINAL_PROCESS =
   /^(windowsterminal|powershell|pwsh|cmd|conhost|wt|alacritty|wezterm|kitty|gnome-terminal|konsole|iterm2?|terminal)$/i;
-/** A subtask whose work happens on the web / in a browser. */
+const SHELL_HOST_PROCESS =
+  /^(shellexperiencehost|startmenuexperiencehost|searchhost|searchapp|textinputhost|lockapp|systemsettings|applicationframehost)$/i;
+/** A subtask whose work happens on the web / in a browser. Generic web-surface
+ *  + web-content nouns — NO specific site names (any site has pages/articles/
+ *  videos; the OS-resolved default browser is the target regardless of site). */
 const WEB_INTENT_PATTERN =
-  /\b(browser|web ?page|website|web|page|tab|url|https?:|www\.|\.com|\.org|\.net|wikipedia|google|youtube|search the web|online)\b/i;
+  /\b(browser|web ?page|website|web|page|tab|url|https?:|www\.|\.com|\.org|\.net|\.io|online|search results?|article|video|playlist|post|feed|thread|channel)\b/i;
 /** A subtask whose work happens in email/mail. */
 const MAIL_INTENT_PATTERN = /\b(email|e-?mail|mail|inbox|compose|message to)\b/i;
 
 function isTargetableWindow(w: WindowInfo | undefined): w is WindowInfo {
-  return !!w && !!w.title?.trim()
-    && !NON_TARGET_WINDOW_TITLE.test(w.title)
-    && !TERMINAL_PROCESS.test(exeBasename(w.processName ?? ''));
+  if (!w || !w.title?.trim()) return false;
+  const proc = exeBasename(w.processName ?? '');
+  // Process-based exclusions only — never our own terminal/console, never an OS
+  // shell host. No window-title matching (those are localized and brittle).
+  return !TERMINAL_PROCESS.test(proc) && !SHELL_HOST_PROCESS.test(proc);
 }
 
 /**

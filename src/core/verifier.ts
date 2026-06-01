@@ -732,7 +732,7 @@ export class GroundTruthVerifier implements Verifier {
     if (/\bcopy\b/.test(t) && !/\bpaste\b/.test(t)) return 'copy';
     if (/type|paste|enter.*text|write.*"|input/.test(t)) return 'type_text';
     if (/create.*file|save.*as|new\s+document/.test(t)) return 'create_file';
-    if (/search|find|look up|google/.test(t)) return 'search';
+    if (/search|find|look up/.test(t)) return 'search';
     return 'generic';
   }
 

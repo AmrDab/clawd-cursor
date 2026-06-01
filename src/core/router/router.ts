@@ -171,11 +171,19 @@ export class Router {
     if (navMatch) {
       const urlTok = navMatch[1].match(/(?:https?:\/\/[^\s,]+|www\.[^\s,]+|[^\s,]+\.(?:com|org|io|dev|net|co|app)[^\s,]*)/i)?.[0];
       if (urlTok) {
-        const rest = navMatch[1].replace(urlTok, ' ');
-        // A comma, or an action verb after the URL, means more than navigation.
-        // Shares MULTI_STEP_ACTION_VERBS with COMPOUND_PATTERN so the gates agree.
-        const hasTrailingAction = /,/.test(navMatch[1])
-          || new RegExp(`\\b(${MULTI_STEP_ACTION_VERBS})\\b`, 'i').test(rest);
+        // STRUCTURAL multi-step check (no action-verb deny-list — that fails
+        // OPEN: any verb we forget routes a multi-step task as a bare nav and
+        // falsely reports done). A pure navigation is JUST a URL plus, at most,
+        // benign nav qualifiers ("in the default browser", "in a new tab"). If
+        // a comma, or any SUBSTANTIVE word, remains after the URL and those
+        // qualifiers are stripped, it's a second step → hand the whole flow to
+        // the agent. Fail-SAFE: when unsure, the agent does it.
+        const rest = navMatch[1]
+          .replace(urlTok, ' ')
+          .replace(/\b(in|on|at|to|the|a|an|my|its|using|via|with|from|default|new|incognito|private|browser|tab|window|page|please)\b/gi, ' ')
+          .replace(/[^\p{L}\p{N}]+/gu, ' ')
+          .trim();
+        const hasTrailingAction = /,/.test(navMatch[1]) || rest.length > 0;
         if (!hasTrailingAction) {
           return this.handleUrlNav(this.normalizeUrl(urlTok));
         }
