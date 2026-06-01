@@ -66,7 +66,6 @@ const READY_TIMEOUT_MS = 8_000;
  */
 const COMPOUND_PATTERN = /\b(and|then)\b.*\b(type|click|press|open|save|send|scroll|navigate|go|visit|search|copy|paste|close|draw|sketch|paint|write|compute|calculate|fill|submit|enter|summarize|describe|read|select|focus|switch|minimize|maximize|check|uncheck|highlight|delete|move|rename|find|look)\b/i;
 
-const URL_PATTERN = /\b(https?:\/\/|www\.|\S+\.(com|org|io|dev|net|co|app))\b/i;
 const OPEN_APP_PATTERN = /^\s*(?:open|launch|start|run)\s+(.+?)\s*$/i;
 const NAV_URL_PATTERN = /^\s*(?:go to|navigate to|visit|browse to|open)\s+(.+?)\s*$/i;
 const FOCUS_APP_PATTERN = /^\s*(?:focus|switch to)\s+(.+?)\s*$/i;
@@ -157,10 +156,24 @@ export class Router {
     const openMatch = task.match(OPEN_APP_PATTERN);
     if (openMatch) return this.handleOpenApp(openMatch[1].trim());
 
-    // 2. URL navigation
+    // 2. URL navigation — ONLY for a PURE navigation (a single URL, optionally
+    //    with a benign "in the default browser" qualifier). A target with a
+    //    trailing ACTION ("youtube.com, search for X and play it") is a
+    //    multi-step task: the router must NOT navigate-and-report-done, dropping
+    //    the rest. Refuse those so the agent performs the whole flow.
     const navMatch = task.match(NAV_URL_PATTERN);
-    if (navMatch && URL_PATTERN.test(navMatch[1])) {
-      return this.handleUrlNav(this.normalizeUrl(navMatch[1]));
+    if (navMatch) {
+      const urlTok = navMatch[1].match(/(?:https?:\/\/[^\s,]+|www\.[^\s,]+|[^\s,]+\.(?:com|org|io|dev|net|co|app)[^\s,]*)/i)?.[0];
+      if (urlTok) {
+        const rest = navMatch[1].replace(urlTok, ' ');
+        // A comma, or an action verb after the URL, means more than navigation.
+        const hasTrailingAction = /,/.test(navMatch[1])
+          || /\b(search|play|click|type|find|select|press|scroll|watch|sign\s*in|log\s*in|add|buy|send|download|then)\b/i.test(rest);
+        if (!hasTrailingAction) {
+          return this.handleUrlNav(this.normalizeUrl(urlTok));
+        }
+        // else: fall through — not a pure nav; let the agent handle the flow.
+      }
     }
 
     // 3. `focus <app>`

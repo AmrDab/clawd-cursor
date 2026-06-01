@@ -229,6 +229,35 @@ describe('Router.route — URL nav with verification', () => {
     // the contract; whether a window surfaces is the verifier's call.
     expect(adapter.launchApp.mock.calls[0][1].url).toBe('https://clawdcursor.com');
   });
+
+  it('REFUSES a multi-step "navigate to URL, search X and play it" — agent does the flow', async () => {
+    // Run e388f690: the router navigated to youtube.com and reported DONE,
+    // silently dropping "search for a song by Adele, and play it". A trailing
+    // action after the URL means it's not a pure navigation — refuse so the
+    // agent performs the whole flow.
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [] });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    const res = await r.route('navigate to https://www.youtube.com, search for a song by Adele, and play it');
+    expect(res.handled).toBe(false);
+    expect(adapter.launchApp).not.toHaveBeenCalled();
+  });
+
+  it('still handles a pure nav with a benign "in the default browser" qualifier', async () => {
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [], platform: 'win32' });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    const res = await r.route('navigate to https://en.wikipedia.org/wiki/Special:Random in the default browser');
+    expect(res.handled).toBe(true);
+    expect(res.path).toBe('url_nav');
+    expect(adapter.launchApp.mock.calls[0][1].url).toBe('https://en.wikipedia.org/wiki/Special:Random');
+  });
+
+  it('refuses "navigate to X and <action>" (no comma) too', async () => {
+    const adapter = makeStatefulAdapter({ postLaunchWindows: [] });
+    const r = new Router(adapter, async () => 'C:\\fake\\msedge.exe');
+    const res = await r.route('go to youtube.com and play a song');
+    expect(res.handled).toBe(false);
+    expect(adapter.launchApp).not.toHaveBeenCalled();
+  });
 });
 
 describe('Router.route — web-service redirect (v0.9.0 fix)', () => {
