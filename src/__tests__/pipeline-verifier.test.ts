@@ -236,6 +236,34 @@ describe('Pipeline ground-truth verifier wiring', () => {
     expect(sub2Input.priorHandoff ?? '').toMatch(/Continue from that state/);
   });
 
+  it('REPORTING: cannot_read on a NAVIGATE subtask does NOT report ❌ when a later subtask succeeds', async () => {
+    // Run 0a0dbd8d: subtask 1 "navigate to youtube" cannot_read'd (webview), but
+    // subtask 2 played the song (verified). It was wrongly reported "❌ failed".
+    const m = makeMockVerifier('pass');
+    const { runAgent } = await import('../core/agent-loop/agent');
+    const original = (runAgent as any).getMockImplementation();
+    (runAgent as any).mockImplementation(async (input: { task: string; mode: string }) => {
+      const isNav = /^\s*(navigate|go to|open|visit)\b/i.test(input.task);
+      return isNav
+        ? { success: false, text: 'cannot_read: webview', exit: 'cannot_read', steps: [], screenshotsCaptured: 0, durationMs: 5 }
+        : { success: true, text: 'done: played the song', exit: 'done', steps: [], screenshotsCaptured: 0, durationMs: 5 };
+    });
+    try {
+      const pipeline = new Pipeline({
+        adapter: makeAdapter(),
+        llm: { text: { baseUrl: 'x', model: 'm', apiKey: 'k', isAnthropic: false }, vision: { baseUrl: 'x', model: 'v', apiKey: 'k', isAnthropic: false } },
+        verifier: m.verifier,
+        decomposer: async () => ['navigate to youtube.com', 'play a bruno mars song'],
+      });
+      const result = await pipeline.run({ task: 'open youtube and play bruno mars' });
+      // Subtask 1 (navigate) cannot_read on all rungs — but it's a navigate, so it
+      // must NOT demote the whole task. Subtask 2 succeeded → overall success.
+      expect(result.success).toBe(true);
+    } finally {
+      (runAgent as any).mockImplementation(original);
+    }
+  });
+
   it('agent success + verifier REJECT → ladder climbs to hybrid', async () => {
     agentResultByRung.clear();
     // Blind claims done, but the verifier will reject it.

@@ -649,7 +649,15 @@ export class Pipeline {
             // no-op rejections like "create new canvas" after "open Paint".
             const isAgentSideFailure =
               reason === 'max_turns' || reason === 'stagnation' ||
-              reason === 'give_up' || reason === 'cannot_read' ||
+              reason === 'give_up' ||
+              // cannot_read is a PERCEPTION failure, not a goal failure. On a
+              // launch/navigate subtask (setup whose result a LATER subtask
+              // uses), it must NOT demote the whole task to ❌ — the navigate
+              // likely succeeded even if a11y couldn't confirm it (run 0a0dbd8d:
+              // the song played, yet it reported "failed" because subtask 1
+              // "navigate to youtube" cannot_read'd). For non-navigate subtasks
+              // cannot_read still counts as a failure.
+              (reason === 'cannot_read' && !isLaunchOrNavigate(subtask)) ||
               reason === 'no_text_model' || reason === 'vision_disabled' ||
               reason === 'router_miss' || reason === 'no_llm' || reason === 'no_ladder';
             if (isAgentSideFailure) subtaskAgentFails += 1;
