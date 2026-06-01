@@ -68,6 +68,13 @@ Rules:
     Good: ["open Notepad", "paste the copied text"]
     Bad:  ["open Calculator and compute 5*7"]
     Good: ["open Calculator", "compute 5*7"]
+- NAME THE WINDOW in a dependent subtask. When subtask N opens an app or
+  navigates to a page and subtask N+1 acts INSIDE it, the N+1 string MUST name
+  that app/page — each subtask runs in isolation and otherwise opens the wrong
+  app. (e.g. after "navigate to docs.google.com", the next subtask must say "in
+  the Google Docs tab" or it will open Notepad and type there.)
+    Bad:  ["navigate to docs.google.com", "create a document and type a sentence"]
+    Good: ["navigate to docs.google.com", "in the Google Docs tab, start a new document and type a sentence about dogs"]
 - Verbs to prefer: open, focus, click, type, press, navigate, select, scroll, save, send.
   Avoid: wait (redundant — see above), check, verify (the verifier handles those).
 - Do NOT invent information the task didn't provide. If an email address or value is missing, leave the subtask at the level of "type the recipient email".

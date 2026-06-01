@@ -208,6 +208,34 @@ describe('Pipeline ground-truth verifier wiring', () => {
     expect(result.text ?? '').toMatch(/unverified|could not be verified|please (check|verify)/i);
   });
 
+  it('CONTINUITY: subtask 2 receives subtask 1 outcome as priorHandoff', async () => {
+    agentResultByRung.clear();
+    agentResultByRung.set('blind', { success: true, exit: 'done' });
+    const m = makeMockVerifier('pass');
+    const { runAgent } = await import('../core/agent-loop/agent');
+    (runAgent as any).mockClear();
+
+    const pipeline = new Pipeline({
+      adapter: makeAdapter(),
+      llm: { text: { baseUrl: 'x', model: 'm', apiKey: 'k', isAnthropic: false } },
+      verifier: m.verifier,
+      // Force a 2-subtask decomposition.
+      decomposer: async () => ['navigate to docs.google.com', 'type a sentence about dogs'],
+    });
+
+    await pipeline.run({ task: 'open google docs and type a sentence about dogs' });
+
+    const calls = (runAgent as any).mock.calls;
+    // Subtask 1's agent gets no prior-subtask breadcrumb; subtask 2's does.
+    const sub1Input = calls[0][0];
+    const sub2Input = calls[calls.length - 1][0];
+    expect(sub1Input.priorHandoff ?? '').not.toMatch(/PRIOR STEP/);
+    // Subtask 2's agent is told what subtask 1 accomplished + to continue there.
+    expect(sub2Input.priorHandoff ?? '').toMatch(/PRIOR STEP/);
+    expect(sub2Input.priorHandoff ?? '').toMatch(/claims success/);
+    expect(sub2Input.priorHandoff ?? '').toMatch(/Continue from that state/);
+  });
+
   it('agent success + verifier REJECT → ladder climbs to hybrid', async () => {
     agentResultByRung.clear();
     // Blind claims done, but the verifier will reject it.

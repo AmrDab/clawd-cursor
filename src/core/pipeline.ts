@@ -568,10 +568,15 @@ export class Pipeline {
         const targetWindow = tw ? { title: tw.title, processName: tw.processName } : undefined;
         if (tw) log.info('pipeline.target_window', { title: tw.title, process: tw.processName });
 
+        // Continuity: hand the previous subtask's outcome to this one so the
+        // agent continues from that state (e.g. "subtask 1 navigated to Google
+        // Docs" → this subtask types THERE, not in a freshly-opened Notepad).
+        const priorSubtask = i > 0 && lastText ? lastText : undefined;
+
         const subResult = await this.runOneSubtask(
           subtask,
           subDecision,
-          { costMeter, log, isAborted, trace: aggregateTrace, targetWindow },
+          { costMeter, log, isAborted, trace: aggregateTrace, targetWindow, priorSubtask },
         );
 
         lastText = subResult.text;
@@ -766,8 +771,12 @@ export class Pipeline {
     let rungsTried = 0;
     /** Last structured feedback from the verifier — carried into the next rung's agent call. */
     let lastFeedback: ReflectionFeedback | undefined;
-    /** Handoff note from the previous rung's agent — the text↔vision channel. */
-    let lastHandoff: string | undefined;
+    /** Handoff note from the previous rung's agent — the text↔vision channel.
+     *  Seeded with the PRIOR SUBTASK's outcome so the first rung continues the
+     *  chain (cross-subtask continuity) instead of starting blind. */
+    let lastHandoff: string | undefined = env.priorSubtask
+      ? `PRIOR STEP (already done): ${env.priorSubtask}\nContinue from that state — act in the window/app it left you in; do NOT restart or open a different app.`
+      : undefined;
 
     // Whether the Reflector override is active (gated env var — see PR9 spec).
     const reflectorEnabled = process.env.CLAWD_REFLECTOR === '1';
@@ -1398,6 +1407,11 @@ interface StrategyEnv {
    *  of thrashing. Undefined for launch/navigate subtasks or when no safe
    *  anchor exists — the generic stay-in-window guidance still applies. */
   targetWindow?: { title: string; processName: string };
+  /** What the PREVIOUS subtask accomplished — carried into this subtask's agent
+   *  so it continues from that state instead of starting blind. Fixes the
+   *  cross-subtask continuity gap (subtask 2 "type a sentence" not knowing
+   *  subtask 1 opened Google Docs in the browser → it opened Notepad instead). */
+  priorSubtask?: string;
 }
 
 interface StrategyResult {
