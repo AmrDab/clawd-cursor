@@ -276,6 +276,14 @@ export interface PipelineLlm {
 export interface PipelineDeps {
   adapter: PlatformAdapter;
   llm: PipelineLlm;
+  /**
+   * Lazy provider for the CDP driver used by the agent-loop `browser_*` tools.
+   * A provider (not a direct handle) because the Agent constructs the Pipeline
+   * in its own constructor, BEFORE the CLI attaches the daemon's CDPDriver —
+   * so we resolve it on demand at runAgent time. Returns null when CDP isn't
+   * wired (the browser_* tools then degrade to OCR).
+   */
+  cdp?: () => import('../platform/cdp-driver').CDPDriver | null;
   /** Refuse vision even if configured (high-security mode). */
   disableVision?: boolean;
   /** Cap inside the agent loop. Default 20. */
@@ -1360,7 +1368,7 @@ export class Pipeline {
         priorHandoff,
         targetWindow: env.targetWindow,
       },
-      { adapter: this.deps.adapter, llm: llmDeps },
+      { adapter: this.deps.adapter, llm: llmDeps, cdp: this.deps.cdp?.() ?? null },
     );
 
     // Build this rung's handoff note so the NEXT rung (the morph's other

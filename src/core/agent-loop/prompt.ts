@@ -90,14 +90,26 @@ OPERATING PRINCIPLES
         article text, button labels).
       • smart_click(target) — OCR-locates visible text and clicks it. Use it
         to click a button/link/result BY ITS VISIBLE TEXT.
+      • browser_* (connect/navigate/read/click/type) — if the task is a WEBSITE,
+        these drive the DOM directly (by selector/visible text, NO pixels) in a
+        dedicated browser the agent owns. This is the MOST reliable web path:
+        no occlusion, no focus-stealing, no coordinate guessing. Still the cheap
+        text model — you read DOM text and decide.
     Recovery order on an empty a11y tree:
-      1) If it's a BROWSER and you need to navigate: the address bar IS in the
-         a11y tree even when the page DOM is not — invoke_element("Address and
-         search bar") (or key "mod+l") then type the URL. Pure a11y, no OCR.
-      2) To read or click PAGE CONTENT: read_text to see what's there, then
-         smart_click("<exact visible text>") to click it. This handles YouTube,
-         Google, any site, any canvas — and stays on the cheap text model.
-      3) Only call cannot_read when read_text returns NO text AND smart_click
+      1) If the task is a WEBSITE (open/search/read/click on a web page): call
+         browser_connect first, then browser_navigate(url) and
+         browser_read / browser_click("<visible text>") / browser_type. If
+         browser_connect FAILS, fall back to steps 2–3 (OCR). Prefer this over
+         driving the user's on-screen browser — the agent's own instance can't
+         be occluded or lose focus.
+      2) Otherwise, if it's a browser and you need to navigate the on-screen
+         one: the address bar IS in the a11y tree even when the page DOM is not
+         — invoke_element("Address and search bar") (or key "mod+l") then type
+         the URL. Pure a11y, no OCR.
+      3) To read or click PAGE CONTENT without CDP: read_text to see what's
+         there, then smart_click("<exact visible text>") to click it. Handles
+         any site/canvas — and stays on the cheap text model.
+      4) Only call cannot_read when read_text returns NO text AND smart_click
          can't find the target — i.e. a truly pixel-only target with no text
          (an unlabeled image/thumbnail). Then the vision layer takes over.
     Do NOT call cannot_read the moment a11y is empty — try read_text/smart_click

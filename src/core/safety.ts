@@ -178,6 +178,7 @@ const TOOL_TIER: Record<string, Tier> = {
   'cdp_page_context': 'read',
   'cdp_read_text': 'read',
   'cdp_list_tabs': 'read',
+  'browser_read': 'read',       // agent-loop CDP read — DOM text/elements, no side effects
   'shortcuts_list': 'read',
   'build_uri': 'read',          // pure string construction — no side effects
   // Input — allow with label check
@@ -200,6 +201,11 @@ const TOOL_TIER: Record<string, Tier> = {
   'cdp_wait_for_selector': 'input',
   'cdp_switch_tab': 'input',
   'cdp_connect': 'input',
+  // Agent-loop CDP browser tools (dedicated agent-owned instance, DOM-driven).
+  'browser_connect': 'input',
+  'browser_navigate': 'input',
+  'browser_click': 'input',
+  'browser_type': 'input',
   'navigate_browser': 'input',
   'focus_window': 'input',
   'minimize_window': 'input',

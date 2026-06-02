@@ -44,6 +44,10 @@
  */
 
 import { chromium, type Browser, type Page } from 'playwright';
+import { spawn } from 'child_process';
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
 
 // ── Default CDP port — matches browser-config.ts and tool launch flags ──
 const DEFAULT_CDP_PORT = 9223;
@@ -170,6 +174,81 @@ export class CDPDriver {
     } catch (err) {
       console.log(`   ❌ CDPDriver: failed to connect to CDP port ${this.cdpPort}: ${err}`);
       return false;
+    }
+  }
+
+  /**
+   * Ensure a CDP connection exists WITHOUT disturbing the user's own browser.
+   *
+   * Order of attempts:
+   *   1. Already connected → done.
+   *   2. `connect()` — attach to any browser already on the debug port.
+   *   3. If `launch` is allowed, spawn the SYSTEM browser with the debug port
+   *      AND a dedicated `--user-data-dir`. Chromium keys its single-instance
+   *      lock on the profile directory, so a dedicated profile starts a
+   *      SEPARATE browser process — it never closes, reuses, or steals focus
+   *      from the user's existing windows. We then connect to that instance.
+   *
+   * This is the autonomous agent's path: a private, CDP-controlled browser it
+   * fully owns. Non-destructive by construction. Returns true once connected.
+   *
+   * @param opts.launch   Allow launching a dedicated instance (default false → attach-only).
+   * @param opts.exePaths Candidate browser executables, in priority order.
+   */
+  async ensureConnected(opts: { launch?: boolean; exePaths?: string[] } = {}): Promise<boolean> {
+    if (await this.isConnected()) return true;
+    if (await this.connect()) return true;
+    if (!opts.launch) return false;
+
+    const exe = (opts.exePaths ?? []).find(p => {
+      try { return fs.existsSync(p); } catch { return false; }
+    });
+    if (!exe) {
+      console.log('   ❌ CDPDriver: no browser executable found to launch with CDP');
+      return false;
+    }
+
+    // Dedicated profile dir → a separate Chromium instance that won't touch
+    // the user's running browser.
+    const profileDir = path.join(os.homedir(), '.clawdcursor', 'cdp-profile');
+    try { fs.mkdirSync(profileDir, { recursive: true }); } catch { /* best-effort */ }
+
+    try {
+      const args = [
+        `--remote-debugging-port=${this.cdpPort}`,
+        `--user-data-dir=${profileDir}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--new-window',
+        'about:blank',
+      ];
+      const child = spawn(exe, args, { stdio: 'ignore', detached: true });
+      child.unref();
+    } catch (err) {
+      console.log(`   ❌ CDPDriver: failed to spawn browser with CDP: ${err}`);
+      return false;
+    }
+
+    // Browser cold-start can take a couple seconds — poll the CDP endpoint.
+    const deadline = Date.now() + 12_000;
+    while (Date.now() < deadline) {
+      const live = await fetch(`http://127.0.0.1:${this.cdpPort}/json/version`, {
+        signal: AbortSignal.timeout(1500),
+      }).then(r => r.ok).catch(() => false);
+      if (live) break;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    return this.connect();
+  }
+
+  /** Navigate the active page to a URL (waits for DOM content to load). */
+  async navigate(url: string): Promise<CDPInteractionResult> {
+    const pg = this.requirePage();
+    try {
+      await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+      return { success: true, method: 'goto', value: pg.url() };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 

@@ -191,6 +191,11 @@ export class Agent {
           vision: visionConfig,
         },
         disableVision,
+        // Lazy CDP provider for the agent-loop browser_* tools. Resolved on
+        // demand because the CLI attaches `this.cdpDriver` AFTER this
+        // constructor runs (see surface/cli.ts). Returns null until then →
+        // browser_* tools degrade to OCR.
+        cdp: () => (this as { cdpDriver?: import('../platform/cdp-driver').CDPDriver }).cdpDriver ?? null,
         // Ground-truth verifier is on by default — every successful agent
         // rung is post-checked against actual screen state, and failed
         // verification demotes the rung so the ladder climbs. Opt-out

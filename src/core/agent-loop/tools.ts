@@ -28,6 +28,7 @@ import { ensureTargetForeground } from './focus-guard';
 import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
 import { OcrEngine, type OcrElement } from '../../platform/ocr-engine';
+import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
 
 /** Lazy OCR singleton for the agent-loop perception tools (read_text, smart_click).
  *  Mirrors the pattern in src/tools/smart.ts. Construction never throws; the real
@@ -1299,6 +1300,113 @@ export function buildUnifiedTools(
         await sleep(150);
         getAgentOcr().invalidateCache();
         return { success: true, text: `smart_click: clicked "${hit.label}" (score ${hit.score.toFixed(2)}) at (${hit.x},${hit.y})${raised}`, targetLabel: hit.label };
+      },
+    },
+
+    // ─── BROWSER (CDP / DOM — reliable web automation, no pixels) ────────
+    // For web pages, driving the DOM by selector/text is far more reliable
+    // than OCR + coordinate clicks: no occlusion, no focus-stealing, no
+    // image scaling. These tools operate a DEDICATED, agent-owned browser
+    // instance (separate profile + debug port) so they never disturb the
+    // user's own windows. They DEGRADE GRACEFULLY: if CDP isn't wired or a
+    // browser can't be launched, they say so and the agent falls back to
+    // read_text / smart_click. Haiku stays the brain — it reads DOM text and
+    // decides; no vision model needed.
+    {
+      name: 'browser_connect',
+      description: 'Open/attach a dedicated browser the agent controls via the DOM (reliable for web pages — no pixels). Call this FIRST for any website task, then use browser_navigate/read/click/type. If it fails, fall back to read_text/smart_click.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      changesScreen: true,
+      async execute(_args, ctx) {
+        if (!ctx.cdp) return { success: false, text: 'browser_connect: CDP not available in this build — use read_text/smart_click for the page instead.' };
+        // CLAWD_AGENT_CDP_OFF=1 → attach-only (never launch a new instance).
+        const allowLaunch = !/^(1|true)$/i.test(process.env.CLAWD_AGENT_CDP_OFF ?? '');
+        const ok = await ctx.cdp.ensureConnected({ launch: allowLaunch, exePaths: [...getEdgePaths(), ...getChromePaths()] }).catch(() => false);
+        if (!ok) return { success: false, text: `browser_connect: could not ${allowLaunch ? 'launch or attach to' : 'attach to'} a CDP browser — fall back to read_text/smart_click.` };
+        const url = await ctx.cdp.getUrl().catch(() => null);
+        const title = await ctx.cdp.getTitle().catch(() => null);
+        return { success: true, text: `browser_connect: connected to "${title ?? '(blank)'}" at ${url ?? 'about:blank'}. Use browser_navigate to open a URL, browser_read to see the page, browser_click/browser_type to interact.` };
+      },
+    },
+    {
+      name: 'browser_navigate',
+      description: 'Navigate the agent-owned browser to a URL (waits for load). Requires browser_connect first.',
+      inputSchema: {
+        type: 'object',
+        properties: { url: { type: 'string', description: 'The URL to open (e.g. https://www.youtube.com).' } },
+        required: ['url'],
+        additionalProperties: false,
+      },
+      changesScreen: true,
+      async execute(args, ctx) {
+        if (!ctx.cdp || !(await ctx.cdp.isConnected())) return { success: false, text: 'browser_navigate: not connected — call browser_connect first.' };
+        const url = String(args.url ?? '').trim();
+        if (!url) return { success: false, isError: true, text: 'browser_navigate: url required.' };
+        const r = await ctx.cdp.navigate(url);
+        return r.success ? { success: true, text: `browser_navigate: loaded ${r.value ?? url}` } : { success: false, text: `browser_navigate failed: ${r.error}` };
+      },
+    },
+    {
+      name: 'browser_read',
+      description: 'Read the current page as structured DOM: interactive elements (links/buttons/inputs with selectors), or text for a CSS selector. Use instead of read_text on web pages. Requires browser_connect first.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          selector: { type: 'string', description: 'Optional CSS selector to read text from (default: structured interactive-element list for the whole page).' },
+        },
+        additionalProperties: false,
+      },
+      changesScreen: false,
+      async execute(args, ctx) {
+        if (!ctx.cdp || !(await ctx.cdp.isConnected())) return { success: false, text: 'browser_read: not connected — call browser_connect first.' };
+        const selector = typeof args.selector === 'string' ? args.selector.trim() : '';
+        const text = selector ? await ctx.cdp.readText(selector, 3000) : await ctx.cdp.getPageContext();
+        return { success: true, text };
+      },
+    },
+    {
+      name: 'browser_click',
+      description: 'Click a page element by visible text or CSS selector (DOM click — no coordinates). Requires browser_connect first.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Visible text of the element to click (preferred).' },
+          selector: { type: 'string', description: 'CSS selector (alternative to text).' },
+        },
+        additionalProperties: false,
+      },
+      changesScreen: true,
+      async execute(args, ctx) {
+        if (!ctx.cdp || !(await ctx.cdp.isConnected())) return { success: false, text: 'browser_click: not connected — call browser_connect first.' };
+        const text = typeof args.text === 'string' ? args.text.trim() : '';
+        const selector = typeof args.selector === 'string' ? args.selector.trim() : '';
+        if (!text && !selector) return { success: false, isError: true, text: 'browser_click: provide text or selector.' };
+        const r = text ? await ctx.cdp.clickByText(text) : await ctx.cdp.click(selector);
+        return r.success ? { success: true, text: `browser_click: clicked ${text ? `"${text}"` : selector} (${r.method})` } : { success: false, text: `browser_click failed: ${r.error}. Call browser_read to see the actual elements, then retry.` };
+      },
+    },
+    {
+      name: 'browser_type',
+      description: 'Type text into a page input by CSS selector or associated label (DOM input — no coordinates). Requires browser_connect first.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Text to type.' },
+          selector: { type: 'string', description: 'CSS selector for the input.' },
+          label: { type: 'string', description: 'Label text associated with the input (alternative to selector).' },
+        },
+        required: ['text'],
+        additionalProperties: false,
+      },
+      changesScreen: true,
+      async execute(args, ctx) {
+        if (!ctx.cdp || !(await ctx.cdp.isConnected())) return { success: false, text: 'browser_type: not connected — call browser_connect first.' };
+        const text = String(args.text ?? '');
+        const selector = typeof args.selector === 'string' ? args.selector.trim() : '';
+        const label = typeof args.label === 'string' ? args.label.trim() : '';
+        if (!selector && !label) return { success: false, isError: true, text: 'browser_type: provide selector or label.' };
+        const r = label ? await ctx.cdp.typeByLabel(label, text) : await ctx.cdp.typeInField(selector, text);
+        return r.success ? { success: true, text: `browser_type: typed into ${selector || `label "${label}"`}` } : { success: false, text: `browser_type failed: ${r.error}` };
       },
     },
 

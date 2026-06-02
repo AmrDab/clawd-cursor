@@ -10,6 +10,7 @@
  */
 
 import type { PlatformAdapter, ScreenshotResult } from '../../platform/types';
+import type { CDPDriver } from '../../platform/cdp-driver';
 
 export type AgentMode =
   /** a11y-only. Screenshot tool is not in the catalog. Cheapest path. */
@@ -143,6 +144,10 @@ export interface AgentToolContext {
    *  foreground drifted to a different process — so the click lands on the
    *  intended window instead of whatever overlaps that pixel. */
   targetWindow?: { title: string; processName: string };
+  /** Optional CDP driver — when present, the browser_* tools drive a
+   *  dedicated, agent-owned browser instance via the DOM (selectors, not
+   *  pixels). Null when the daemon didn't wire CDP. Tools degrade to OCR. */
+  cdp?: CDPDriver | null;
 }
 
 /**

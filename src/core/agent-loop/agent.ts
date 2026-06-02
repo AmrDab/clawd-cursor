@@ -92,6 +92,9 @@ const NO_TOOL_CALL_LIMIT = 3;
 export interface AgentDeps {
   adapter: import('../../platform/types').PlatformAdapter;
   llm: AgentLlmDeps;
+  /** Optional CDP driver for the browser_* tools (dedicated agent-owned
+   *  browser). Resolved lazily by the pipeline from the daemon's driver. */
+  cdp?: import('../../platform/cdp-driver').CDPDriver | null;
 }
 
 /**
@@ -663,6 +666,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           screenshotsCaptured,
           activeApp,
           targetWindow: input.targetWindow,
+          cdp: deps.cdp ?? null,
         };
 
         let result: Awaited<ReturnType<UnifiedTool['execute']>>;

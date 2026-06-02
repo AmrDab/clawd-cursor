@@ -82,6 +82,14 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     // page + click by visible text WITHOUT escalating to the vision model.
     'read_text',
     'smart_click',
+    // CDP/DOM browser control — the agent's own browser instance, driven by
+    // selector/text instead of pixels. The MOST reliable path for web tasks
+    // (no occlusion/focus-stealing). Connect first; degrades to OCR if absent.
+    'browser_connect',
+    'browser_navigate',
+    'browser_read',
+    'browser_click',
+    'browser_type',
     'done',
     'give_up',
     'cannot_read',
@@ -104,6 +112,11 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     // Webview forms (browser-rendered) have no DOM a11y — OCR finds field labels.
     'read_text',
     'smart_click',
+    // CDP/DOM — fill web forms by selector/label, far more reliable than OCR.
+    'browser_connect',
+    'browser_read',
+    'browser_click',
+    'browser_type',
     // When the "form" is just a wrapper around a known semantic intent
     // (compose mail, place call, open file, open Slack channel, etc.),
     // open_uri + build_uri skip the form entirely.
