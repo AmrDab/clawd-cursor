@@ -231,9 +231,9 @@ v0.9 collapses everything onto **MCP — one protocol, two transports**. There i
 |------|---------|-----------|-------|-----------------|
 | `mcp` | `clawdcursor mcp [--compact]` | stdio | **You** (editor host) | 97 granular (default) or 6 compact (`--compact`) |
 | `agent --no-llm` or `agent` with no LLM configured | `clawdcursor agent --no-llm` | HTTP `/mcp` | **You** (HTTP client) | 97 granular + 6 compact, both via the same `/mcp` endpoint |
-| `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in LLM pipeline | All of the above PLUS the autonomous `submit_task` MCP tool — hand it a plain-English task |
+| `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in LLM pipeline | All of the above PLUS the autonomous task-handoff tool — named `task` on the compact surface, `submit_task` on granular — hand it a plain-English task |
 
-In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor reasons AND acts — call the `submit_task` MCP tool with a natural-language instruction, then poll `agent_status`.
+In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor reasons AND acts — call the autonomous handoff tool (`task` in compact mode, `submit_task` in granular) with a natural-language instruction, then poll `agent_status`.
 
 The `start` and `serve` verbs from v0.8 still work as deprecation aliases (they print a warning and proxy to `agent`); they're scheduled for removal in v0.10.
 
