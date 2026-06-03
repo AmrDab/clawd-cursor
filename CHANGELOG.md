@@ -2,6 +2,72 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.0.0] - 2026-06-03 — adaptive pipeline + cost tiers + desktop grounding
+
+### Upgrading from 0.9.x
+
+**MCP server id.** The server id has been `clawdcursor` since v0.9.0 (it
+was `clawd-cursor` before that). If your editor re-prompts for every tool
+call after upgrading, your allowlist entries are keyed to the old id or to
+individual tool names. Switch to the **server-level wildcard**:
+
+```
+mcp__clawdcursor
+```
+
+A single wildcard entry covers all current and future tools and survives
+tool renames across versions — per-tool entries like
+`mcp__clawdcursor__window` silently break whenever a tool is added,
+removed, or renamed.
+
+### Added — text ↔ vision handoff in the adaptive pipeline
+
+The pipeline now switches between text-only and vision rungs mid-task
+when the verifier signals a mismatch, rather than restarting. Spatial
+gestures (drag into / onto) correctly morph to the vision rung instead of
+staying blind.
+
+### Added — cost-class metadata on all 97 granular tools
+
+Every granular tool is stamped with a `costClass` (`act` / `inspect` /
+`perceive-text` / `perceive-image`). The class is exposed in the MCP
+`tools/list` description prefix so external agents can select the
+cheapest viable tool without reading the full schema.
+
+### Added — desktop-survey grounding for the preprocessor
+
+The preprocessor and decomposer now plan from live desktop perception
+(open windows + OS-default handlers) instead of static app guesses.
+The stay-in-target-window guardrail refuses actions against windows that
+were not open when the task started.
+
+### Added — intent-driven email compose-send
+
+`compose-send` only auto-fires the Send action when the task description
+explicitly requests sending. Tasks that ask to draft or compose leave a
+pre-filled draft open instead of dispatching immediately.
+
+### Fixed — Save As filename field on Windows
+
+The granular `set_field_value` → `invoke-element set-value` path in
+`ps-bridge.ps1` lacked the composite handling added to the compound
+`set_value` path in v0.9.7. The "File name:" label is a read-only Text
+element; the fix resolves the writable sibling Edit control via
+`LabeledBy` before writing, with a keyboard-sequence fallback.
+
+### Fixed — CLI flags honoured in non-interactive mode
+
+`--provider` and `--model` flags passed to `clawdcursor agent` were
+silently ignored when no TTY was attached. The config-reading path now
+applies CLI flags before falling back to the config file on all entry
+points.
+
+### Changed — retired hardcoded in-app choreography constants
+
+Per-app tab-order and keystroke constants (e.g. `tabsAfterRecipient`) are
+removed; the pipeline derives sequencing from live accessibility-tree
+inspection instead.
+
 ## [0.9.9] - 2026-05-24 — security hardening + registry perf
 
 ### Security — AppleScript backslash escaping + crypto host token (PR #136)

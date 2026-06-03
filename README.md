@@ -139,7 +139,9 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 > **Don't run `clawdcursor mcp` in a terminal yourself** &mdash; your editor launches it automatically over stdio when it needs the server. The only commands you run by hand are the install, `consent`, and `doctor` steps above.
 
-> **macOS:** run `clawdcursor grant` to walk through Accessibility + Screen Recording permissions.
+> **Editor permission allowlist (Claude Code, Cursor, &hellip;).** If your editor maintains a per-tool permission allowlist (keys like `mcp__clawdcursor__window`), use the **server-level wildcard** `"mcp__clawdcursor"` instead. It covers every tool in one entry and is immune to tool renames across versions — per-tool entries silently break whenever a tool is added, removed, or renamed.
+
+> **macOS first run.** Run `clawdcursor grant` to walk through the permission dialogs, then open **System Settings &rarr; Privacy &amp; Security** and enable the entry named **ClawdCursor** under **both** Accessibility and Screen Recording. v1.0.0 consolidates all desktop control under this single native-app identity &mdash; both entries are required.
 > **Linux:** install `tesseract-ocr`, `python3-gi`, `gir1.2-atspi-2.0`, and (Wayland only) `ydotool` or `wtype`.
 
 ---
@@ -408,7 +410,7 @@ Platform-specific code lives in `src/platform/{windows,macos,linux}.ts` (plus `w
 Per-OS setup notes:
 
 - **Windows** &mdash; no setup. PowerShell bridge spawns on demand.
-- **macOS** &mdash; first run needs Accessibility + Screen Recording in `System Settings > Privacy & Security`. `clawdcursor grant` walks the dialogs. Retina / HiDPI handled in the adapter; **do not pre-scale coordinates**.
+- **macOS** &mdash; first run needs Accessibility + Screen Recording in `System Settings > Privacy & Security`. `clawdcursor grant` walks the dialogs; enable the entry named **ClawdCursor** under both categories. Retina / HiDPI handled in the adapter; **do not pre-scale coordinates**.
 - **Linux X11** &mdash; `apt install tesseract-ocr python3-gi gir1.2-atspi-2.0` (or your distro's equivalent).
 - **Linux Wayland** &mdash; same a11y packages, plus `ydotool` + a running `ydotoold` daemon (preferred) or `wtype` (keyboard only).
 
