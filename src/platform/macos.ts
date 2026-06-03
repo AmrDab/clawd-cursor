@@ -137,14 +137,32 @@ export class MacOSAdapter implements PlatformAdapter {
       logicalWidth = w || 0; logicalHeight = h || 0;
     } catch { /* fall through */ }
 
-    // Capture a probe screenshot to learn physical dimensions.
-    const probe = await this.screenshot();
-    const physicalWidth = probe.width * probe.scaleFactor;
-    const physicalHeight = probe.height * probe.scaleFactor;
-    if (!logicalWidth) logicalWidth = probe.width;
-    if (!logicalHeight) logicalHeight = probe.height;
-
-    const dpiRatio = physicalWidth > logicalWidth ? physicalWidth / logicalWidth : 1;
+    // Capture a probe screenshot to learn physical (retina) dimensions.
+    // If the screenshot-helper binary is missing (e.g. published npm install
+    // before `cd native && ./build.sh`), degrade gracefully: assume 1x DPI
+    // so that listDisplays() and the a11y pipeline still work.  callers that
+    // genuinely need screenshots will get the actionable error from screenshot().
+    let physicalWidth = logicalWidth;
+    let physicalHeight = logicalHeight;
+    let dpiRatio = 1;
+    try {
+      const probe = await this.screenshot();
+      physicalWidth = probe.width * probe.scaleFactor;
+      physicalHeight = probe.height * probe.scaleFactor;
+      if (!logicalWidth) logicalWidth = probe.width;
+      if (!logicalHeight) logicalHeight = probe.height;
+      dpiRatio = physicalWidth > logicalWidth ? physicalWidth / logicalWidth : 1;
+    } catch (err) {
+      // Screenshot-helper absent or Screen Recording not granted.
+      // logicalWidth/logicalHeight may already be set from NSScreen above;
+      // if not, we have no dimensions at all — surface a clear error.
+      if (!logicalWidth || !logicalHeight) {
+        throw err; // re-throw so init()'s .catch() swallows it, not an opaque crash
+      }
+      // Usable logical dims from NSScreen — keep the physical = logical / 1x
+      // fallback set at declaration (screenshot() is the first statement in the
+      // try, so on this path physicalWidth/Height still hold the logical dims).
+    }
 
     this.screenSize = { physicalWidth, physicalHeight, logicalWidth, logicalHeight, dpiRatio };
     return this.screenSize;
@@ -197,7 +215,25 @@ export class MacOSAdapter implements PlatformAdapter {
   }
 
   async screenshot(opts?: { maxWidth?: number; displayIndex?: number }): Promise<ScreenshotResult> {
-    if (!this.screenshotHelperPath) throw new Error('screenshot-helper not found');
+    if (!this.screenshotHelperPath) {
+      // Build a human-readable list of the candidate paths that were searched
+      // so the user knows exactly where the binary was expected.
+      const root = getPackageRoot();
+      const searched = [
+        path.join(root, 'native', 'ClawdCursor.app', 'Contents', 'MacOS', 'screenshot-helper'),
+        path.join(root, 'node_modules', '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', 'screenshot-helper'),
+        path.join(os.homedir(), '.clawdcursor', 'ClawdCursor.app', 'Contents', 'MacOS', 'screenshot-helper'),
+      ].join('\n  ');
+      throw new Error(
+        `screenshot-helper not found. The native macOS helper binary was not built or installed.\n` +
+        `Searched:\n  ${searched}\n\n` +
+        `To fix: cd into the clawdcursor package root and run:\n` +
+        `  cd native && ./build.sh\n` +
+        `(Requires Xcode Command Line Tools — install with: xcode-select --install)\n\n` +
+        `Or reinstall clawdcursor after installing the Command Line Tools:\n` +
+        `  npm install -g clawdcursor`,
+      );
+    }
 
     const tmp = `/tmp/.clawdcursor-shot-${process.pid}-${Date.now()}.png`;
     try {
