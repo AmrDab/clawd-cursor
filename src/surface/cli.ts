@@ -10,8 +10,12 @@
 // Catch this non-fatal socket error to prevent server crash.
 process.on('uncaughtException', (err: any) => {
   if (err?.code === 'EINVAL' && err?.syscall === 'setTypeOfService') {
-    // Non-fatal: Node.js internal QoS socket option not supported on this macOS version.
-    // Safe to ignore — the HTTP request will still complete.
+    // Swallowed intentionally: Node.js v25+ on macOS attempts to set the IP
+    // QoS/TOS socket option via undici's fetch(); macOS does not support it
+    // and throws EINVAL. The HTTP request continues normally — this is purely
+    // a kernel-level no-op. We log at debug level so it remains observable
+    // without polluting normal output.
+    console.debug('[clawdcursor] uncaughtException swallowed (known-benign): setTypeOfService EINVAL on macOS/Node v25+');
     return;
   }
   // Re-throw any other uncaught exception
@@ -145,8 +149,23 @@ async function forceKillPort(port: number): Promise<boolean> {
     }
   }
 
+  // Non-Windows: enumerate PIDs explicitly before killing, mirroring the
+  // Windows branch above. Running `kill -9 $(lsof -ti tcp:N)` with an empty
+  // substitution sends SIGKILL with no target argument — behavior is
+  // distro-dependent and can erroneously kill the current process on some
+  // systems. Instead: capture lsof output, parse PIDs in JS, and only kill
+  // when we have at least one confirmed PID.
   try {
-    execSync(`kill -9 $(lsof -ti tcp:${port})`, { shell: '/bin/sh' });
+    const lsofOut = execSync(`lsof -ti tcp:${port}`, { encoding: 'utf-8', shell: '/bin/sh' });
+    const pids = lsofOut.trim().split(/\s+/)
+      .map(s => parseInt(s, 10))
+      .filter(n => Number.isInteger(n) && n > 0);
+
+    if (pids.length === 0) return false;
+    for (const pid of pids) {
+      process.kill(pid, 'SIGKILL');
+      console.log(`${e('🐾', '>')} Killed process ${pid}`);
+    }
     return true;
   } catch {
     return false;
