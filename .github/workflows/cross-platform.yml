@@ -38,6 +38,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit production dependencies
+        # Gate on high+ severity. Two moderate advisories are currently
+        # accepted/tracked: an unfixable infinite-loop in `file-type` (transitive
+        # via @nut-tree-fork/nut-js -> jimp, no patched release exists) and an
+        # XSS in `ip-address` (via the MCP SDK's express-rate-limit). Revisit to
+        # `moderate` once upstream ships fixes (see issue #117).
+        run: npm audit --audit-level=high --omit=dev
+
       - name: Lint
         run: npm run lint
 
