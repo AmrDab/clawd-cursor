@@ -163,8 +163,15 @@ async function forceKillPort(port: number): Promise<boolean> {
 
     if (pids.length === 0) return false;
     for (const pid of pids) {
-      process.kill(pid, 'SIGKILL');
-      console.log(`${e('🐾', '>')} Killed process ${pid}`);
+      try {
+        process.kill(pid, 'SIGKILL');
+        console.log(`${e('🐾', '>')} Killed process ${pid}`);
+      } catch (err: any) {
+        // ESRCH = the process already exited between lsof and now — that's
+        // success for our purpose (the port is free). Re-throw anything else
+        // (e.g. EPERM) so the outer catch returns false.
+        if (err?.code !== 'ESRCH') throw err;
+      }
     }
     return true;
   } catch {

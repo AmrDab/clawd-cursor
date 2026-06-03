@@ -494,8 +494,8 @@ Per-OS setup notes:
 
 If you hit a genuine **clawdcursor bug** — a tool throws or crashes, or it behaves contrary to this document — help get it fixed. (This is for clawdcursor *defects*, NOT for "I couldn't complete the task" — a task you couldn't finish is not a bug.)
 
-1. **Gather context:** your model name, the user's goal, the exact tool calls you made and what happened (expected vs. actual), and the relevant log under `~/.clawdcursor/logs/` (newest file).
-2. **Submit with the built-in reporter** — it redacts sensitive data (no screenshots, clipboard, or typed text) and shows a preview before sending:
+1. **Gather context:** your model name, the user's goal, the exact tool calls you made and what happened (expected vs. actual), and the relevant task log under `~/.clawdcursor/task-logs/` (newest `.jsonl` file).
+2. **Submit with the built-in reporter** — it redacts sensitive data (no screenshots, clipboard, or typed text). In interactive use it shows a preview first; called non-interactively (no TTY — e.g. by an agent) it sends directly, so review your `--note` before running:
    ```
    clawdcursor report --note "<one-line summary — include your model name and the goal>"
    ```

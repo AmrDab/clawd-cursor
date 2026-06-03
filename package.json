@@ -48,7 +48,7 @@
     "SKILL.md"
   ],
   "scripts": {
-    "postinstall": "node scripts/verify-install.js || true && node scripts/postinstall-native.js || true",
+    "postinstall": "node scripts/verify-install.js || node -e \"process.exit(0)\" && node scripts/postinstall-native.js || node -e \"process.exit(0)\"",
     "prepare": "tsc && node dist/postbuild.js",
     "build": "tsc && node dist/postbuild.js",
     "setup": "node scripts/verify-install.js && npm run build && node -e \"if(process.platform==='darwin'){const{execSync}=require('child_process');try{execSync('chmod +x native/build.sh && native/build.sh',{stdio:'inherit'})}catch(e){console.error('\\n❌ Native build failed. Run manually: cd native && ./build.sh');process.exit(1)}}\" && npm link --force",
