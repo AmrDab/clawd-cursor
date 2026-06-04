@@ -61,6 +61,22 @@ when CDP isn't available.
 `read_text` and `smart_click` let the text model read and click webview /
 canvas content via OCR — no escalation to the vision model.
 
+### Fixed — npm package shipped without the Windows bridge + OCR scripts (critical)
+
+`scripts/ps-bridge.ps1` (the persistent UIA bridge) and `scripts/ocr-recognize.ps1`
+were never in the package.json `files` whitelist, so a real `npm install` shipped
+without them. On Windows the bridge crashed on every spawn in an infinite restart
+loop, leaving the whole desktop-perception layer dead — `list_windows` returned 0,
+the accessibility tree was empty, OCR failed — so the agent could launch apps but
+was blind. This affected every published install (0.9.7–0.9.9); it was masked in
+development by `npm link`. Now `scripts/*.ps1` ships in the package.
+
+### Added — Windows panic-stop hotkey
+
+`scripts/install-panic-hotkey.ps1` installs a global keyboard shortcut
+(default Ctrl+Alt+K) that force-kills every clawdcursor process — the daemon and
+its PowerShell UIA/OCR children — instantly, for when an autonomous run misbehaves.
+
 ### Fixed — Save As filename field on Windows
 
 The granular `set_field_value` → `invoke-element set-value` path in
