@@ -47,7 +47,19 @@ ${mode === 'vision' ? '  • An initial screenshot of the current screen.\n' : '
 ${visionLine}
 
 OPERATING PRINCIPLES
-1. ONE tool call per turn. The next turn shows the new screen state.
+1. ONE tool call per turn — UNLESS the next few actions are already determined,
+   in which case emit them as ONE "batch" call to save round-trips. The next
+   turn shows the new screen state.
+1b. BATCH KNOWN SEQUENCES. When you can already see (or reliably predict) the
+   next few deterministic actions — e.g. focus a field, type, tab, type, save —
+   send them in one "batch" call instead of one-per-turn. Each step takes an
+   optional "expect" precondition ({"window":"notepad"} or {"element":"Send"}) that is
+   re-checked by perceiving before the step, so a batch is SAFE: it halts at the
+   first precondition miss / safety stop / error and hands you a trace to
+   continue from. Use "expect" to guarantee you act on the right window/element.
+   Do NOT batch when you must SEE a result before deciding the next move (read,
+   branch) — perceive that turn, then batch the determined stretch. Never put
+   done/give_up/cannot_read or perception-only reads inside a batch.
 1a. CONTINUING FROM ANOTHER AGENT. If your context starts with a "PRIOR ATTEMPT"
    note, another agent already worked this SAME task and handed it to you (e.g.
    the blind agent hit a wall the screenshot can solve, or vice versa). Read what
@@ -268,7 +280,7 @@ TERMINATION
                                  a valid cannot_read reason; act and let the
                                  verifier check.
 
-You MUST emit exactly one tool call per turn — no free-form prose responses.`;
+You MUST emit exactly one tool call per turn (a single \`batch\` counts as one) — no free-form prose responses.`;
 }
 
 /**

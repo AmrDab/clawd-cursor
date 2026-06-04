@@ -41,6 +41,7 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'focus_window',
     'wait_for_element',
     'list_windows',
+    'batch',
     'done',
     'give_up',
     'cannot_read',
@@ -64,6 +65,7 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     // vscode, obsidian, spotify, zoommtg, https, ...).
     'open_uri',
     'build_uri',
+    'batch',
     'done',
     'give_up',
     'cannot_read',
@@ -90,6 +92,7 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'browser_read',
     'browser_click',
     'browser_type',
+    'batch',
     'done',
     'give_up',
     'cannot_read',
@@ -124,6 +127,7 @@ export const TEXT_PALETTES: Record<Exclude<Capability, 'general'>, string[]> = {
     'build_uri',
     // Launch escape hatch — the form's app may not be open/focused yet.
     'open_app',
+    'batch',
     'done',
     'give_up',
     'cannot_read',

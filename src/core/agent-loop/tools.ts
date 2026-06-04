@@ -22,6 +22,7 @@
 import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
 import type { Capability } from '../classify/capability';
 import { paletteFor } from './palettes';
+import { buildBatchTool } from './batch-tool';
 import { getCompoundTools, COMPOUND_REPLACES } from './compound';
 import { imageScale, scaleCoord } from './coord-scale';
 import { ensureTargetForeground } from './focus-guard';
@@ -1410,6 +1411,10 @@ export function buildUnifiedTools(
       },
     },
 
+    // ─── BATCHED PLANNING ───────────────────────────────────────
+    // Run several known next actions in one turn (saves LLM round-trips).
+    buildBatchTool(),
+
     // ─── TERMINAL ACTIONS ──────────────────────────────────────
     {
       name: 'done',
@@ -1491,6 +1496,13 @@ export function buildUnifiedTools(
       },
     },
   ];
+
+  // A/B toggle: CLAWD_AGENT_NO_BATCH=1 removes the batch tool so the SAME task
+  // can be run per-call (one tool per turn) vs batched, for measurement.
+  if (/^(1|true)$/i.test(process.env.CLAWD_AGENT_NO_BATCH ?? '')) {
+    const bi = tools.findIndex(t => t.name === 'batch');
+    if (bi >= 0) tools.splice(bi, 1);
+  }
 
   // ── Vision mode: compound tools + perception + a11y + terminals ─
   // Replace the individual mouse/keyboard/window primitives with the

@@ -225,6 +225,9 @@ const TOOL_TIER: Record<string, Tier> = {
   'drag': 'input',
   'screenshot': 'read',
   'read_text': 'read',     // OCR perception — no side effects (smart_click already mapped above)
+  // `batch` is an inert wrapper — it gates EACH of its steps through this same
+  // evaluator at runtime, so the wrapper call itself is allow-tier.
+  'batch': 'read',
   'done': 'read',
   'give_up': 'read',
   'cannot_read': 'read',
