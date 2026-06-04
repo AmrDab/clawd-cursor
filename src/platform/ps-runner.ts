@@ -48,7 +48,15 @@ export class PSRunner {
   }
 
   private _start(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    // Capture reject so the exit handler can settle the startup promise even
+    // when the PS bridge exits before it outputs {"ready":true}.  Without
+    // this, clearTimeout(readyTimer) in the exit handler would leave
+    // startPromise as a zombie — never resolved, never rejected — causing
+    // every subsequent `await this.startPromise` to hang forever.
+    let startReject!: (err: Error) => void;
+
+    return new Promise<void>((resolve, reject) => {
+      startReject = reject;
       this.dead  = false;
       this.ready = false;
 
@@ -113,6 +121,12 @@ export class PSRunner {
         this.current = null;
         this.queue   = [];
         const err = new Error(`PSRunner exited (code ${code})`);
+        // Reject the startup promise if the bridge never signalled ready.
+        // Previously this was omitted: clearTimeout(readyTimer) disabled the
+        // 12-second safety net but no rejection was issued, leaving
+        // startPromise as an unsettled zombie.  Any awaiter (e.g.
+        // getActiveWindow inside key_press) would then hang forever.
+        startReject(err);
         for (const c of pending) { clearTimeout(c.timer); c.reject(err); }
       });
     });

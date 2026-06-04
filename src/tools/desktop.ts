@@ -7,11 +7,34 @@
  */
 
 import * as os from 'os';
-import type { ToolDefinition } from './types';
+import type { ToolDefinition, ToolContext } from './types';
 
 /** Dangerous key combos that are blocked */
 const BLOCKED_KEYS = ['alt+f4', 'ctrl+alt+delete', 'ctrl+alt+del'];
 const IS_MAC = os.platform() === 'darwin';
+
+/**
+ * Best-effort active-window label for a tool's result text.
+ *
+ * `getActiveWindow()` goes through the platform a11y bridge (the persistent
+ * PowerShell/UIA process on Windows, AX on macOS, AT-SPI on Linux). That call
+ * is only ever used here to ANNOTATE the result ("Key pressed: X in [app]") —
+ * it is NOT load-bearing for the actual key/type action. So it must never be
+ * able to block or hang the action: if the bridge is slow, recovering, or
+ * wedged, we fall back to "(unknown)" after a short timeout and the keystroke
+ * still goes through. OS-agnostic — applies to every platform's bridge.
+ */
+async function activeWindowLabel(ctx: ToolContext): Promise<string> {
+  try {
+    const active = await Promise.race([
+      ctx.a11y.getActiveWindow(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 1500)),
+    ]);
+    return active ? `[${active.processName}] "${active.title}"` : '(unknown)';
+  } catch {
+    return '(unknown)';
+  }
+}
 
 export function getDesktopTools(): ToolDefinition[] {
   return [
@@ -232,8 +255,7 @@ export function getDesktopTools(): ToolDefinition[] {
       safetyTier: 1,
       handler: async ({ text }, ctx) => {
         await ctx.ensureInitialized();
-        const active = await ctx.a11y.getActiveWindow();
-        const activeInfo = active ? `[${active.processName}] "${active.title}"` : '(unknown)';
+        const activeInfo = await activeWindowLabel(ctx);
 
         // Preserve the user's clipboard contents around the paste-as-type
         // operation. Without this, callers who do
@@ -279,8 +301,7 @@ export function getDesktopTools(): ToolDefinition[] {
         if (BLOCKED_KEYS.some(b => lower === b)) {
           return { text: `BLOCKED: "${key}" is a dangerous key combo.`, isError: true };
         }
-        const active = await ctx.a11y.getActiveWindow();
-        const activeInfo = active ? `[${active.processName}] "${active.title}"` : '(unknown)';
+        const activeInfo = await activeWindowLabel(ctx);
         await ctx.desktop.keyPress(key);
         ctx.a11y.invalidateCache();
         return { text: `Key pressed: ${key} in ${activeInfo}` };
