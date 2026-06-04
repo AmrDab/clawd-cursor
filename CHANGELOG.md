@@ -47,6 +47,20 @@ were not open when the task started.
 explicitly requests sending. Tasks that ask to draft or compose leave a
 pre-filled draft open instead of dispatching immediately.
 
+### Added — CDP/DOM browser rung for the autonomous agent
+
+For web tasks the autonomous agent can drive a dedicated, agent-owned
+browser through the DOM (CSS selectors / visible text, no pixels) instead
+of OCR-on-the-desktop plus coordinate clicks. The instance is launched with
+its own profile so it never closes, reuses, or steals focus from the user's
+own browser windows. Degrades gracefully to OCR (`read_text` / `smart_click`)
+when CDP isn't available.
+
+### Added — OCR perception on the cheap text rung
+
+`read_text` and `smart_click` let the text model read and click webview /
+canvas content via OCR — no escalation to the vision model.
+
 ### Fixed — Save As filename field on Windows
 
 The granular `set_field_value` → `invoke-element set-value` path in
@@ -61,6 +75,17 @@ element; the fix resolves the writable sibling Edit control via
 silently ignored when no TTY was attached. The config-reading path now
 applies CLI flags before falling back to the config file on all entry
 points.
+
+### Fixed — keyboard / typing / open_app could hang over MCP (tools-only)
+
+Over `clawdcursor mcp` (stdio) and `agent --no-llm` (HTTP), `key_press`,
+`type_text`, and `open_app` could hang indefinitely. Root cause: a latent
+zombie-promise in the persistent PowerShell/UIA bridge runner — when the
+bridge exited before signalling ready, the startup promise was never
+settled, so any awaiter hung forever. The bridge now rejects and recovers,
+and the cosmetic active-window lookup in `key_press`/`type_text` is
+time-boxed so a slow or recovering bridge can never block a keystroke. The
+full LLM agent path was unaffected.
 
 ### Changed — retired hardcoded in-app choreography constants
 
