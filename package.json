@@ -37,6 +37,7 @@
     "scripts/verify-install.js",
     "scripts/postinstall-native.js",
     "scripts/sync-version.ts",
+    "scripts/*.ps1",
     "native/build.sh",
     "native/Package.swift",
     "native/Sources/",
