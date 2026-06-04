@@ -9,6 +9,7 @@ import { getDesktopTools } from './desktop';
 import { getA11yTools } from './a11y';
 import { getCdpTools } from './cdp';
 import { getOrchestrationTools } from './orchestration';
+import { getBatchTools } from './batch';
 import { getShortcutTools } from './shortcuts';
 import { getOcrTools } from './ocr';
 import { getSmartTools } from './smart';
@@ -65,6 +66,7 @@ function granularTools(): ToolDefinition[] {
       ...getA11yTools(),
       ...getCdpTools(),
       ...getOrchestrationTools(),
+      ...getBatchTools(),
       ...getShortcutTools(),
       ...getOcrTools(),
       ...getSmartTools(),

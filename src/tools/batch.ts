@@ -1,0 +1,250 @@
+/**
+ * Guarded action-sequence executor + the `batch` tool.
+ *
+ * Lets an AI driving clawdcursor (over MCP, or the autonomous loop) submit an
+ * ORDERED LIST of tool calls that run in one shot — collapsing N round-trips
+ * into one — WITHOUT a code sandbox. It is DECLARATIVE on purpose:
+ *
+ *   - Each step is `{ name, arguments, expect? }` — a normal tool call plus an
+ *     optional precondition guard. No arbitrary code → no injection-as-control-
+ *     flow, no element-handle staleness (every step re-queries by name), no
+ *     opaque partial-execution blob.
+ *   - Every step routes through the SAME `evaluateToolCall` safety gate and the
+ *     SAME `getTool().handler` execution path the MCP server uses per call.
+ *   - Between steps the executor RE-PERCEIVES to check each step's `expect`
+ *     guard; on any guard miss / safety stop / step error it HALTS and returns
+ *     a structured trace so the caller re-plans from real state (the morph
+ *     ladder's recovery, just coarser).
+ *
+ * This is the "batched planning" middle path: most of Code Mode's efficiency,
+ * none of the sandbox's hard problems (see the architecture review).
+ */
+import { getTool, getCompactTools } from './registry';
+import { evaluateToolCall } from './safety-gate';
+import type { ToolContext, ToolResult, ToolDefinition } from './types';
+
+/** Resolve a step's tool by name from EITHER surface — a granular tool
+ *  (`mouse_click`, `open_app`, …) or a compound tool (`computer`, `window`, …)
+ *  — so a batch works whether the caller drives the 97-tool or 6-compound API. */
+function resolveAnyTool(name: string): ToolDefinition | undefined {
+  return getTool(name) ?? getCompactTools().find(t => t.name === name);
+}
+
+/** A lightweight, declarative precondition checked (by re-perceiving) before a step runs. */
+export interface BatchGuard {
+  /** An a11y element with this name must be present in the current UI. */
+  element?: string;
+  /** The foreground/active window's title or processName must contain this (case-insensitive). */
+  window?: string;
+}
+
+export interface BatchStep {
+  /** Tool name — a compound (`computer`/`window`/…) with `arguments.action`, or a granular tool. */
+  name: string;
+  arguments?: Record<string, unknown>;
+  /** Optional precondition; if it fails the batch halts here and reports back. */
+  expect?: BatchGuard;
+  /** Optional human label for the trace. */
+  label?: string;
+}
+
+type StepStatus = 'ok' | 'guard_failed' | 'blocked' | 'needs_confirm' | 'error' | 'unknown_tool' | 'skipped';
+
+export interface StepOutcome { i: number; label: string; status: StepStatus; text: string; }
+
+export interface BatchResult {
+  total: number;
+  completed: number;
+  allDone: boolean;
+  stoppedAt?: number;
+  stopReason?: string;
+  steps: StepOutcome[];
+}
+
+const DEFAULT_MAX_STEPS = 12;
+
+function labelFor(step: BatchStep): string {
+  if (step.label) return step.label;
+  const action = step.arguments?.action;
+  return action ? `${step.name}.${String(action)}` : step.name;
+}
+
+/** Re-perceive and evaluate a step's precondition guard. Returns ok=false with a reason on miss. */
+async function checkGuard(guard: BatchGuard, ctx: ToolContext): Promise<{ ok: boolean; detail: string }> {
+  if (guard.window) {
+    const t = getTool('get_active_window');
+    if (t) {
+      const r = await t.handler({}, ctx).catch((e): ToolResult => ({ text: String(e), isError: true }));
+      const txt = (r.text || '').toLowerCase();
+      if (!txt.includes(guard.window.toLowerCase())) {
+        return { ok: false, detail: `foreground window is not "${guard.window}" (got: ${(r.text || '').slice(0, 90)})` };
+      }
+    }
+  }
+  if (guard.element) {
+    const t = getTool('find_element');
+    if (t) {
+      const r = await t.handler({ name: guard.element }, ctx).catch((e): ToolResult => ({ text: String(e), isError: true }));
+      const txt = (r.text || '').toLowerCase();
+      const missing = r.isError || txt.includes('not found') || txt.includes('no match') || txt.includes('no element') || /\b0 (match|element)/.test(txt);
+      if (missing) return { ok: false, detail: `element "${guard.element}" not present` };
+    }
+  }
+  return { ok: true, detail: '' };
+}
+
+/**
+ * Run an ordered list of guarded tool calls, halting on the first guard miss,
+ * safety stop, or step error. Reuses the real safety gate + tool handlers.
+ */
+export async function executeBatch(
+  steps: BatchStep[],
+  ctx: ToolContext,
+  opts: { allowConfirm?: boolean; maxSteps?: number } = {},
+): Promise<BatchResult> {
+  const cap = opts.maxSteps ?? DEFAULT_MAX_STEPS;
+  const outcomes: StepOutcome[] = [];
+  let completed = 0;
+
+  const halt = (i: number, reason: string): BatchResult =>
+    ({ total: steps.length, completed, allDone: false, stoppedAt: i, stopReason: reason, steps: outcomes });
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const label = labelFor(step);
+
+    if (i >= cap) {
+      outcomes.push({ i, label, status: 'skipped', text: `not run — batch capped at ${cap} steps` });
+      return halt(i, `batch capped at ${cap} steps; submit the remainder as a new batch`);
+    }
+
+    const tool: ToolDefinition | undefined = resolveAnyTool(step.name);
+    if (!tool) {
+      outcomes.push({ i, label, status: 'unknown_tool', text: `tool "${step.name}" is not registered` });
+      return halt(i, `unknown tool "${step.name}"`);
+    }
+
+    // Precondition: re-perceive and verify the step's expectation.
+    if (step.expect) {
+      const g = await checkGuard(step.expect, ctx);
+      if (!g.ok) {
+        outcomes.push({ i, label, status: 'guard_failed', text: `precondition failed: ${g.detail}` });
+        return halt(i, `precondition failed at step ${i} — re-plan from current state`);
+      }
+    }
+
+    const args = step.arguments ?? {};
+
+    // Safety — identical gate to a normal tools/call.
+    const safetyErr = evaluateToolCall(tool, args);
+    if (safetyErr) {
+      const isConfirm = (safetyErr.text || '').includes('safety confirm');
+      if (!(isConfirm && opts.allowConfirm)) {
+        outcomes.push({ i, label, status: isConfirm ? 'needs_confirm' : 'blocked', text: safetyErr.text });
+        return halt(i, isConfirm ? `step ${i} needs confirmation (re-submit with allowConfirm:true if intended)` : `step ${i} blocked by safety`);
+      }
+    }
+
+    // Execute via the real handler.
+    let res: ToolResult;
+    try {
+      res = await tool.handler(args, ctx);
+    } catch (e) {
+      res = { text: `threw: ${e instanceof Error ? e.message : String(e)}`, isError: true };
+    }
+    if (res.isError) {
+      outcomes.push({ i, label, status: 'error', text: (res.text || '').slice(0, 200) });
+      return halt(i, `step ${i} (${label}) errored`);
+    }
+
+    outcomes.push({ i, label, status: 'ok', text: (res.text || '').slice(0, 160) });
+    completed++;
+  }
+
+  return { total: steps.length, completed, allDone: completed === steps.length, steps: outcomes };
+}
+
+/** Pre-flight: scan each step's safety tier WITHOUT executing. */
+function dryRunScan(steps: BatchStep[]): { i: number; label: string; gate: string }[] {
+  return steps.map((step, i) => {
+    const label = labelFor(step);
+    const tool = resolveAnyTool(step.name);
+    if (!tool) return { i, label, gate: 'unknown-tool' };
+    const err = evaluateToolCall(tool, step.arguments ?? {});
+    const gate = !err ? 'allow' : (err.text.includes('safety confirm') ? 'confirm' : 'block');
+    return { i, label, gate };
+  });
+}
+
+function renderResult(r: BatchResult): string {
+  const lines = r.steps.map(s => `  ${s.i}. [${s.status}] ${s.label} — ${s.text}`);
+  const head = r.allDone
+    ? `batch: all ${r.total} steps completed.`
+    : `batch: ${r.completed}/${r.total} completed, halted at step ${r.stoppedAt} — ${r.stopReason}`;
+  return `${head}\n${lines.join('\n')}`;
+}
+
+export function getBatchTools(): ToolDefinition[] {
+  return [
+    {
+      name: 'batch',
+      description:
+        'Run an ORDERED LIST of tool calls in one shot (collapses many round-trips into one). Each step is ' +
+        '{ name, arguments, expect? }. `name`+`arguments` is a normal tool call (compound like ' +
+        '{"name":"computer","arguments":{"action":"type","text":"hi"}} or a granular tool). Optional `expect` ' +
+        'is a precondition checked by RE-PERCEIVING before the step runs: {"window":"notepad"} (foreground ' +
+        'window must match) or {"element":"Send"} (a11y element must be present). The batch HALTS on the first ' +
+        'failed precondition, safety stop, or step error and returns a per-step trace so you re-plan from real ' +
+        'state. Every step goes through the same safety gate as a direct call. Use `expect` to guarantee you ' +
+        'act on the right window/element instead of guessing. Set dryRun:true to pre-scan safety tiers without ' +
+        'executing; allowConfirm:true to let confirm-tier steps proceed.',
+      parameters: {
+        steps: { type: 'string', description: 'JSON array of ordered steps: [{ "name": "<tool>", "arguments": {...}, "expect": {"window"?,"element"?} }] (a real array is also accepted).', required: true },
+        allowConfirm: { type: 'boolean', description: 'Allow confirm-tier steps to run (default false → halt at them).', required: false },
+        dryRun: { type: 'boolean', description: 'Only report each step\'s safety tier; do not execute.', required: false },
+        maxSteps: { type: 'number', description: `Hard cap on executed steps (default ${DEFAULT_MAX_STEPS}).`, required: false },
+      },
+      category: 'orchestration',
+      compactGroup: 'system',
+      safetyTier: 0, // the batch itself is inert; each STEP is gated individually at runtime.
+      handler: async (params, ctx: ToolContext): Promise<ToolResult> => {
+        // `steps` arrives as a JSON string (constrained schema) or, from clients
+        // that pass rich JSON, a real array. Accept both.
+        let steps: BatchStep[];
+        const raw = params.steps;
+        if (typeof raw === 'string') {
+          try { steps = JSON.parse(raw); } catch { return { text: 'batch: `steps` must be a valid JSON array.', isError: true }; }
+        } else if (Array.isArray(raw)) {
+          steps = raw as BatchStep[];
+        } else {
+          return { text: 'batch: `steps` must be a JSON array of { name, arguments, expect? }.', isError: true };
+        }
+        if (!Array.isArray(steps) || steps.length === 0) {
+          return { text: 'batch: `steps` must be a non-empty array of { name, arguments, expect? }.', isError: true };
+        }
+        for (const s of steps) {
+          if (!s || typeof s.name !== 'string') {
+            return { text: 'batch: every step needs a string `name` (the tool to call).', isError: true };
+          }
+        }
+
+        if (params.dryRun) {
+          const scan = dryRunScan(steps);
+          const willStop = scan.find(s => s.gate === 'confirm' || s.gate === 'block' || s.gate === 'unknown-tool');
+          return {
+            text:
+              `batch (dry run): ${steps.length} steps.\n` +
+              scan.map(s => `  ${s.i}. [${s.gate}] ${s.label}`).join('\n') +
+              (willStop ? `\nNote: without allowConfirm, the batch would halt at step ${willStop.i} ([${willStop.gate}]).` : '\nAll steps would be allowed.'),
+          };
+        }
+
+        const result = await executeBatch(steps, ctx, {
+          allowConfirm: params.allowConfirm === true,
+          maxSteps: typeof params.maxSteps === 'number' ? params.maxSteps : undefined,
+        });
+        return { text: renderResult(result), isError: !result.allDone };
+      },
+    },
+  ];
+}

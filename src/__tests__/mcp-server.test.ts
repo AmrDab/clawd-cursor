@@ -54,11 +54,11 @@ describe('createMcpServer', () => {
     expect(handle.tools.length).toBe(getAllTools().length);
   });
 
-  it('registers the 6 compound tools with --compact', async () => {
+  it('registers the 6 primitive compounds + batch with --compact', async () => {
     const ctx = fakeCtx();
     const handle = await createMcpServer({ compact: true, ctx });
     expect(handle.toolCount).toBe(getCompactSurface().length);
-    expect(handle.toolCount).toBe(6);
+    expect(handle.toolCount).toBe(7); // computer/accessibility/window/system/browser/task + batch
   });
 
   it('returns an McpServer instance ready for transport.connect', async () => {

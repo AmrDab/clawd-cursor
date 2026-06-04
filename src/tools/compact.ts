@@ -33,6 +33,7 @@
  */
 
 import { getTool } from './registry';
+import { getBatchTools } from './batch';
 import type { ToolDefinition, ToolContext, ToolResult } from './types';
 
 // ─── Action → granular-tool delegation table ────────────────────────
@@ -353,8 +354,12 @@ export function getCompactTools(): ToolDefinition[] {
         { action: '__task__', delegate: 'delegate_to_agent', argRemap: { instruction: 'task' } },
       ], { action: '__task__', ...args }, ctx),
     },
+
+    // `batch` — run an ordered list of the above calls in one shot (declarative,
+    // guarded, safety-gated per step). The efficiency lever without a sandbox.
+    ...getBatchTools(),
   ];
 }
 
 /** Names of all compact tools (for tier + doc lookups). */
-export const COMPACT_TOOL_NAMES = ['computer', 'accessibility', 'window', 'system', 'browser', 'task'] as const;
+export const COMPACT_TOOL_NAMES = ['computer', 'accessibility', 'window', 'system', 'browser', 'task', 'batch'] as const;

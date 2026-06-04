@@ -208,11 +208,11 @@ describe('compact-as-transform invariants', () => {
   });
 
   // ── 2. 6 compound names are exactly the expected set ────────────────────
-  it('2. Compact surface exposes exactly the 6 expected compound names', () => {
+  it('2. Compact surface exposes the 6 primitive compounds + the batch meta-tool', () => {
     const compactTools = getCompactTools();
     const names = compactTools.map(t => t.name).sort();
     expect(names).toEqual(
-      ['accessibility', 'browser', 'computer', 'system', 'task', 'window'],
+      ['accessibility', 'batch', 'browser', 'computer', 'system', 'task', 'window'],
     );
   });
 

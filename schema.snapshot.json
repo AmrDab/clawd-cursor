@@ -209,6 +209,36 @@
       "costClass": "inspect"
     },
     {
+      "name": "batch",
+      "description": "Run an ORDERED LIST of tool calls in one shot (collapses many round-trips into one). Each step is { name, arguments, expect? }. `name`+`arguments` is a normal tool call (compound like {\"name\":\"computer\",\"arguments\":{\"action\":\"type\",\"text\":\"hi\"}} or a granular tool). Optional `expect` is a precondition checked by RE-PERCEIVING before the step runs: {\"window\":\"notepad\"} (foreground window must match) or {\"element\":\"Send\"} (a11y element must be present). The batch HALTS on the first failed precondition, safety stop, or step error and returns a per-step trace so you re-plan from real state. Every step goes through the same safety gate as a direct call. Use `expect` to guarantee you act on the right window/element instead of guessing. Set dryRun:true to pre-scan safety tiers without executing; allowConfirm:true to let confirm-tier steps proceed.",
+      "category": "orchestration",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "string",
+            "description": "JSON array of ordered steps: [{ \"name\": \"<tool>\", \"arguments\": {...}, \"expect\": {\"window\"?,\"element\"?} }] (a real array is also accepted)."
+          },
+          "allowConfirm": {
+            "type": "boolean",
+            "description": "Allow confirm-tier steps to run (default false → halt at them)."
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Only report each step's safety tier; do not execute."
+          },
+          "maxSteps": {
+            "type": "number",
+            "description": "Hard cap on executed steps (default 12)."
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      },
+      "costClass": "act"
+    },
+    {
       "name": "build_uri",
       "description": "Build a properly-encoded URI from a scheme + semantic fields. Returns the URI as text; pair with open_uri to dispatch it. Examples: scheme=\"mailto\" + to/subject/body → RFC 6068 mailto URI. scheme=\"tel\" + path=\"+15551234\" → tel:+15551234. scheme=\"slack\" + team/channel → slack URI.",
       "category": "orchestration",
