@@ -1363,6 +1363,15 @@ export class Pipeline {
         guide: decision.hints.guide,
         capability: decision.hints.capability,
         maxTurns: this.maxTurnsPerRung,
+        // Pipeline-driven batching (OPT-IN, default OFF). A live A/B showed two
+        // things: (1) Haiku won't emit batches on its own; (2) when FORCED to,
+        // it produces unreliable plans (wrong guards -> halt -> escalation), net
+        // WORSE than per-call. So forcing is gated behind CLAWD_AGENT_FORCE_BATCH
+        // until the planner is a capable model or uses deterministic templates.
+        // The `batch` tool stays available for capable external MCP agents.
+        forceBatchFirst: mode === 'blind'
+          && /^(1|true)$/i.test(process.env.CLAWD_AGENT_FORCE_BATCH ?? '')
+          && !/^(1|true)$/i.test(process.env.CLAWD_AGENT_NO_BATCH ?? ''),
         isAborted: env.isAborted,
         reflectorHint: prevFeedback?.hint,
         priorHandoff,

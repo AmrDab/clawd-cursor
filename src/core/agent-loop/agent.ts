@@ -310,7 +310,13 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
               messages: history,
               maxTokens: llmConfig.maxTokens ?? 1024,
               timeoutMs: 45_000,
-              toolChoice: 'auto',
+              // Pipeline-driven batching: force a `batch` on turn 1 so the model
+              // plans the deterministic stretch up front instead of defaulting
+              // to one call per turn. Only when batch is actually in this rung's
+              // palette; auto thereafter (re-planning / done).
+              toolChoice: (turn === 1 && input.forceBatchFirst && tools.some(t => t.name === 'batch'))
+                ? { name: 'batch' }
+                : 'auto',
             });
             llmCalls += 1;
             break;

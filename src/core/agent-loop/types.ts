@@ -35,6 +35,15 @@ export interface AgentInput {
   capability?: import('../classify/capability').Capability;
   /** Hard cap on turns. Default 20. */
   maxTurns?: number;
+  /**
+   * Pipeline-driven batching: when set, the FIRST turn forces the model to emit
+   * a `batch` (via tool_choice) instead of letting it default to one call per
+   * turn — so the round-trip win is captured by the pipeline, not left to the
+   * model's discretion (which a live A/B showed it won't take). Only applied
+   * when `batch` is in the rung's palette; the batch halts + falls to per-call
+   * on any guard miss, so it degrades safely.
+   */
+  forceBatchFirst?: boolean;
   /** Cooperative cancel — polled every turn. */
   isAborted?: () => boolean;
   /**
