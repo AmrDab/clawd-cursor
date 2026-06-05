@@ -38,6 +38,8 @@
     "scripts/postinstall-native.js",
     "scripts/sync-version.ts",
     "scripts/*.ps1",
+    "scripts/mac/",
+    "scripts/linux/",
     "native/build.sh",
     "native/Package.swift",
     "native/Sources/",

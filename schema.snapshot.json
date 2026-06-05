@@ -1826,7 +1826,11 @@
         "properties": {
           "target": {
             "type": "string",
-            "description": "Element name/text to click (e.g., \"Send\", \"Submit\", \"New Email\")"
+            "description": "Element name/text to click (e.g., \"Send\", \"Submit\", \"New Email\"). Alias: \"name\"."
+          },
+          "name": {
+            "type": "string",
+            "description": "Alias for \"target\" — the rest of the accessibility surface uses \"name\"."
           },
           "processId": {
             "type": "number",
@@ -1836,10 +1840,7 @@
             "type": "number",
             "description": "Max time in ms (default 5000)"
           }
-        },
-        "required": [
-          "target"
-        ]
+        }
       },
       "costClass": "perceive-text"
     },
@@ -1861,7 +1862,11 @@
           },
           "target": {
             "type": "string",
-            "description": "Element name to read from specifically"
+            "description": "Element name to read from specifically. Alias: \"name\"."
+          },
+          "name": {
+            "type": "string",
+            "description": "Alias for \"target\"."
           },
           "processId": {
             "type": "number",
@@ -1884,7 +1889,11 @@
           },
           "target": {
             "type": "string",
-            "description": "Element name to focus before typing (optional — types into currently focused element if omitted)"
+            "description": "Element name to focus before typing (optional — types into currently focused element if omitted). Alias: \"name\"."
+          },
+          "name": {
+            "type": "string",
+            "description": "Alias for \"target\"."
           },
           "processId": {
             "type": "number",

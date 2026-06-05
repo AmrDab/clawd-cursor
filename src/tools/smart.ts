@@ -48,7 +48,12 @@ export function getSmartTools(): ToolDefinition[] {
         },
         target: {
           type: 'string',
-          description: 'Element name to read from specifically',
+          description: 'Element name to read from specifically. Alias: "name".',
+          required: false,
+        },
+        name: {
+          type: 'string',
+          description: 'Alias for "target".',
           required: false,
         },
         processId: {
@@ -62,7 +67,7 @@ export function getSmartTools(): ToolDefinition[] {
       handler: async (params, ctx) => {
         await ctx.ensureInitialized();
         const scope = (params.scope as string) || 'window';
-        const target = params.target as string | undefined;
+        const target = (params.target ?? params.name) as string | undefined;
         const processId = params.processId as number | undefined;
 
         // ── Focused element read (shortcut — no OCR needed) ──
@@ -177,8 +182,13 @@ export function getSmartTools(): ToolDefinition[] {
       parameters: {
         target: {
           type: 'string',
-          description: 'Element name/text to click (e.g., "Send", "Submit", "New Email")',
-          required: true,
+          description: 'Element name/text to click (e.g., "Send", "Submit", "New Email"). Alias: "name".',
+          required: false,
+        },
+        name: {
+          type: 'string',
+          description: 'Alias for "target" — the rest of the accessibility surface uses "name".',
+          required: false,
         },
         processId: {
           type: 'number',
@@ -195,7 +205,10 @@ export function getSmartTools(): ToolDefinition[] {
       safetyTier: 1,
       handler: async (params, ctx) => {
         await ctx.ensureInitialized();
-        const target = params.target as string;
+        const target = (params.target ?? params.name) as string;
+        if (!target || typeof target !== 'string' || target.trim() === '') {
+          return { text: 'smart_click: "target" (alias "name") is required — the element text to click, e.g. "Send".', isError: true };
+        }
         const processId = params.processId as number | undefined;
         const timeoutMs = (params.timeout as number) || 10000; // default 10s, was 5s
         const attempted: string[] = [];
@@ -590,7 +603,12 @@ export function getSmartTools(): ToolDefinition[] {
         },
         target: {
           type: 'string',
-          description: 'Element name to focus before typing (optional — types into currently focused element if omitted)',
+          description: 'Element name to focus before typing (optional — types into currently focused element if omitted). Alias: "name".',
+          required: false,
+        },
+        name: {
+          type: 'string',
+          description: 'Alias for "target".',
           required: false,
         },
         processId: {
@@ -604,7 +622,7 @@ export function getSmartTools(): ToolDefinition[] {
       handler: async (params, ctx) => {
         await ctx.ensureInitialized();
         const text = params.text as string;
-        const target = params.target as string | undefined;
+        const target = (params.target ?? params.name) as string | undefined;
         const processId = params.processId as number | undefined;
 
         // If target specified, find and focus it first
