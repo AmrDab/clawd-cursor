@@ -288,21 +288,34 @@ export function getDesktopTools(): ToolDefinition[] {
 
     {
       name: 'key_press',
-      description: 'Press a keyboard key or key combination. Use "+" for combos (e.g. "ctrl+s", "shift+enter", "alt+tab"). Single keys: "Return", "Tab", "Escape", "Backspace", "Delete", "F1"-"F12", "Left/Right/Up/Down".',
+      description: 'Press a keyboard key or key combination. Use "+" for a chord (e.g. "ctrl+s", "shift+enter", "alt+tab"). Separate multiple presses with SPACES to send them in sequence (e.g. "Down Down End", "ctrl+a Delete"). Single keys: "Return", "Tab", "Escape", "Backspace", "Delete", "F1"-"F12", "Left/Right/Up/Down".',
       parameters: {
-        key: { type: 'string', description: 'Key or combo to press (e.g. "Return", "ctrl+a", "F5", "Escape")', required: true },
+        key: { type: 'string', description: 'Key/combo to press (e.g. "Return", "ctrl+a", "F5"). Space-separate combos for a sequence ("Down Down End").', required: true },
       },
       category: 'keyboard',
       compactGroup: 'computer',
       safetyTier: 1,
       handler: async ({ key }, ctx) => {
         await ctx.ensureInitialized();
-        const lower = (key as string).toLowerCase().replace(/\s+/g, '');
-        if (BLOCKED_KEYS.some(b => lower === b)) {
-          return { text: `BLOCKED: "${key}" is a dangerous key combo.`, isError: true };
+        // Defense-in-depth: a missing/mistyped arg used to reach `.toLowerCase()`
+        // on `undefined` and throw an opaque crash. Fail with an actionable
+        // message instead (the `computer` compound names this field `combo`,
+        // with `key` accepted as an alias).
+        if (typeof key !== 'string' || key.trim() === '') {
+          return { text: 'key_press: "key" is required — the key or combo to press, e.g. "Return" or "ctrl+a". (On the `computer` compound the field is `combo`; `key` is also accepted.)', isError: true };
+        }
+        // "+" joins a chord; whitespace separates combos pressed in sequence.
+        const combos = key.trim().split(/\s+/);
+        for (const combo of combos) {
+          const lower = combo.toLowerCase().replace(/\s+/g, '');
+          if (BLOCKED_KEYS.some(b => lower === b)) {
+            return { text: `BLOCKED: "${combo}" is a dangerous key combo.`, isError: true };
+          }
         }
         const activeInfo = await activeWindowLabel(ctx);
-        await ctx.desktop.keyPress(key);
+        for (const combo of combos) {
+          await ctx.desktop.keyPress(combo);
+        }
         ctx.a11y.invalidateCache();
         return { text: `Key pressed: ${key} in ${activeInfo}` };
       },

@@ -52,7 +52,9 @@ export function evaluateToolCall(
 
   // confirm / warn path
   return {
-    text: `${tool.name}: safety confirm - ${reason} (requires user confirmation)`,
+    text: `${tool.name}: safety confirm - ${reason} (requires user confirmation). ` +
+          `Next step: surface this to the user and wait for approval — re-issuing the same call will just block again. ` +
+          `If the user already authorized this intent, run the step inside \`batch({allowConfirm:true})\`.`,
     isError: true,
   };
 }

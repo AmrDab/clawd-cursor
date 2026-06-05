@@ -69,7 +69,7 @@ const COMPUTER_ACTIONS: ActionRoute[] = [
   { action: 'scroll',        delegate: 'mouse_scroll' },
   { action: 'scroll_horizontal', delegate: 'mouse_scroll_horizontal' },
   { action: 'drag',          delegate: 'mouse_drag' },
-  { action: 'drag_path',     delegate: 'mouse_drag_stepped', argRemap: { path: 'path' } },
+  { action: 'drag_path',     delegate: 'mouse_drag_stepped' },
   { action: 'mouse_down',    delegate: 'mouse_down' },
   { action: 'mouse_up',      delegate: 'mouse_up' },
   // Keyboard — `combo` is the natural compound name for a key chord;
@@ -148,6 +148,14 @@ const SYSTEM_ACTIONS: ActionRoute[] = [
   // Cross-OS: macOS `open`, Linux `xdg-open`, Windows registered-handler resolve.
   { action: 'build_uri',       delegate: 'build_uri' },
   { action: 'open_uri',        delegate: 'open_uri' },
+  // Launch/open family — ALSO on `window`, aliased here because "open an
+  // app/file/url" reads as a system action (and `open_uri` already lives on
+  // system). The MCP layer enum-validates `action` before our dispatcher, so
+  // the cross-compound hint can't fire over /mcp — making the intuitive call
+  // valid on BOTH compounds is what actually unblocks an integrating agent.
+  { action: 'open_app',        delegate: 'open_app' },
+  { action: 'open_file',       delegate: 'open_file' },
+  { action: 'open_url',        delegate: 'open_url' },
   // Persist a learned app guide (write companion to `app_guide`, which reads).
   { action: 'learn_app',       delegate: 'learn_app' },
 ];
@@ -194,6 +202,20 @@ function buildCompoundSchema(
         ? Object.entries(route.argRemap).find(([, v]) => v === pname)?.[0]
         : undefined;
       const targetName = remappedFrom ?? pname;
+      // Anti silent-drop: when a field is RENAMED on the compound (e.g.
+      // `combo` exposes the granular `key_press`'s `key`), the granular's
+      // native name (`key`) is otherwise absent from the published schema —
+      // so the MCP server's Zod validator silently strips it and the handler
+      // crashes on `undefined`. Publish the native name as an accepted alias.
+      // The dispatcher already forwards unmapped native names verbatim to the
+      // granular, so no runtime change is needed — this only stops the strip.
+      if (remappedFrom && remappedFrom !== pname && !(pname in schema)) {
+        schema[pname] = {
+          ...pdef,
+          required: false,
+          description: `Alias for "${remappedFrom}". ${pdef.description}`,
+        };
+      }
       if (targetName in schema) {
         // Field already declared by an earlier delegate. The first-wins
         // policy is fine for type/description (they should match), but
@@ -235,6 +257,29 @@ function actionCatalog(routes: ActionRoute[]): string {
  * action) pair, optionally remap args, then hand off. Surfacing the
  * same ToolResult contract the granular tool returns.
  */
+/**
+ * Index of every compound's action table — lets a misrouted action point the
+ * caller at the compound that actually owns it (e.g. `system open_app` →
+ * "that action is on `window`"), instead of a dead-end "unknown action".
+ */
+const COMPOUND_ROUTE_INDEX: Record<string, ActionRoute[]> = {
+  computer: COMPUTER_ACTIONS,
+  accessibility: ACCESSIBILITY_ACTIONS,
+  window: WINDOW_ACTIONS,
+  system: SYSTEM_ACTIONS,
+  browser: BROWSER_ACTIONS,
+};
+
+/** Which other compound(s) expose `action`, excluding the one already tried. */
+function compoundsForAction(action: string, exclude: string): string[] {
+  const hits: string[] = [];
+  for (const [name, routes] of Object.entries(COMPOUND_ROUTE_INDEX)) {
+    if (name === exclude) continue;
+    if (routes.some(r => r.action === action)) hits.push(name);
+  }
+  return hits;
+}
+
 async function dispatchCompound(
   compoundName: string,
   routes: ActionRoute[],
@@ -250,8 +295,12 @@ async function dispatchCompound(
   }
   const route = routes.find(r => r.action === actionName);
   if (!route) {
+    const elsewhere = compoundsForAction(actionName, compoundName);
+    const hint = elsewhere.length
+      ? ` — that action lives on the "${elsewhere.join('"/"')}" compound; call it there.`
+      : '';
     return {
-      text: `${compoundName}: unknown action "${actionName}". Valid: ${actionCatalog(routes)}`,
+      text: `${compoundName}: unknown action "${actionName}"${hint} Valid actions here: ${actionCatalog(routes)}`,
       isError: true,
     };
   }
@@ -266,6 +315,28 @@ async function dispatchCompound(
     if (k === 'action') continue;
     const mapped = route.argRemap?.[k] ?? k;
     forwarded[mapped] = v;
+  }
+
+  // Enforce the granular's REQUIRED params at the compound boundary. Every
+  // compound field is published as optional (sub-actions own their own
+  // requirements), so without this a missing required arg reaches the handler
+  // as `undefined` and crashes on the first `.toLowerCase()` / `.goto()` / etc.
+  // (smart_click.target, smart_type.text, key_*.key, navigate.url, …). Fail
+  // with an actionable message naming the field in the compound's vocabulary.
+  const missing = Object.entries(granular.parameters)
+    .filter(([, def]) => def.required === true)
+    .filter(([pname]) => forwarded[pname] === undefined || forwarded[pname] === null)
+    .map(([pname]) => {
+      const exposed = route.argRemap
+        ? Object.entries(route.argRemap).find(([, v]) => v === pname)?.[0]
+        : undefined;
+      return exposed ?? pname;
+    });
+  if (missing.length) {
+    return {
+      text: `${compoundName} ${actionName}: missing required field(s): ${missing.join(', ')}.`,
+      isError: true,
+    };
   }
 
   return granular.handler(forwarded, ctx);

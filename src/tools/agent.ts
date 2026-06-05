@@ -18,9 +18,11 @@ import type { ToolDefinition } from './types';
 function needAgent(tool: string): { text: string; isError: true } {
   return {
     text: `${tool}: no autonomous agent is attached to this MCP context. ` +
-          `This tool requires \`clawdcursor agent\` (the daemon). ` +
-          `Stdio MCP clients (Cursor, Claude Code, Windsurf) cannot use this — ` +
-          `use the granular tools (mouse_click, type_text, …) directly.`,
+          `This tool needs \`clawdcursor agent\` running WITH an LLM configured. ` +
+          `Tools-only contexts (stdio \`clawdcursor mcp\`, or \`agent --no-llm\`) cannot use it — ` +
+          `drive the desktop yourself with the other tools instead: the compound ` +
+          `computer/accessibility/window/system/browser tools (compact surface), ` +
+          `or the granular mouse_click/type_text/… tools.`,
     isError: true,
   };
 }

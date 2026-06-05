@@ -78,9 +78,10 @@ metadata:
 > **If you are an LLM reading this: YOU SHOULD BE USING COMPACT MODE.**
 >
 > - MCP stdio (editor host): add `"args": ["mcp", "--compact"]` to your config.
-> - MCP over HTTP (daemon mode): the running daemon's `/mcp` endpoint serves
->   both palettes - request the compact catalog by filtering `tools/list`
->   results to the 6 compound names below.
+> - MCP over HTTP (daemon mode): start the daemon with `--compact` (or set
+>   `CLAWD_MCP_COMPACT=1`) so `/mcp` serves the 6 compound tools. The surface is
+>   fixed at startup — a daemon serves EITHER the 6 compact tools OR the 97
+>   granular ones, not both. Default (no flag) is granular.
 >
 > Granular mode's 97 tools are kept for back-compat. Compact's 6 tools are much smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
 
@@ -230,7 +231,7 @@ v0.9 collapses everything onto **MCP — one protocol, two transports**. There i
 | Mode | Command | Transport | Brain | Tools available |
 |------|---------|-----------|-------|-----------------|
 | `mcp` | `clawdcursor mcp [--compact]` | stdio | **You** (editor host) | 97 granular (default) or 6 compact (`--compact`) |
-| `agent --no-llm` or `agent` with no LLM configured | `clawdcursor agent --no-llm` | HTTP `/mcp` | **You** (HTTP client) | 97 granular + 6 compact, both via the same `/mcp` endpoint |
+| `agent --no-llm` or `agent` with no LLM configured | `clawdcursor agent --no-llm [--compact]` | HTTP `/mcp` | **You** (HTTP client) | 97 granular (default) **or** 6 compact — pass `--compact` (or `CLAWD_MCP_COMPACT=1`). One surface per daemon, chosen at startup — NOT both at once |
 | `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in LLM pipeline | All of the above PLUS the autonomous task-handoff tool — named `task` on the compact surface, `submit_task` on granular — hand it a plain-English task |
 
 In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor reasons AND acts — call the autonomous handoff tool (`task` in compact mode, `submit_task` in granular) with a natural-language instruction, then poll `agent_status`.
@@ -479,7 +480,7 @@ Per-OS setup notes:
 |---|---|
 | Port 3847 not responding | `clawdcursor agent` - wait 2s - `GET /health` |
 | 401 Unauthorized (mid-session, unexpectedly) | The on-disk token at `~/.clawdcursor/token` was rotated by another clawdcursor process. `clawdcursor stop && clawdcursor agent --no-llm` to start the HTTP MCP surface fresh without AI setup or scheduled tasks, then re-read the token. |
-| Empty a11y tree on a *native-looking* app | It's probably **Electron or WebView2** - olk (New Outlook), Teams, Discord, Slack, VS Code, Notion, Obsidian all render inside Chromium. Call `system({"action":"detect_webview"})` to confirm + get a relaunch-with-CDP hint. Once relaunched with `--remote-debugging-port=9222`, attach via `browser({"action":"connect"})` and you get the full DOM. |
+| Empty a11y tree on a *native-looking* app | It's probably **Electron or WebView2** - olk (New Outlook), Teams, Discord, Slack, VS Code, Notion, Obsidian all render inside Chromium. Call `system({"action":"detect_webview"})` to confirm, then `system({"action":"relaunch_with_cdp"})` to restart it on the debugging port clawdcursor expects (don't hand-pick a port — `connect` looks on a fixed port and a manual `--remote-debugging-port` will mismatch). Then attach via `browser({"action":"connect"})` and you get the full DOM. |
 | Empty a11y tree on a *truly* custom-canvas app | Real canvas apps (Paint, Figma, games). Escalate to `computer({"action":"screenshot"})` + coord clicks, or `system({"action":"ocr"})` to read visible text with bounds. |
 | "Element not found" on invoke | The element isn't on-screen or has no a11y name. Read the tree first; if sparse, check `system({"action":"detect_webview"})` before falling back to coord click. |
 | Action runs but nothing happens | Wrong window has focus. `window({"action":"active"})` then `window({"action":"focus",...})` before retrying. v0.8.2 `focus_window` force-raises through Windows' foreground lock - if it still doesn't work, the target is likely minimized in a different virtual desktop. |
