@@ -51,6 +51,41 @@ fi
 
 echo "✅ Built ClawdCursor.app"
 
+# Generate Contents/Info.plist — REQUIRED for a valid .app bundle. Without it
+# codesign fails with "bundle format unrecognized, invalid, or unsuitable"
+# (issue #150). CFBundleExecutable names the main binary inside Contents/MacOS/.
+cat > "ClawdCursor.app/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.clawdcursor.helper</string>
+    <key>CFBundleName</key>
+    <string>ClawdCursor</string>
+    <key>CFBundleDisplayName</key>
+    <string>ClawdCursor</string>
+    <key>CFBundleExecutable</key>
+    <string>ClawdCursorHost</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>ClawdCursor controls other apps to automate desktop tasks you request.</string>
+</dict>
+</plist>
+PLIST
+echo "   ✓ Wrote Contents/Info.plist"
+
 # Code signing (REQUIRED for TCC on macOS 26+ / Tahoe)
 # Without signing, the app won't appear in System Settings privacy panels
 if [[ -n "$CLAWDCURSOR_SIGN_IDENTITY" ]]; then
