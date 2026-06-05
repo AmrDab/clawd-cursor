@@ -155,22 +155,44 @@ export function buildUnifiedTools(
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Accessibility name of the element' },
+          automationId: { type: 'string', description: 'Element automation ID (more precise than name)' },
           controlType: { type: 'string', description: 'Optional role filter (Button, MenuItem, Tab, etc.)' },
           processId: { type: 'number', description: 'Optional: limit to a specific process' },
+          action: {
+            type: 'string',
+            enum: ['click', 'set-value', 'get-value', 'focus', 'expand', 'collapse'],
+            description: 'Action to perform (default: "click")',
+          },
+          value: { type: 'string', description: 'Value for set-value action' },
         },
-        required: ['name'],
+        // `name` OR `automationId` must be supplied; neither is required at
+        // the JSON-schema level — the execute() body guards the total absence.
         additionalProperties: false,
       },
       changesScreen: true,
       async execute(args, ctx) {
-        const name = String(args.name ?? '');
+        // `automationId` is accepted for MCP backward-compat but the PlatformAdapter
+        // invokeElement interface does not expose automationId filtering — it is used
+        // only as a name alias when name is absent.
+        const rawName = typeof args.name === 'string' ? args.name : '';
+        const automationId = typeof args.automationId === 'string' ? args.automationId : undefined;
+        const name = rawName || automationId || '';
         const controlType = typeof args.controlType === 'string' ? args.controlType : undefined;
         const processId = typeof args.processId === 'number' ? args.processId : undefined;
-        const res = await ctx.platform.invokeElement({ name, controlType, processId, action: 'click' });
+        const VALID_ACTIONS = ['click', 'set-value', 'get-value', 'focus', 'expand', 'collapse'] as const;
+        type PermittedAction = typeof VALID_ACTIONS[number];
+        const rawAction = typeof args.action === 'string' ? args.action : 'click';
+        const action: PermittedAction = (VALID_ACTIONS as readonly string[]).includes(rawAction)
+          ? rawAction as PermittedAction
+          : 'click';
+        const value = typeof args.value === 'string' ? args.value : undefined;
+        const res = await ctx.platform.invokeElement({ name, controlType, processId, action, value });
         await sleep(150);
         return {
           success: res.success,
-          text: res.success ? `Invoked "${name}" via a11y.` : `a11y invoke "${name}" missed — element not found.`,
+          text: res.success
+            ? (res.data && 'value' in (res.data as object) ? `Invoked "${name}" (${action}) → value: "${(res.data as any).value}"` : `Invoked "${name}" via a11y.`)
+            : `a11y invoke "${name}" missed — element not found.`,
           targetLabel: name,
         };
       },
@@ -184,6 +206,7 @@ export function buildUnifiedTools(
         properties: {
           name: { type: 'string', description: 'Accessibility name of the field' },
           value: { type: 'string' },
+          controlType: { type: 'string', description: 'Optional role filter (e.g. "Edit")' },
           processId: { type: 'number' },
         },
         required: ['name', 'value'],
@@ -193,8 +216,9 @@ export function buildUnifiedTools(
       async execute(args, ctx) {
         const name = String(args.name ?? '');
         const value = String(args.value ?? '');
+        const controlType = typeof args.controlType === 'string' ? args.controlType : undefined;
         const processId = typeof args.processId === 'number' ? args.processId : undefined;
-        const res = await ctx.platform.invokeElement({ name, processId, action: 'set-value', value });
+        const res = await ctx.platform.invokeElement({ name, controlType, processId, action: 'set-value', value });
         await sleep(150);
         return {
           success: res.success,
@@ -542,19 +566,50 @@ export function buildUnifiedTools(
 
     {
       name: 'key',
-      description: 'Press a key combo. Use "mod" for Ctrl/Cmd. Examples: "mod+s", "Return", "Tab", "shift+Tab", "Escape", "F5".',
+      description: 'Press a key or key combo. Use "mod" for Ctrl/Cmd. Use "+" for a chord (e.g. "mod+s", "shift+Tab"). Space-separate for a sequence ("Down Down End"). Examples: "Return", "Tab", "Escape", "F5", "ctrl+a".',
       inputSchema: {
         type: 'object',
-        properties: { combo: { type: 'string' } },
-        required: ['combo'],
+        properties: {
+          // `combo` is the canonical System B name. `key` is accepted as a
+          // backward-compatible alias (matches the MCP surface param name
+          // `key_press.key` and the compound surface alias).
+          combo: { type: 'string', description: 'Key/combo to press (e.g. "Return", "mod+s"). Space-separate for a sequence.' },
+          key: { type: 'string', description: 'Alias for combo — accepted for MCP/compound backward-compatibility.' },
+        },
+        // Neither is required at the JSON-Schema level so the validator passes
+        // when only one is provided; the execute() guard catches a total absence.
         additionalProperties: false,
       },
       changesScreen: true,
       async execute(args, ctx) {
-        const combo = String(args.combo ?? '');
-        await ctx.platform.keyPress(combo);
+        // (b) Accept `key` as a backward-compatible alias for `combo`.
+        const raw = (args.combo ?? args.key);
+        // (a) Guard: missing or empty argument → actionable error instead of crash.
+        if (raw === undefined || raw === null || String(raw).trim() === '') {
+          return {
+            success: false,
+            isError: true,
+            text: 'key: "combo" is required — the key or combo to press, e.g. "Return" or "mod+s". (The MCP surface alias is "key".)',
+          };
+        }
+        const input = String(raw).trim();
+        // Dangerous key combos that are blocked (mirrors System A BLOCKED_KEYS).
+        const BLOCKED = ['alt+f4', 'ctrl+alt+delete', 'ctrl+alt+del'];
+        // (b) "+" joins a chord; whitespace separates combos pressed in sequence.
+        const combos = input.split(/\s+/);
+        // (c) BLOCKED_KEYS guard — check every combo in the sequence.
+        for (const c of combos) {
+          const norm = c.toLowerCase().replace(/\s+/g, '');
+          if (BLOCKED.some(b => norm === b)) {
+            return { success: false, isError: true, text: `BLOCKED: "${c}" is a dangerous key combo.` };
+          }
+        }
+        for (const c of combos) {
+          await ctx.platform.keyPress(c);
+          if (combos.length > 1) await sleep(50); // brief gap between sequence steps
+        }
         await sleep(150);
-        return { success: true, text: `Pressed ${combo}` };
+        return { success: true, text: `Pressed ${input}` };
       },
     },
 

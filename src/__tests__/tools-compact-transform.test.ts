@@ -49,12 +49,17 @@ vi.mock('../platform/ocr-engine', () => ({
 import { getAllTools, getCompactSurface, getTools } from '../tools/registry';
 import { getCompactTools } from '../tools/compact';
 import type { ToolContext } from '../tools/types';
+import { makeMockPlatform } from './helpers/mock-platform';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Minimal mock ToolContext — enough for the handlers we test (which all
- * check ctx.ensureInitialized() and then call specific sub-systems).
+ * Minimal mock ToolContext — enough for the handlers we test.
+ *
+ * - ctx.desktop and ctx.a11y are kept for non-migrated System A tools.
+ * - ctx.platform is now populated via makeMockPlatform() so that
+ *   projected System B tools (type_text, key_press, etc.) can call
+ *   toolContextToAgent(ctx) → ctx.platform.* without throwing.
  */
 function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -88,7 +93,7 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
       isConnected: vi.fn().mockResolvedValue(false),
       getPage: vi.fn().mockReturnValue(null),
     },
-    platform: undefined,
+    platform: makeMockPlatform(),
     getMouseScaleFactor: () => 1,
     getScreenshotScaleFactor: () => 1,
     ensureInitialized: vi.fn().mockResolvedValue(undefined),
@@ -459,5 +464,66 @@ describe('compact-as-transform invariants', () => {
     const via1 = getAllTools().map(t => t.name).sort();
     const via2 = getTools().map(t => t.name).sort();
     expect(via1).toEqual(via2);
+  });
+});
+
+// ── 12. Agent-friction regression fixes (from the v1-alpha live test) ─────────
+describe('12. compound surface agent-friction fixes', () => {
+  const computer = () => getCompactTools().find(t => t.name === 'computer')!;
+  const system = () => getCompactTools().find(t => t.name === 'system')!;
+
+  it('keyboard: compound publishes the granular `key` as an alias for `combo` (anti silent-drop)', () => {
+    const params = computer().parameters as Record<string, { description?: string }>;
+    expect(params).toHaveProperty('combo'); // canonical compound name
+    expect(params).toHaveProperty('key');   // granular-native alias — was silently stripped before
+    expect(params.key.description ?? '').toMatch(/alias/i);
+  });
+
+  it('keyboard: dispatching via the `key` alias reaches key_press (no drop, no crash)', async () => {
+    const ctx = makeCtx();
+    const res = await computer().handler({ action: 'key', key: 'super' }, ctx);
+    expect(res.isError).toBeFalsy();
+    // System B key tool routes through ctx.platform.keyPress (the real runtime path).
+    expect(ctx.platform!.keyPress).toHaveBeenCalledWith('super');
+  });
+
+  it('keyboard: the canonical `combo` field still works (back-compat)', async () => {
+    const ctx = makeCtx();
+    await computer().handler({ action: 'key', combo: 'ctrl+c' }, ctx);
+    expect(ctx.platform!.keyPress).toHaveBeenCalledWith('ctrl+c');
+  });
+
+  it('keyboard: space-separated combos are pressed in sequence', async () => {
+    const ctx = makeCtx();
+    await computer().handler({ action: 'key', combo: 'Down Down End' }, ctx);
+    expect(ctx.platform!.keyPress).toHaveBeenNthCalledWith(1, 'Down');
+    expect(ctx.platform!.keyPress).toHaveBeenNthCalledWith(2, 'Down');
+    expect(ctx.platform!.keyPress).toHaveBeenNthCalledWith(3, 'End');
+  });
+
+  it('keyboard: a missing key/combo returns an actionable error, not a crash', async () => {
+    const ctx = makeCtx();
+    const res = await computer().handler({ action: 'key' }, ctx);
+    expect(res.isError).toBe(true);
+    expect(res.text.toLowerCase()).toContain('required');
+    expect(ctx.platform!.keyPress).not.toHaveBeenCalled();
+  });
+
+  it('taxonomy: a misrouted action names the compound that owns it', async () => {
+    const ctx = makeCtx();
+    // `read_tree` lives only on `accessibility`; calling it on `system` should
+    // point there (this exercises the direct/batch path — over MCP the enum
+    // layer rejects first, which is why launch actions are aliased instead).
+    const res = await system().handler({ action: 'read_tree' }, ctx);
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain('accessibility'); // hint points at the owning compound
+    expect(res.text).not.toContain('not registered');
+  });
+
+  it('taxonomy: the launch family is reachable from `system` too (open_app alias)', () => {
+    const sys = getCompactTools().find(t => t.name === 'system')!;
+    const actions = (sys.parameters.action as { enum?: string[] }).enum ?? [];
+    expect(actions).toContain('open_app'); // intuitive `system open_app` is now valid over MCP
+    expect(actions).toContain('open_url');
   });
 });

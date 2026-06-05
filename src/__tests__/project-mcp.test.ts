@@ -1,0 +1,468 @@
+/**
+ * Tests for src/core/agent-loop/project-mcp.ts (Step 2 of the re-projection refactor).
+ *
+ * Tests:
+ *   1. jsonSchemaToParamDefs: correctly converts a UnifiedTool.inputSchema
+ *      into a Record<string, ParameterDef> (type, description, required, enum).
+ *
+ *   2. projectToToolDefinition: projecting a representative System B tool (read_screen)
+ *      yields a structurally valid ToolDefinition (name, description, parameters,
+ *      category, safetyTier, costClass, handler).
+ *
+ *   3. Name mapping: the type → type_text mapping is applied (mcpName from TOOL_META).
+ *
+ *   4. Handler integration: calling the projected handler with a mock ToolContext
+ *      returns a valid ToolResult (text present, isError boolean) without throwing.
+ *
+ *   5. unifiedToToolResult: success→isError false, failure→isError true, screenshot
+ *      with a buffer is base64-encoded into result.image.
+ *
+ *   6. toolContextToAgent: async construction from a mock ToolContext resolves
+ *      to a well-shaped AgentToolContext.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// ── Mock heavy native deps BEFORE any imports ──────────────────────────────
+
+vi.mock('@nut-tree-fork/nut-js', () => ({
+  mouse: { config: {}, move: vi.fn(), click: vi.fn(), setPosition: vi.fn() },
+  keyboard: { config: {}, type: vi.fn() },
+  screen: { grab: vi.fn() },
+  Button: { LEFT: 0 },
+  Key: new Proxy({}, { get: (_t, p) => p }),
+  Point: class { constructor(public x: number, public y: number) {} },
+  Region: class {
+    constructor(
+      public left: number, public top: number,
+      public width: number, public height: number,
+    ) {}
+  },
+}));
+
+vi.mock('sharp', () => ({
+  default: vi.fn(() => ({
+    resize: vi.fn().mockReturnThis(),
+    png: vi.fn().mockReturnThis(),
+    jpeg: vi.fn().mockReturnThis(),
+    toBuffer: vi.fn().mockResolvedValue(Buffer.from('fake-png')),
+  })),
+}));
+
+vi.mock('../platform/ocr-engine', () => ({
+  OcrEngine: class {
+    isAvailable() { return false; }
+    async recognizeScreen() { return { elements: [], fullText: '', durationMs: 0 }; }
+    invalidateCache() {}
+  },
+}));
+
+// ── Imports after mocks ──────────────────────────────────────────────────────
+
+import {
+  jsonSchemaToParamDefs,
+  toolContextToAgent,
+  unifiedToToolResult,
+  projectToToolDefinition,
+} from '../core/agent-loop/project-mcp';
+import { buildUnifiedTools } from '../core/agent-loop/tools';
+import { TOOL_META } from '../core/agent-loop/tool-meta';
+import type { UnifiedTool, UnifiedToolResult } from '../core/agent-loop/types';
+import type { ToolContext } from '../tools/types';
+
+// ── Mock helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Build a minimal mock PlatformAdapter that returns safe stubs for all
+ * methods System B tools may call via AgentToolContext.platform.*.
+ */
+function makeMockPlatform() {
+  return {
+    platform: 'win32' as const,
+    getActiveWindow: vi.fn().mockResolvedValue({
+      title: 'TestApp',
+      processName: 'test.exe',
+      processId: 42,
+      bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+    }),
+    listWindows: vi.fn().mockResolvedValue([]),
+    focusWindow: vi.fn().mockResolvedValue(true),
+    getUiTree: vi.fn().mockResolvedValue([]),
+    findElements: vi.fn().mockResolvedValue([]),
+    invokeElement: vi.fn().mockResolvedValue({ success: true }),
+    getFocusedElement: vi.fn().mockResolvedValue(null),
+    waitForElement: vi.fn().mockResolvedValue(null),
+    mouseClick: vi.fn().mockResolvedValue(undefined),
+    mouseScroll: vi.fn().mockResolvedValue(undefined),
+    mouseDrag: vi.fn().mockResolvedValue(undefined),
+    mouseMove: vi.fn().mockResolvedValue(undefined),
+    mouseMoveRelative: vi.fn().mockResolvedValue(undefined),
+    mouseDown: vi.fn().mockResolvedValue(undefined),
+    mouseUp: vi.fn().mockResolvedValue(undefined),
+    keyPress: vi.fn().mockResolvedValue(undefined),
+    keyDown: vi.fn().mockResolvedValue(undefined),
+    keyUp: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    readClipboard: vi.fn().mockResolvedValue(''),
+    writeClipboard: vi.fn().mockResolvedValue(undefined),
+    launchApp: vi.fn().mockResolvedValue({ pid: 1, title: 'TestApp' }),
+    setWindowState: vi.fn().mockResolvedValue(true),
+    setWindowBounds: vi.fn().mockResolvedValue(true),
+    listDisplays: vi.fn().mockResolvedValue([]),
+    screenshot: vi.fn().mockResolvedValue({
+      buffer: Buffer.from('fake-image'),
+      width: 1280,
+      height: 720,
+      format: 'jpeg',
+    }),
+  };
+}
+
+/**
+ * Build a minimal mock ToolContext. Mirrors the shape of the real ToolContext
+ * in src/tools/types.ts without any native I/O.
+ */
+function makeMockToolContext(overrides: Partial<ToolContext> = {}): ToolContext {
+  const mockPlatform = makeMockPlatform();
+
+  return {
+    desktop: {
+      getScreenSize: vi.fn().mockReturnValue({ width: 1920, height: 1080 }),
+      captureForLLM: vi.fn().mockResolvedValue({
+        buffer: Buffer.from('fake'),
+        width: 1920, height: 1080, llmWidth: 1280, llmHeight: 720, scaleFactor: 1.5,
+      }),
+    },
+    a11y: {
+      getActiveWindow: vi.fn().mockResolvedValue(null),
+      getWindows: vi.fn().mockResolvedValue([]),
+      readClipboard: vi.fn().mockResolvedValue(''),
+      writeClipboard: vi.fn().mockResolvedValue(undefined),
+      invalidateCache: vi.fn(),
+      getScreenContext: vi.fn().mockResolvedValue(''),
+    },
+    cdp: {
+      isConnected: vi.fn().mockResolvedValue(false),
+      ensureConnected: vi.fn().mockResolvedValue(false),
+    },
+    platform: mockPlatform as any,
+    agent: undefined,
+    getLogBuffer: undefined,
+    getMouseScaleFactor: vi.fn().mockReturnValue(1),
+    getScreenshotScaleFactor: vi.fn().mockReturnValue(1),
+    ensureInitialized: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('jsonSchemaToParamDefs', () => {
+  it('converts a simple string property', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The name' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(defs.name).toMatchObject({
+      type: 'string',
+      description: 'The name',
+      required: true,
+    });
+  });
+
+  it('marks optional properties correctly', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {
+        requiredProp: { type: 'string', description: 'req' },
+        optionalProp: { type: 'number', description: 'opt' },
+      },
+      required: ['requiredProp'],
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(defs.requiredProp.required).toBe(true);
+    expect(defs.optionalProp.required).toBe(false);
+  });
+
+  it('maps JSON Schema "number" type to ParameterDef "number"', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {
+        count: { type: 'number', description: 'Count' },
+      },
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(defs.count.type).toBe('number');
+  });
+
+  it('maps JSON Schema "boolean" type to ParameterDef "boolean"', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {
+        flag: { type: 'boolean', description: 'A flag' },
+      },
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(defs.flag.type).toBe('boolean');
+  });
+
+  it('preserves string enum values', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {
+        direction: {
+          type: 'string',
+          enum: ['up', 'down'],
+          description: 'Direction',
+        },
+      },
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(defs.direction.enum).toEqual(['up', 'down']);
+  });
+
+  it('handles empty properties gracefully', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(Object.keys(defs)).toHaveLength(0);
+  });
+
+  it('preserves numeric maximum constraint', () => {
+    const schema: UnifiedTool['inputSchema'] = {
+      type: 'object',
+      properties: {
+        ms: { type: 'number', description: 'Wait ms', maximum: 5000 },
+      },
+      additionalProperties: false,
+    };
+    const defs = jsonSchemaToParamDefs(schema);
+    expect(defs.ms.maximum).toBe(5000);
+  });
+});
+
+describe('unifiedToToolResult', () => {
+  it('maps success=true to isError=false', () => {
+    const r: UnifiedToolResult = { success: true, text: 'ok' };
+    const result = unifiedToToolResult(r);
+    expect(result.text).toBe('ok');
+    expect(result.isError).toBe(false);
+  });
+
+  it('maps success=false to isError=true', () => {
+    const r: UnifiedToolResult = { success: false, text: 'boom' };
+    const result = unifiedToToolResult(r);
+    expect(result.isError).toBe(true);
+  });
+
+  it('base64-encodes a screenshot buffer into result.image', () => {
+    const buf = Buffer.from('fake-image-bytes');
+    const r: UnifiedToolResult = {
+      success: true,
+      text: 'Captured',
+      screenshot: {
+        buffer: buf,
+        width: 1280,
+        height: 720,
+        scaleFactor: 1,
+      } as any,
+    };
+    const result = unifiedToToolResult(r);
+    expect(result.image).toBeDefined();
+    expect(result.image!.data).toBe(buf.toString('base64'));
+    expect(result.image!.mimeType).toBe('image/png');
+  });
+
+  it('sets mimeType to image/png (ScreenshotResult is always PNG)', () => {
+    const r: UnifiedToolResult = {
+      success: true,
+      text: 'Captured',
+      screenshot: {
+        buffer: Buffer.from('png'),
+        width: 100,
+        height: 100,
+        scaleFactor: 1,
+      } as any,
+    };
+    const result = unifiedToToolResult(r);
+    expect(result.image!.mimeType).toBe('image/png');
+  });
+
+  it('does not include image field when no screenshot', () => {
+    const r: UnifiedToolResult = { success: true, text: 'no pic' };
+    const result = unifiedToToolResult(r);
+    expect(result.image).toBeUndefined();
+  });
+});
+
+describe('toolContextToAgent', () => {
+  it('returns a well-shaped AgentToolContext', async () => {
+    const ctx = makeMockToolContext();
+    const agentCtx = await toolContextToAgent(ctx);
+
+    expect(agentCtx.platform).toBeDefined();
+    expect(agentCtx.task).toBe('');
+    expect(agentCtx.mode).toBe('blind');
+    expect(agentCtx.screen).toMatchObject({
+      physicalWidth: 1920,
+      physicalHeight: 1080,
+    });
+    expect(agentCtx.screenshotsCaptured).toEqual({ n: 0 });
+    expect(agentCtx.targetWindow).toBeUndefined();
+    expect(agentCtx.activeApp).toBeUndefined();
+  });
+
+  it('calls ensureInitialized on the ToolContext', async () => {
+    const ctx = makeMockToolContext();
+    await toolContextToAgent(ctx);
+    expect(ctx.ensureInitialized).toHaveBeenCalled();
+  });
+
+  it('throws when ctx.platform is absent', async () => {
+    const ctx = makeMockToolContext({ platform: undefined });
+    await expect(toolContextToAgent(ctx)).rejects.toThrow(
+      'toolContextToAgent: ctx.platform is not initialized',
+    );
+  });
+});
+
+describe('projectToToolDefinition', () => {
+  // Use read_screen as a representative tool (blind + hybrid + vision, same name in both systems).
+  let readScreenTool: UnifiedTool;
+  let typeTool: UnifiedTool;
+
+  beforeEach(() => {
+    const blindTools = buildUnifiedTools('blind');
+    const found = blindTools.find(t => t.name === 'read_screen');
+    if (!found) throw new Error('read_screen not found in buildUnifiedTools("blind")');
+    readScreenTool = found;
+
+    const foundType = blindTools.find(t => t.name === 'type');
+    if (!foundType) throw new Error('type not found in buildUnifiedTools("blind")');
+    typeTool = foundType;
+  });
+
+  it('produces a structurally valid ToolDefinition for read_screen', () => {
+    const def = projectToToolDefinition(readScreenTool);
+
+    // Name
+    expect(def.name).toBe('read_screen');
+    // Description comes from System B
+    expect(typeof def.description).toBe('string');
+    expect(def.description.length).toBeGreaterThan(0);
+    // Parameters
+    expect(typeof def.parameters).toBe('object');
+    // Handler
+    expect(typeof def.handler).toBe('function');
+    // Metadata
+    expect(def.category).toBeDefined();
+    expect(def.safetyTier).toBeDefined();
+    expect(def.costClass).toBeDefined();
+  });
+
+  it('applies the type → type_text MCP name mapping', () => {
+    const def = projectToToolDefinition(typeTool);
+    // System B name is 'type'; TOOL_META maps it to MCP name 'type_text'.
+    expect(def.name).toBe('type_text');
+  });
+
+  it('applies the click → mouse_click MCP name mapping', () => {
+    const clickTool = buildUnifiedTools('blind').find(t => t.name === 'click');
+    expect(clickTool).toBeDefined();
+    const def = projectToToolDefinition(clickTool!);
+    expect(def.name).toBe('mouse_click');
+  });
+
+  it('applies the screenshot → desktop_screenshot MCP name mapping', () => {
+    // screenshot is only in hybrid and vision modes.
+    const hybridTools = buildUnifiedTools('hybrid');
+    const shot = hybridTools.find(t => t.name === 'screenshot');
+    expect(shot).toBeDefined();
+    const def = projectToToolDefinition(shot!);
+    expect(def.name).toBe('desktop_screenshot');
+  });
+
+  it('applies the list_windows → get_windows MCP name mapping', () => {
+    const lw = buildUnifiedTools('blind').find(t => t.name === 'list_windows');
+    expect(lw).toBeDefined();
+    const def = projectToToolDefinition(lw!);
+    expect(def.name).toBe('get_windows');
+  });
+
+  it('handler calls succeed and return a valid ToolResult', async () => {
+    const def = projectToToolDefinition(readScreenTool);
+    const ctx = makeMockToolContext();
+
+    const result = await def.handler({}, ctx);
+
+    expect(typeof result.text).toBe('string');
+    expect(typeof result.isError).toBe('boolean');
+    // Must not throw — the system B execute() wraps errors internally.
+  });
+
+  it('handler does not throw for the type tool', async () => {
+    const def = projectToToolDefinition(typeTool);
+    const ctx = makeMockToolContext();
+
+    const result = await def.handler({ text: 'hello world' }, ctx);
+
+    expect(typeof result.text).toBe('string');
+    expect(typeof result.isError).toBe('boolean');
+  });
+
+  it('throws when passed a tool name not in TOOL_META', () => {
+    const fakeTool: UnifiedTool = {
+      name: '__nonexistent_tool__',
+      description: 'test',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      changesScreen: false,
+      async execute() { return { success: true, text: 'x' }; },
+    };
+    expect(() => projectToToolDefinition(fakeTool)).toThrow(
+      'no TOOL_META entry for System B tool "__nonexistent_tool__"',
+    );
+  });
+
+  it('metadata fields match TOOL_META for read_screen', () => {
+    const def = projectToToolDefinition(readScreenTool);
+    expect(def.category).toBe('perception');
+    expect(def.safetyTier).toBe(0);
+    expect(def.costClass).toBe('perceive-text');
+  });
+});
+
+describe('name mapping completeness', () => {
+  it('all expected name-change pairs are correct', () => {
+    const expectedRenames: Array<{ sysbName: string; mcpName: string }> = [
+      { sysbName: 'list_windows',    mcpName: 'get_windows'      },
+      { sysbName: 'click',           mcpName: 'mouse_click'      },
+      { sysbName: 'drag',            mcpName: 'mouse_drag'       },
+      { sysbName: 'scroll',          mcpName: 'mouse_scroll'     },
+      { sysbName: 'type',            mcpName: 'type_text'        },
+      { sysbName: 'key',             mcpName: 'key_press'        },
+      { sysbName: 'screenshot',      mcpName: 'desktop_screenshot' },
+      { sysbName: 'read_text',       mcpName: 'ocr_read_screen'  },
+      { sysbName: 'browser_connect', mcpName: 'cdp_connect'      },
+      { sysbName: 'browser_navigate',mcpName: 'navigate_browser' },
+      { sysbName: 'browser_read',    mcpName: 'cdp_page_context' },
+      { sysbName: 'browser_click',   mcpName: 'cdp_click'        },
+      { sysbName: 'browser_type',    mcpName: 'cdp_type'         },
+    ];
+
+    for (const { sysbName, mcpName } of expectedRenames) {
+      expect(TOOL_META[sysbName]?.mcpName).toBe(mcpName);
+    }
+  });
+});

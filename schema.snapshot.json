@@ -3,7 +3,7 @@
   "tools": [
     {
       "name": "a11y_collapse",
-      "description": "Collapse a tree node, combo box, or disclosure element by accessibility name. Counterpart of a11y_expand.",
+      "description": "Collapse a tree node / combo / disclosure by a11y name.",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -29,7 +29,7 @@
     },
     {
       "name": "a11y_expand",
-      "description": "Expand a tree node, combo box, or disclosure element by accessibility name. Uses UIA ExpandCollapsePattern on Windows and AXExpanded attribute on macOS. More reliable than click-to-toggle when the element is already in a mixed state.",
+      "description": "Expand a tree node / combo / disclosure by a11y name (UIA ExpandCollapsePattern, AX AXExpanded).",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -81,7 +81,7 @@
     },
     {
       "name": "a11y_get_value",
-      "description": "Read the current value of a named text field, slider, or editable element (UIA ValuePattern / AX AXValue). Use this to verify what a form field contains before deciding whether to type into it.",
+      "description": "Read the current value of a named field (UIA ValuePattern / AX AXValue). Useful to verify before typing.",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -138,7 +138,7 @@
     },
     {
       "name": "a11y_select",
-      "description": "Select a list item, tab, or radio button by accessibility name. Uses UIA SelectionItemPattern on Windows; sets AXSelected on macOS. More reliable than clicking when an item is scrolled out of view.",
+      "description": "Select a list item / tab / radio by a11y name (UIA SelectionItemPattern, AX AXSelected).",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -164,7 +164,7 @@
     },
     {
       "name": "a11y_toggle",
-      "description": "Toggle a checkbox, switch, or toggle-button by accessibility name. Uses UIA TogglePattern on Windows and AXValue flip on macOS. Returns the NEW toggle state (On/Off/Indeterminate) in the result.",
+      "description": "Toggle a checkbox / switch / toggle-button by a11y name. Returns new state (On/Off/Indeterminate).",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -266,18 +266,18 @@
     },
     {
       "name": "cdp_click",
-      "description": "Click a DOM element by CSS selector or by visible text content.",
+      "description": "Click a page element by visible text or CSS selector (DOM click — no coordinates). Requires browser_connect first.",
       "category": "browser",
       "parameters": {
         "type": "object",
         "properties": {
-          "selector": {
-            "type": "string",
-            "description": "CSS selector to click (e.g. \"#submit\", \"button.primary\")"
-          },
           "text": {
             "type": "string",
-            "description": "Visible text of the element to click (alternative to selector)"
+            "description": "Visible text of the element to click (preferred)."
+          },
+          "selector": {
+            "type": "string",
+            "description": "CSS selector (alternative to text)."
           }
         }
       },
@@ -285,7 +285,7 @@
     },
     {
       "name": "cdp_connect",
-      "description": "Connect to Edge/Chrome browser via Chrome DevTools Protocol (port 9223). Must be called before other cdp_* tools. Use navigate_browser to launch Edge with CDP enabled.",
+      "description": "Open/attach a dedicated browser the agent controls via the DOM (reliable for web pages — no pixels). Call this FIRST for any website task, then use browser_navigate/read/click/type. If it fails, fall back to read_text/smart_click.",
       "category": "browser",
       "parameters": {
         "type": "object",
@@ -323,11 +323,16 @@
     },
     {
       "name": "cdp_page_context",
-      "description": "Get a structured list of interactive elements on the current browser page (inputs, buttons, links with selectors and positions).",
+      "description": "Read the current page as structured DOM: interactive elements (links/buttons/inputs with selectors), or text for a CSS selector. Use instead of read_text on web pages. Requires browser_connect first.",
       "category": "browser",
       "parameters": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "selector": {
+            "type": "string",
+            "description": "Optional CSS selector to read text from (default: structured interactive-element list for the whole page)."
+          }
+        }
       },
       "costClass": "perceive-text"
     },
@@ -419,22 +424,22 @@
     },
     {
       "name": "cdp_type",
-      "description": "Type text into a DOM input field by CSS selector or by associated label text.",
+      "description": "Type text into a page input by CSS selector or associated label (DOM input — no coordinates). Requires browser_connect first.",
       "category": "browser",
       "parameters": {
         "type": "object",
         "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to type."
+          },
           "selector": {
             "type": "string",
-            "description": "CSS selector for the input field"
+            "description": "CSS selector for the input."
           },
           "label": {
             "type": "string",
-            "description": "Label text associated with the input (alternative to selector)"
-          },
-          "text": {
-            "type": "string",
-            "description": "Text to type into the field"
+            "description": "Label text associated with the input (alternative to selector)."
           }
         },
         "required": [
@@ -493,7 +498,7 @@
     },
     {
       "name": "close_window",
-      "description": "Polite close request — the app receives WM_CLOSE / AXCloseAction / _NET_CLOSE_WINDOW and may prompt (\"Save changes?\") or refuse. Returns when the request was posted, NOT when the window actually closed.",
+      "description": "Polite close request (WM_CLOSE / AXCloseAction / _NET_CLOSE_WINDOW). App may prompt.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -682,7 +687,7 @@
     },
     {
       "name": "focus_element",
-      "description": "Put keyboard focus on a UI element by accessibility name. Does NOT raise the window — use focus_window first if you also need the window in the foreground. Returns not_supported_on_platform on Linux (AT-SPI bridge pending).",
+      "description": "Keyboard-focus an element by a11y name. Does NOT raise window — use focus_window first if needed.",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -708,7 +713,7 @@
     },
     {
       "name": "focus_window",
-      "description": "Bring a window to the foreground. Matches by process name, PID, or title substring. Verifies focus after attempt.",
+      "description": "Bring a window to the foreground. Match by processName, pid, or title substring.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -760,7 +765,7 @@
     },
     {
       "name": "get_element_state",
-      "description": "Return only the state flags of a named element (focused, enabled/disabled, selected, busy, offscreen, expandable, expanded). Use for quick state checks without pulling the entire element record.",
+      "description": "Get state flags of a named element (focused/enabled/disabled/selected/busy/offscreen/expandable/expanded).",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -837,7 +842,7 @@
     },
     {
       "name": "get_windows",
-      "description": "List all visible windows with their title, process name, PID, and bounds.",
+      "description": "List visible top-level windows with title, process, and bounds. Useful when the active window is wrong or missing.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -847,14 +852,14 @@
     },
     {
       "name": "invoke_element",
-      "description": "Invoke a UI Automation action on an element. More precise than smart_click — supports set-value, get-value, focus, expand, collapse in addition to click.",
+      "description": "Click/activate a UI element by its accessibility name. MORE RELIABLE than coord clicks — use this when the snapshot shows a named target.",
       "category": "window",
       "parameters": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Element name to find"
+            "description": "Accessibility name of the element"
           },
           "automationId": {
             "type": "string",
@@ -862,15 +867,15 @@
           },
           "controlType": {
             "type": "string",
-            "description": "Filter by control type (e.g., \"ControlType.Button\")"
+            "description": "Optional role filter (Button, MenuItem, Tab, etc.)"
           },
           "processId": {
             "type": "number",
-            "description": "Target process ID"
+            "description": "Optional: limit to a specific process"
           },
           "action": {
             "type": "string",
-            "description": "Action to perform",
+            "description": "Action to perform (default: \"click\")",
             "enum": [
               "click",
               "set-value",
@@ -890,7 +895,7 @@
     },
     {
       "name": "key_down",
-      "description": "Press a key (or modifier) without releasing. Pair with key_up. Enables hold-modifier-while-click or chord-hold workflows. Accepts the same tokens as key_press (\"shift\", \"Return\", \"F5\", etc.).",
+      "description": "Press a key without releasing. Pair with key_up. Use to hold modifiers (shift, ctrl) during clicks.",
       "category": "keyboard",
       "parameters": {
         "type": "object",
@@ -908,25 +913,26 @@
     },
     {
       "name": "key_press",
-      "description": "Press a keyboard key or key combination. Use \"+\" for combos (e.g. \"ctrl+s\", \"shift+enter\", \"alt+tab\"). Single keys: \"Return\", \"Tab\", \"Escape\", \"Backspace\", \"Delete\", \"F1\"-\"F12\", \"Left/Right/Up/Down\".",
+      "description": "Press a key or key combo. Use \"mod\" for Ctrl/Cmd. Use \"+\" for a chord (e.g. \"mod+s\", \"shift+Tab\"). Space-separate for a sequence (\"Down Down End\"). Examples: \"Return\", \"Tab\", \"Escape\", \"F5\", \"ctrl+a\".",
       "category": "keyboard",
       "parameters": {
         "type": "object",
         "properties": {
+          "combo": {
+            "type": "string",
+            "description": "Key/combo to press (e.g. \"Return\", \"mod+s\"). Space-separate for a sequence."
+          },
           "key": {
             "type": "string",
-            "description": "Key or combo to press (e.g. \"Return\", \"ctrl+a\", \"F5\", \"Escape\")"
+            "description": "Alias for combo — accepted for MCP/compound backward-compatibility."
           }
-        },
-        "required": [
-          "key"
-        ]
+        }
       },
       "costClass": "act"
     },
     {
       "name": "key_up",
-      "description": "Release a key previously pressed with key_down. No-op if not currently down.",
+      "description": "Release a key previously pressed with key_down.",
       "category": "keyboard",
       "parameters": {
         "type": "object",
@@ -978,7 +984,7 @@
     },
     {
       "name": "list_displays",
-      "description": "Enumerate all connected displays with logical bounds, physical size, DPI ratio, and primary flag. Use this before desktop_screenshot with displayIndex to target a specific monitor.",
+      "description": "Enumerate connected displays with logical bounds + DPI ratio. Use before display-specific screenshots.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -1005,7 +1011,7 @@
     },
     {
       "name": "maximize_window",
-      "description": "Maximize the foreground window (or a specific window matched by processName/title). Polite request — the OS window manager may snap to the full working area.",
+      "description": "Maximize the foreground window (or a matched window). Polite request; WM may interpret.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -1051,7 +1057,7 @@
     },
     {
       "name": "minimize_window_to_taskbar",
-      "description": "Minimize a window (hide to taskbar/Dock). Counterpart to the existing `minimize_window` in a11y.ts but routed through the OS-agnostic PlatformAdapter and accepts explicit target queries.",
+      "description": "Minimize the foreground or matched window to the taskbar / Dock.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -1074,7 +1080,7 @@
     },
     {
       "name": "mouse_click",
-      "description": "Click the left mouse button at the given image-space coordinates.",
+      "description": "Click at (x,y). Default coords come from the a11y snapshot (already screen-correct). If you read the target off the SCREENSHOT instead, pass space:\"image\" so the tool scales it. Prefer invoke_element when the target has an a11y name.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1086,6 +1092,26 @@
           "y": {
             "type": "number",
             "description": "Y coordinate in image-space"
+          },
+          "button": {
+            "type": "string",
+            "description": "Mouse button to click: \"left\" (default) or \"right\"",
+            "enum": [
+              "left",
+              "right"
+            ]
+          },
+          "count": {
+            "type": "number",
+            "description": "1=single, 2=double"
+          },
+          "space": {
+            "type": "string",
+            "description": "Coordinate space of the x/y you pass. \"screen\" (default) = accessibility-snapshot coords, already correct for the real screen. \"image\" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use \"image\" ONLY when the target is not in the a11y snapshot and you read it off the picture.",
+            "enum": [
+              "screen",
+              "image"
+            ]
           }
         },
         "required": [
@@ -1120,7 +1146,7 @@
     },
     {
       "name": "mouse_down",
-      "description": "Press a mouse button without releasing. Pair with mouse_up. Useful for hold-and-drag gestures, modifier-click selections, or chord input.",
+      "description": "Press a mouse button without releasing. Pair with mouse_up. Enables hold-and-drag + modifier clicks.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1140,7 +1166,7 @@
     },
     {
       "name": "mouse_drag",
-      "description": "Drag from one image-space coordinate to another (click-hold-move-release). Useful for selecting text, moving objects, or resizing.",
+      "description": "Drag the mouse from (startX,startY) to (endX,endY). Used for selecting text, drawing, resizing.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1161,21 +1187,13 @@
             "type": "number",
             "description": "End Y in image-space"
           },
-          "x1": {
-            "type": "number",
-            "description": "Alias for startX"
-          },
-          "y1": {
-            "type": "number",
-            "description": "Alias for startY"
-          },
-          "x2": {
-            "type": "number",
-            "description": "Alias for endX"
-          },
-          "y2": {
-            "type": "number",
-            "description": "Alias for endY"
+          "space": {
+            "type": "string",
+            "description": "Coordinate space of the x/y you pass. \"screen\" (default) = accessibility-snapshot coords, already correct for the real screen. \"image\" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use \"image\" ONLY when the target is not in the a11y snapshot and you read it off the picture.",
+            "enum": [
+              "screen",
+              "image"
+            ]
           }
         },
         "required": [
@@ -1253,7 +1271,7 @@
     },
     {
       "name": "mouse_move_relative",
-      "description": "Move the cursor by a relative offset (dx, dy) in image-space pixels. Useful for drawing on a canvas or adjusting a selection. On Wayland where cursor-query APIs are blocked, uses the last known position.",
+      "description": "Move cursor by a relative offset (dx, dy). Wayland-safe via cursor cache.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1299,7 +1317,7 @@
     },
     {
       "name": "mouse_scroll",
-      "description": "Scroll the mouse wheel at the given image-space coordinates.",
+      "description": "Scroll at (x,y) in a direction. Omit x,y to scroll at the screen center.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1322,13 +1340,18 @@
           },
           "amount": {
             "type": "number",
-            "description": "Scroll amount in wheel ticks (default: 3)",
-            "default": 3
+            "description": "Wheel ticks (default 3)"
+          },
+          "space": {
+            "type": "string",
+            "description": "Coordinate space of the x/y you pass. \"screen\" (default) = accessibility-snapshot coords, already correct for the real screen. \"image\" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use \"image\" ONLY when the target is not in the a11y snapshot and you read it off the picture.",
+            "enum": [
+              "screen",
+              "image"
+            ]
           }
         },
         "required": [
-          "x",
-          "y",
           "direction"
         ]
       },
@@ -1396,7 +1419,7 @@
     },
     {
       "name": "mouse_up",
-      "description": "Release a mouse button previously pressed with mouse_down. No-op if nothing is held.",
+      "description": "Release a mouse button previously pressed with mouse_down.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1526,14 +1549,14 @@
     },
     {
       "name": "read_screen",
-      "description": "Read the accessibility tree of the screen. Returns structured text showing: WINDOWS, FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT (keyboard focus). When the focused window is a browser with CDP attached, also appends a BROWSER DOM section with interactive page elements (UIA stops at chrome — this is how to see canvas / SPA content). Fast, small, and structured — prefer this over screenshots.",
+      "description": "Refresh the accessibility snapshot of the focused window (already attached each turn — call this only if you suspect staleness).",
       "category": "perception",
       "parameters": {
         "type": "object",
         "properties": {
           "processId": {
             "type": "number",
-            "description": "Focus on a specific process ID (optional — reads foreground window by default)"
+            "description": "Optional: limit to a specific process"
           }
         }
       },
@@ -1564,7 +1587,7 @@
     },
     {
       "name": "resize_window",
-      "description": "Set a window's logical-pixel bounds. Pass only the dimensions you want to change; omitted fields preserve the current value. Coordinates are logical pixels — top-left origin.",
+      "description": "Set the foreground (or matched) window bounds in logical pixels. Omitted fields preserved.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -1603,7 +1626,7 @@
     },
     {
       "name": "restore_window",
-      "description": "Restore a minimized or maximized window back to its previous bounds. Use this to bring a hidden window back without toggling into fullscreen.",
+      "description": "Restore a minimized or maximized window to its previous bounds.",
       "category": "window",
       "parameters": {
         "type": "object",
@@ -1714,7 +1737,7 @@
     },
     {
       "name": "set_field_value",
-      "description": "Set the value of a named text field directly via accessibility — more reliable than focus+type for forms (no IME issues, no autocomplete races). Uses UIA ValuePattern on Windows and AXValue on macOS. Referenced as the delegate for the compact `accessibility({\"action\":\"set_value\", ...})` route.",
+      "description": "Set an editable field's value directly via accessibility (more reliable than click+type for forms).",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -1959,7 +1982,7 @@
     },
     {
       "name": "type_text",
-      "description": "Type text into the currently focused element. Internally uses clipboard paste for reliability (no dropped chars). The user clipboard is saved before and restored after, so calling type_text never clobbers any text the caller had previously placed on the clipboard.",
+      "description": "Type text into the currently focused input. Prefer set_field_value when a field has an a11y name.",
       "category": "keyboard",
       "parameters": {
         "type": "object",
@@ -1977,7 +2000,7 @@
     },
     {
       "name": "undo_last",
-      "description": "Emit the OS-specific Undo shortcut (Ctrl+Z on Win/Linux, Cmd+Z on macOS) into the focused window.",
+      "description": "Send the OS Undo keystroke (mod+Z).",
       "category": "keyboard",
       "parameters": {
         "type": "object",
@@ -2007,7 +2030,7 @@
     },
     {
       "name": "wait_for_element",
-      "description": "Poll the accessibility tree until an element appears or timeout elapses. Useful after an action that triggers a dialog or side panel. Returns not_supported_on_platform on Linux (AT-SPI bridge pending).",
+      "description": "Poll the a11y tree until an element matching name/controlType appears. Useful after an action spawns a dialog.",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -2026,13 +2049,12 @@
           },
           "timeoutMs": {
             "type": "number",
-            "description": "Max wait in milliseconds (default 5000)",
-            "default": 5000
+            "description": "Default 5000",
+            "maximum": 30000
           },
           "intervalMs": {
             "type": "number",
-            "description": "Poll interval in ms (default 250)",
-            "default": 250
+            "description": "Default 250"
           }
         }
       },

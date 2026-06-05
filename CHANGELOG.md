@@ -2,6 +2,109 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [Unreleased] — v2 — tool-unification migration
+
+### Migration notes (v2 behavior change)
+
+**`mouse_click` / `mouse_drag` / `mouse_scroll` — `space:'screen'` no longer double-scales**
+
+External MCP callers that omit the `space` parameter are **unaffected** — omitting `space` continues to default to `'image'`, which applies the same image→physical scaling that all previous releases applied.
+
+The one behavior change is for callers that explicitly pass `space:'screen'`:
+
+| Caller behavior | v1.x result | v2 result |
+|---|---|---|
+| `{x, y}` (no `space`) | scaled (image→physical) | scaled (image→physical) — **unchanged** |
+| `{x, y, space:'image'}` | scaled (image→physical) | scaled (image→physical) — **unchanged** |
+| `{x, y, space:'screen'}` | **double-scaled** (bug) | pass-through — **fixed** |
+
+If your agent passes a11y-snapshot coordinates via `mouse_click` / `mouse_drag` / `mouse_scroll` and previously compensated by dividing by the DPI ratio before sending, remove that compensation after upgrading.
+
+### Implementation notes
+
+- `mouse_click`, `mouse_drag`, `mouse_scroll`, `mouse_move_relative`, `mouse_down`, `mouse_up` are now projected from System B (`buildUnifiedTools`) via `projectToToolDefinition` (the same uniform path used by the window and keyboard groups in Steps 3–4).
+- The projected coord-sensitive tools (`click`, `drag`, `scroll`) inject `space:'image'` as the default when the caller omits it, preserving the legacy scaling contract.
+- System A handlers for these six tools are intentionally kept (Step 8 handles removal).
+- Tools left on System A (no System B granular equivalent): `mouse_hover`, `mouse_double_click`, `mouse_right_click`, `mouse_middle_click`, `mouse_triple_click`, `mouse_scroll_horizontal`, `mouse_drag_stepped`.
+- **`mouse_drag`**: the `x1/y1/x2/y2` convenience aliases are removed; use the canonical `startX/startY/endX/endY` (unchanged, still required). Callers already using the canonical names are unaffected.
+
+**`mouse_scroll` — `x` and `y` are no longer required**
+
+System A required `x`, `y`, and `direction`. In v2 only `direction` is required; omitting `x`/`y` scrolls at the screen center (safe default). Callers that always supply `x`/`y` are unaffected.
+
+| Caller behavior | v1.x result | v2 result |
+|---|---|---|
+| `{x, y, direction}` | scrolls at (x,y) | scrolls at (x,y) — **unchanged** |
+| `{direction}` (no x/y) | schema validation error (x/y required) | scrolls at screen center |
+
+**`key_press` — `key` param removed from JSON-Schema `required` array**
+
+System A's JSON schema listed `key` as required. In v2 the schema lists neither `combo` nor `key` as required (the execute body still guards the total absence and returns an actionable error). Callers supplying the `key` param are fully unaffected; the only change is that MCP-level schema validation no longer rejects a missing-key call before it reaches the handler.
+
+| Caller behavior | v1.x result | v2 result |
+|---|---|---|
+| `{key: "Return"}` | runs normally | runs normally — **unchanged** |
+| `{}` (no key) | schema validation error | handler-level error (actionable message) |
+
+**`set_field_value` — category corrected from `'window'` to `'perception'`**
+
+TOOL_META had `set_field_value` category as `'window'`; System A's `a11y_depth.ts` definition uses `'perception'`. The mismatch is corrected: the projected tool now reports `category: 'perception'`, matching the System A original. This is a routing/metadata fix with no behavioral change.
+
+**`invoke_element` — `automationId` matching now falls back to name-based search**
+
+The `automationId` parameter is accepted for backward-compat but the `PlatformAdapter.invokeElement` interface does not expose automationId filtering. When a caller passes only `automationId` (no `name`), the value is used as the `name` search string, which is a best-effort fallback.
+
+| Caller behavior | v1.x result | v2 result |
+|---|---|---|
+| `{name: "OK"}` | name-based a11y match | same — **unchanged** |
+| `{automationId: "btn_ok"}` | exact automationId match | uses `automationId` as name string (best-effort) |
+| `{name: "OK", automationId: "btn_ok"}` | name + automationId match | name is used; automationId is accepted but not narrowing |
+
+For precise automationId targeting, prefer `find_element` (which filters by automationId) followed by `invoke_element` with the found element's `name`.
+
+**`cdp_connect` — now auto-launches a browser when none is running**
+
+Previously `cdp_connect` only attached to an already-running Chrome/Edge process.
+In v2 it auto-launches Edge/Chrome with the CDP debug port if no browser is connected.
+
+| Caller behavior | v1.x result | v2 result |
+|---|---|---|
+| No browser running | error "Failed to connect…" | launches Edge/Chrome, then connects |
+| Browser already running | attaches | attaches — **unchanged** |
+
+If you previously launched the browser manually (via `navigate_browser`) before calling `cdp_connect`, that workflow continues to work. The new behavior is additive.
+
+**`cdp_page_context` — gains an optional `selector` param**
+
+Previously `cdp_page_context` took no parameters and always returned the full structured
+interactive-element list for the page.
+In v2 callers may pass an optional CSS `selector`; when present, the tool returns the
+plain-text content of the matching element instead of the full element list.
+
+| Caller behavior | v1.x result | v2 result |
+|---|---|---|
+| No params | structured interactive-element list | same — **unchanged** |
+| `{selector: "main"}` | invalid param (ignored or error) | text content of `main` element |
+
+Callers that pass no params are fully unaffected. The no-param path returns the same
+`getPageContext()` result as before.
+
+### Implementation notes (Step 7 — CDP / browser group)
+
+- `cdp_connect`, `cdp_page_context`, `cdp_click`, `cdp_type` are now projected from System B
+  (`buildUnifiedTools`) via `projectToToolDefinition` (the same uniform path used by Steps 3–6).
+- System A handlers for these four tools are intentionally kept (Step 8 handles removal).
+- **`navigate_browser` is NOT migrated.** System A's `navigate_browser` is a browser-launcher
+  tool (`safetyTier 2`, `category: 'orchestration'`) that spawns Edge/Chrome with
+  `--remote-debugging-port`. System B's `browser_navigate` is a within-session navigation call
+  that requires a prior `browser_connect`. Projecting `browser_navigate` as `navigate_browser`
+  would silently strip the launch capability and break external callers.
+- Tools left on System A (no System B equivalent in `buildUnifiedTools()`):
+  `navigate_browser`, `cdp_read_text`, `cdp_select_option`, `cdp_evaluate`,
+  `cdp_wait_for_selector`, `cdp_list_tabs`, `cdp_switch_tab`, `cdp_scroll`.
+
+---
+
 ## [1.0.0] - 2026-06-03 — adaptive pipeline + cost tiers + desktop grounding
 
 ### Upgrading from 0.9.x
