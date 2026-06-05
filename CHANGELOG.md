@@ -4,6 +4,50 @@ All notable changes to Clawd Cursor will be documented in this file.
 
 ## [Unreleased] — v2 — tool-unification migration
 
+### Changed — one tool implementation, used everywhere
+
+The MCP tool surface and the internal autonomous agent-loop used to carry **two
+parallel implementations** of ~35 of the same tools (~2,100 LOC of duplication).
+The MCP surface now **projects from the agent-loop (System B) implementations** via
+`projectToToolDefinition`, so external agents inherit the reliability tweaks that
+were previously internal-only: smushed-coordinate coercion, focus-theft
+detection/reporting, automatic pid-scoping for a11y searches, the clipboard
+paste fast-path, and conditional coordinate scaling.
+
+- ~34 tools migrated (window, keyboard, mouse, a11y/perception, CDP). **Tool names
+  and parameters are backward-compatible — no renames** (the MCP catalog stays at
+  98 tools), so existing editor/agent permission allowlists keep working.
+- Tools where System A is richer or unique are **kept on System A**: `ocr_read_screen`
+  (structured `elements[]`+bounds output), `smart_*`, `find_element`,
+  `navigate_browser` (the browser *launcher*), `cdp_evaluate/select/wait/tabs/scroll`,
+  and the extra mouse variants.
+- A shared characterization test-suite pins the System B behaviors so the projection
+  can't silently regress them.
+- (Pending) deletion of the now-dead System A handler bodies — the LOC drop lands
+  in a follow-up; this release makes System B the single source of truth.
+
+### Fixed
+
+- **Packaging (#151):** the published package now ships the macOS (`scripts/mac/`)
+  and Linux (`scripts/linux/`) runtime scripts. Previously only Windows `.ps1` files
+  were whitelisted, so accessibility/window/OCR tools were dead on mac/Linux installs
+  — the same class of bug as the earlier Windows-bridge omission.
+- **macOS native helper (#150):** `native/build.sh` now generates `Contents/Info.plist`
+  (without it the `.app` is an invalid, unsignable bundle) and `entitlements.plist` no
+  longer contains XML comments that `codesign`'s AMFI parser rejects. Unblocks the
+  signed-bundle path that TCC (Accessibility / Screen Recording) and #149 depend on.
+  *(Authored on Windows — needs a macOS `./build.sh` + screenshot smoke test to confirm.)*
+- **Compact-surface friction:** native-name aliases stop the MCP validator from
+  silently dropping a correctly-intended arg; a central required-arg guard converts the
+  crash-on-undefined class into actionable errors; `open_app`/`open_file`/`open_url` are
+  reachable from the `system` compound (not just `window`); an unknown action now names
+  the compound that owns it; `key_press` accepts space-separated key sequences.
+- **a11y consistency:** `smart_click` / `smart_type` / `smart_read` accept `name` as an
+  alias for `target` (the rest of the accessibility surface uses `name`).
+- Confirm-tier safety and `task`-unavailable error messages are now actionable.
+
+### Behavior changes (v2)
+
 ### Migration notes (v2 behavior change)
 
 **`mouse_click` / `mouse_drag` / `mouse_scroll` — `space:'screen'` no longer double-scales**
