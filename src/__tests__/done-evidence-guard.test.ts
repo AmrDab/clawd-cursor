@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { buildUnifiedTools } from '../core/agent-loop/tools';
 
 function getDoneTool() {
-  const tools = buildUnifiedTools('blind');
+  const tools = buildUnifiedTools();
   const done = tools.find(t => t.name === 'done');
   if (!done) throw new Error('done tool missing from blind catalog');
   return done;

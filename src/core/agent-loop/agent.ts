@@ -133,11 +133,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     screen = { logicalWidth: 1920, logicalHeight: 1080, physicalWidth: 1920, physicalHeight: 1080, dpiRatio: 1 };
   }
 
-  // Build the tool catalog for this mode + capability. When capability is
-  // set (text modes only), serves a scoped palette; vision mode always
-  // collapses mouse/keyboard/window into compound tools. See
-  // `buildUnifiedTools` for the selection logic.
-  const tools = buildUnifiedTools(input.mode, input.capability);
+  // Build the flat tool catalog. Mode and capability params are no longer
+  // accepted — the full catalog is served regardless of mode.
+  const tools = buildUnifiedTools();
   const toolMap = new Map(tools.map(t => [t.name, t]));
   const llmTools = toUnifiedLLMTools(tools);
 

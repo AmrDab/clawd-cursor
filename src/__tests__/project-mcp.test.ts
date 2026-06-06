@@ -344,7 +344,7 @@ describe('projectToToolDefinition', () => {
   let typeTool: UnifiedTool;
 
   beforeEach(() => {
-    const blindTools = buildUnifiedTools('blind');
+    const blindTools = buildUnifiedTools();
     const found = blindTools.find(t => t.name === 'read_screen');
     if (!found) throw new Error('read_screen not found in buildUnifiedTools("blind")');
     readScreenTool = found;
@@ -379,7 +379,7 @@ describe('projectToToolDefinition', () => {
   });
 
   it('applies the click → mouse_click MCP name mapping', () => {
-    const clickTool = buildUnifiedTools('blind').find(t => t.name === 'click');
+    const clickTool = buildUnifiedTools().find(t => t.name === 'click');
     expect(clickTool).toBeDefined();
     const def = projectToToolDefinition(clickTool!);
     expect(def.name).toBe('mouse_click');
@@ -387,7 +387,7 @@ describe('projectToToolDefinition', () => {
 
   it('applies the screenshot → desktop_screenshot MCP name mapping', () => {
     // screenshot is only in hybrid and vision modes.
-    const hybridTools = buildUnifiedTools('hybrid');
+    const hybridTools = buildUnifiedTools();
     const shot = hybridTools.find(t => t.name === 'screenshot');
     expect(shot).toBeDefined();
     const def = projectToToolDefinition(shot!);
@@ -395,7 +395,7 @@ describe('projectToToolDefinition', () => {
   });
 
   it('applies the list_windows → get_windows MCP name mapping', () => {
-    const lw = buildUnifiedTools('blind').find(t => t.name === 'list_windows');
+    const lw = buildUnifiedTools().find(t => t.name === 'list_windows');
     expect(lw).toBeDefined();
     const def = projectToToolDefinition(lw!);
     expect(def.name).toBe('get_windows');

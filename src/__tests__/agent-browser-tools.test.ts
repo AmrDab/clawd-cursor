@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { buildUnifiedTools } from '../core/agent-loop/tools';
 import type { AgentToolContext } from '../core/agent-loop/types';
 
-const tool = (name: string) => buildUnifiedTools('blind').find(t => t.name === name)!;
+const tool = (name: string) => buildUnifiedTools().find(t => t.name === name)!;
 
 /** A mock CDPDriver exposing only the methods the browser_* tools call. */
 function mockCdp(overrides: Partial<Record<string, any>> = {}) {

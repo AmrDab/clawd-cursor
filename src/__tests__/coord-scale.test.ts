@@ -45,7 +45,7 @@ function makeCtx(clicks: Array<{ x: number; y: number }>): AgentToolContext {
 }
 
 describe('click tool coordinate space', () => {
-  const click = buildUnifiedTools('hybrid').find(t => t.name === 'click')!;
+  const click = buildUnifiedTools().find(t => t.name === 'click')!;
 
   it('space:"image" scales screenshot coords to physical (1107 → 2214)', async () => {
     const clicks: Array<{ x: number; y: number }> = [];

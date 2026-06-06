@@ -31,7 +31,7 @@ const MAX_STEPS = 10;
 
 /** Re-perceive the a11y tree (lower-cased) for guard checks. */
 async function perceiveTree(ctx: AgentToolContext): Promise<string> {
-  const rs = buildUnifiedTools(ctx.mode).find(t => t.name === 'read_screen');
+  const rs = buildUnifiedTools().find(t => t.name === 'read_screen');
   if (!rs) return '';
   try { return ((await rs.execute({}, ctx)).text || '').toLowerCase(); } catch { return ''; }
 }
@@ -66,7 +66,7 @@ export function buildBatchTool(): UnifiedTool {
         return { success: false, text: 'batch: `steps` must be a non-empty array.' };
       }
 
-      const byName = new Map(buildUnifiedTools(ctx.mode).filter(t => t.name !== 'batch').map(t => [t.name, t]));
+      const byName = new Map(buildUnifiedTools().filter(t => t.name !== 'batch').map(t => [t.name, t]));
       const trace: string[] = [];
       let done = 0;
       const halt = (msg: string): UnifiedToolResult => ({ success: false, text: `${msg}\n${trace.join('\n')}` });

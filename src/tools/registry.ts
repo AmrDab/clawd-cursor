@@ -76,7 +76,7 @@ const WINDOW_MCP_NAMES = new Set([
 let _projectedWindowCache: ToolDefinition[] | null = null;
 function projectedWindowTools(): ToolDefinition[] {
   if (_projectedWindowCache === null) {
-    const sysBTools = buildUnifiedTools('blind');
+    const sysBTools = buildUnifiedTools();
     _projectedWindowCache = sysBTools
       .filter(t => WINDOW_SYSB_NAMES.has(t.name))
       .map(t => projectToToolDefinition(t));
@@ -161,7 +161,7 @@ let _projectedMouseCache: ToolDefinition[] | null = null;
 function projectedMouseTools(): ToolDefinition[] {
   if (_projectedMouseCache !== null) return _projectedMouseCache;
 
-  const sysBTools = buildUnifiedTools('blind');
+  const sysBTools = buildUnifiedTools();
   _projectedMouseCache = sysBTools
     .filter(t => MOUSE_SYSB_NAMES.has(t.name))
     .map(t => {
@@ -326,7 +326,7 @@ let _projectedA11yCache: ToolDefinition[] | null = null;
 function projectedA11yTools(): ToolDefinition[] {
   if (_projectedA11yCache !== null) return _projectedA11yCache;
 
-  const sysBTools = buildUnifiedTools('blind');
+  const sysBTools = buildUnifiedTools();
   _projectedA11yCache = sysBTools
     .filter(t => A11Y_SYSB_NAMES.has(t.name))
     .map(t => projectToToolDefinition(t));
@@ -425,7 +425,7 @@ let _projectedBrowserCache: ToolDefinition[] | null = null;
 function projectedBrowserTools(): ToolDefinition[] {
   if (_projectedBrowserCache !== null) return _projectedBrowserCache;
 
-  const sysBTools = buildUnifiedTools('blind');
+  const sysBTools = buildUnifiedTools();
   _projectedBrowserCache = sysBTools
     .filter(t => BROWSER_SYSB_NAMES.has(t.name))
     .map(t => projectToToolDefinition(t));
@@ -471,7 +471,7 @@ let _projectedKeyboardCache: ToolDefinition[] | null = null;
 function projectedKeyboardTools(): ToolDefinition[] {
   if (_projectedKeyboardCache !== null) return _projectedKeyboardCache;
 
-  const sysBTools = buildUnifiedTools('blind');
+  const sysBTools = buildUnifiedTools();
   _projectedKeyboardCache = sysBTools
     .filter(t => KEYBOARD_SYSB_NAMES.has(t.name))
     .map(t => projectToToolDefinition(t));

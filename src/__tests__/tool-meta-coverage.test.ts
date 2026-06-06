@@ -88,15 +88,12 @@ const VISION_COMPOUNDS: Set<string> = new Set([
 // ── Build the complete System B tool name set ─────────────────────────────────
 
 /**
- * Collect unique tool names across all three modes.
- * Union: blind + hybrid + vision = complete catalog.
+ * Collect all tool names from the flat catalog.
  */
 function getAllSystemBNames(): Set<string> {
   const names = new Set<string>();
-  for (const mode of ['blind', 'hybrid', 'vision'] as const) {
-    for (const tool of buildUnifiedTools(mode)) {
-      names.add(tool.name);
-    }
+  for (const tool of buildUnifiedTools()) {
+    names.add(tool.name);
   }
   return names;
 }

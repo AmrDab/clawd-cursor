@@ -56,7 +56,7 @@ describe('ensureTargetForeground', () => {
 });
 
 describe('click tool raises the target window before clicking', () => {
-  const click = buildUnifiedTools('hybrid').find(t => t.name === 'click')!;
+  const click = buildUnifiedTools().find(t => t.name === 'click')!;
 
   it('focuses the target when the foreground is a different process, then clicks', async () => {
     const calls: string[] = [];

@@ -15,7 +15,7 @@ function ctxWith(platform: any): AgentToolContext {
     screenshotsCaptured: { n: 0 },
   };
 }
-const typeTool = () => buildUnifiedTools('blind').find(t => t.name === 'type')!;
+const typeTool = () => buildUnifiedTools().find(t => t.name === 'type')!;
 
 describe('type tool — clipboard paste fast path', () => {
   it('pastes via clipboard (write + mod+v), NOT per-character typeText', async () => {

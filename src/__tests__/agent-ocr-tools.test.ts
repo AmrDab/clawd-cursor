@@ -34,7 +34,7 @@ function ctx(clicks: any[]): AgentToolContext {
     screenshotsCaptured: { n: 0 },
   };
 }
-const tool = (name: string) => buildUnifiedTools('blind').find(t => t.name === name)!;
+const tool = (name: string) => buildUnifiedTools().find(t => t.name === name)!;
 
 beforeEach(() => { ocrState.available = true; ocrState.elements = []; });
 

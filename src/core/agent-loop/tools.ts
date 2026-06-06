@@ -20,10 +20,7 @@
  */
 
 import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
-import type { Capability } from '../classify/capability';
-import { paletteFor } from './palettes';
 import { buildBatchTool } from './batch-tool';
-import { getCompoundTools, COMPOUND_REPLACES } from './compound';
 import { imageScale, scaleCoord } from './coord-scale';
 import { ensureTargetForeground } from './focus-guard';
 import { resolveAlias } from '../router/aliases';
@@ -99,10 +96,7 @@ const HEDGING_PATTERN = new RegExp(
  * present regardless of mode/capability — the agent must always have
  * an exit door.
  */
-export function buildUnifiedTools(
-  mode: 'blind' | 'hybrid' | 'vision',
-  capability?: Capability,
-): UnifiedTool[] {
+export function buildUnifiedTools(): UnifiedTool[] {
   const tools: UnifiedTool[] = [
     // ─── PERCEPTION ─────────────────────────────────────────────
     {
@@ -1562,46 +1556,10 @@ export function buildUnifiedTools(
     if (bi >= 0) tools.splice(bi, 1);
   }
 
-  // ── Vision mode: compound tools + perception + a11y + terminals ─
-  // Replace the individual mouse/keyboard/window primitives with the
-  // three action-discriminated compound schemas. This shrinks the
-  // catalog the vision LLM sees from ~30 tool definitions to ~12,
-  // cutting prompt tokens ~7× and letting the model pick categories
-  // first, specific actions second (exactly Anthropic's pattern).
-  if (mode === 'vision') {
-    const kept = tools.filter(t =>
-      !COMPOUND_REPLACES.has(t.name) &&
-      t.name !== 'cannot_read' && // vision has nothing to escalate to
-      t.name !== 'screenshot',    // included separately below so it sits at top
-    );
-    const screenshot = tools.find(t => t.name === 'screenshot');
-    const compound = getCompoundTools();
-    return [
-      ...(screenshot ? [screenshot] : []),
-      ...compound,
-      ...kept,
-    ];
-  }
-
-  // ── Text modes (blind / hybrid): capability-scoped palettes ────
-  // When the preprocessor supplied a specific capability, filter to
-  // the tight palette. `general` or undefined → full catalog, matching
-  // pre-Tranche-2.5 behavior.
-  if (capability && capability !== 'general') {
-    const allow = new Set(paletteFor(capability) ?? []);
-    // Blind mode must keep cannot_read; hybrid can call screenshot if
-    // the palette asks for it (rare — most palettes omit it).
-    const palette = tools.filter(t => allow.has(t.name));
-    if (mode === 'blind') return palette.filter(t => t.name !== 'screenshot');
-    return palette;
-  }
-
-  // Full catalog (general capability) with mode-specific trim:
-  if (mode === 'blind') {
-    // Strip screenshot; keep cannot_read as the blind→vision escape.
-    return tools.filter(t => t.name !== 'screenshot');
-  }
-  // Hybrid: full catalog minus cannot_read (hybrid already has vision access).
+  // Full flat catalog. `screenshot` is available so the agent can call it
+  // when a11y is insufficient. `cannot_read` is excluded — the model runs
+  // in hybrid mode with direct screenshot access; there is no blind→vision
+  // escalation path to trigger.
   return tools.filter(t => t.name !== 'cannot_read');
 }
 

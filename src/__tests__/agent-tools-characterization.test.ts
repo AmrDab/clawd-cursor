@@ -59,7 +59,6 @@ vi.mock('../platform/ocr-engine', () => ({
 // ── Imports after mocks ──────────────────────────────────────────────────────
 
 import { buildUnifiedTools, coerceCoord } from '../core/agent-loop/tools';
-import { COMPOUND_REPLACES } from '../core/agent-loop/compound';
 import { imageScale, scaleCoord } from '../core/agent-loop/coord-scale';
 import type { AgentToolContext } from '../core/agent-loop/types';
 import { makeMockPlatform } from './helpers/mock-platform';
@@ -96,138 +95,59 @@ function findTool(tools: ReturnType<typeof buildUnifiedTools>, name: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Tool set composition per mode
+// 1. Tool set composition (flat catalog — mode-agnostic)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('1. buildUnifiedTools() — tool set composition', () => {
+describe('1. buildUnifiedTools() — flat catalog composition', () => {
 
-  it('blind: includes cannot_read (blind→vision escape)', () => {
-    const tools = buildUnifiedTools('blind');
-    expect(tools.map(t => t.name)).toContain('cannot_read');
-  });
-
-  it('blind: excludes screenshot', () => {
-    const tools = buildUnifiedTools('blind');
-    expect(tools.map(t => t.name)).not.toContain('screenshot');
-  });
-
-  it('blind: includes granular click tool', () => {
-    const tools = buildUnifiedTools('blind');
-    expect(tools.map(t => t.name)).toContain('click');
-  });
-
-  it('blind: does NOT include compound mouse tool (compound is vision-only)', () => {
-    const tools = buildUnifiedTools('blind');
-    expect(tools.map(t => t.name)).not.toContain('mouse');
-  });
-
-  it('blind: always has terminal tools (done, give_up)', () => {
-    const tools = buildUnifiedTools('blind');
-    const names = tools.map(t => t.name);
-    expect(names).toContain('done');
-    expect(names).toContain('give_up');
-  });
-
-  it('hybrid: includes screenshot tool', () => {
-    const tools = buildUnifiedTools('hybrid');
+  it('includes screenshot (available for on-demand vision)', () => {
+    const tools = buildUnifiedTools();
     expect(tools.map(t => t.name)).toContain('screenshot');
   });
 
-  it('hybrid: excludes cannot_read (hybrid has direct vision access)', () => {
-    const tools = buildUnifiedTools('hybrid');
+  it('excludes cannot_read (no blind→vision escalation path in hybrid loop)', () => {
+    const tools = buildUnifiedTools();
     expect(tools.map(t => t.name)).not.toContain('cannot_read');
   });
 
-  it('hybrid: includes granular click tool (not compound mouse)', () => {
-    const tools = buildUnifiedTools('hybrid');
+  it('includes granular click tool', () => {
+    const tools = buildUnifiedTools();
+    expect(tools.map(t => t.name)).toContain('click');
+  });
+
+  it('does NOT include compound mouse/keyboard/window tools (vision-only — not used in thin loop)', () => {
+    const tools = buildUnifiedTools();
     const names = tools.map(t => t.name);
-    expect(names).toContain('click');
     expect(names).not.toContain('mouse');
+    expect(names).not.toContain('keyboard');
   });
 
-  it('vision: includes compound mouse/keyboard/window tools', () => {
-    const tools = buildUnifiedTools('vision');
-    const names = tools.map(t => t.name);
-    expect(names).toContain('mouse');
-    expect(names).toContain('keyboard');
-    expect(names).toContain('window');
-  });
-
-  it('vision: excludes granular tools that COMPOUND_REPLACES covers', () => {
-    const tools = buildUnifiedTools('vision');
-    const names = new Set(tools.map(t => t.name));
-    for (const replaced of COMPOUND_REPLACES) {
-      expect(names.has(replaced), `vision should not include "${replaced}" (replaced by compound)`).toBe(false);
-    }
-  });
-
-  it('vision: excludes cannot_read (nothing to escalate to)', () => {
-    const tools = buildUnifiedTools('vision');
-    expect(tools.map(t => t.name)).not.toContain('cannot_read');
-  });
-
-  it('vision: includes screenshot at top of the list', () => {
-    const tools = buildUnifiedTools('vision');
-    expect(tools[0].name).toBe('screenshot');
-  });
-
-  it('vision: includes terminal done and give_up', () => {
-    const tools = buildUnifiedTools('vision');
+  it('always has terminal tools (done, give_up)', () => {
+    const tools = buildUnifiedTools();
     const names = tools.map(t => t.name);
     expect(names).toContain('done');
     expect(names).toContain('give_up');
   });
 
-  it('vision: includes perception tools (read_screen, read_text, smart_click)', () => {
-    const tools = buildUnifiedTools('vision');
+  it('inputSchema.required on click is ["x","y"]', () => {
+    const tools = buildUnifiedTools();
+    const click = findTool(tools, 'click');
+    expect(click.inputSchema.required).toContain('x');
+    expect(click.inputSchema.required).toContain('y');
+  });
+
+  it('inputSchema.required on done is ["evidence"]', () => {
+    const tools = buildUnifiedTools();
+    const done = findTool(tools, 'done');
+    expect(done.inputSchema.required).toEqual(['evidence']);
+  });
+
+  it('includes perception tools (read_screen, read_text, smart_click)', () => {
+    const tools = buildUnifiedTools();
     const names = tools.map(t => t.name);
     expect(names).toContain('read_screen');
     expect(names).toContain('read_text');
     expect(names).toContain('smart_click');
-  });
-
-  it('all modes: inputSchema.required on click is ["x","y"]', () => {
-    for (const mode of ['blind', 'hybrid'] as const) {
-      const tools = buildUnifiedTools(mode);
-      const click = findTool(tools, 'click');
-      expect(click.inputSchema.required).toContain('x');
-      expect(click.inputSchema.required).toContain('y');
-    }
-  });
-
-  it('all modes: inputSchema.required on done is ["evidence"]', () => {
-    for (const mode of ['blind', 'hybrid', 'vision'] as const) {
-      const tools = buildUnifiedTools(mode);
-      const done = findTool(tools, 'done');
-      expect(done.inputSchema.required).toEqual(['evidence']);
-    }
-  });
-
-  it('vision: compound mouse inputSchema.required is ["action"]', () => {
-    const tools = buildUnifiedTools('vision');
-    const mouse = findTool(tools, 'mouse');
-    expect(mouse.inputSchema.required).toEqual(['action']);
-  });
-
-  it('vision: compound keyboard inputSchema.required is ["action"]', () => {
-    const tools = buildUnifiedTools('vision');
-    const kb = findTool(tools, 'keyboard');
-    expect(kb.inputSchema.required).toEqual(['action']);
-  });
-
-  it('palette filter: capability=app_launch gives a focused palette without, e.g., drag', () => {
-    const tools = buildUnifiedTools('blind', 'app_launch');
-    const names = tools.map(t => t.name);
-    expect(names).toContain('open_app');
-    expect(names).toContain('done');
-    // drag is not in the app_launch palette
-    expect(names).not.toContain('drag');
-  });
-
-  it('palette filter: capability=general returns the full catalog (same as undefined)', () => {
-    const withGeneral = buildUnifiedTools('blind', 'general').map(t => t.name).sort();
-    const withUndefined = buildUnifiedTools('blind', undefined).map(t => t.name).sort();
-    expect(withGeneral).toEqual(withUndefined);
   });
 });
 
@@ -275,7 +195,7 @@ describe('2. coerceCoord — smushed coordinate handling', () => {
 
   it('smushed click: click tool reads the warning and appends it to result.text', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     // Pass smushed coordinate: x="390, 79", y not meaningful (will be overridden by split)
     const result = await clickTool.execute({ x: '390, 79' as any, y: 0 }, ctx);
@@ -295,7 +215,7 @@ describe('3. coordBreadcrumb — click result contains image→screen breadcrumb
 
   it('screen-space click: result text contains the "(x,y)" and screen dimensions', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     const result = await clickTool.execute({ x: 100, y: 200 }, ctx);
     expect(result.success).toBe(true);
@@ -310,7 +230,7 @@ describe('3. coordBreadcrumb — click result contains image→screen breadcrumb
   it('image-space click: result text contains "image (x,y) → screen (sx,sy)" with scale', async () => {
     // physicalWidth=2560, LLM_TARGET_WIDTH=1280 → imageScale=2
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     const result = await clickTool.execute({ x: 100, y: 200, space: 'image' }, ctx);
     expect(result.success).toBe(true);
@@ -326,7 +246,7 @@ describe('3. coordBreadcrumb — click result contains image→screen breadcrumb
 
   it('screen-space click: no "→ screen" breadcrumb (scale is 1, no transformation needed)', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     // Screen space with scale=1: no transformation arrow should appear
     const result = await clickTool.execute({ x: 100, y: 200, space: 'screen' }, ctx);
@@ -364,7 +284,7 @@ describe('4. Conditional coordinate scaling', () => {
 
   it('space:"image" click: platform receives SCALED coords', async () => {
     const ctx = makeCtx(); // physicalWidth=2560, scale=2
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     await clickTool.execute({ x: 100, y: 200, space: 'image' }, ctx);
     // mouseClick should be called with scaled coords: x=200, y=400
@@ -373,7 +293,7 @@ describe('4. Conditional coordinate scaling', () => {
 
   it('space:"screen" click: platform receives ORIGINAL coords (no scaling)', async () => {
     const ctx = makeCtx(); // physicalWidth=2560, scale would be 2 if image
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     await clickTool.execute({ x: 100, y: 200, space: 'screen' }, ctx);
     // mouseClick should be called with unscaled coords: x=100, y=200
@@ -382,7 +302,7 @@ describe('4. Conditional coordinate scaling', () => {
 
   it('default (no space arg) behaves as screen-space', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     await clickTool.execute({ x: 100, y: 200 }, ctx);
     // No space arg → defaults to 'screen' → unscaled
@@ -398,7 +318,7 @@ describe('5. ensureTargetForeground — no-op without targetWindow', () => {
 
   it('click succeeds when ctx.targetWindow is undefined (no focus-guard call)', async () => {
     const ctx = makeCtx({ targetWindow: undefined });
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     const result = await clickTool.execute({ x: 100, y: 200 }, ctx);
     expect(result.success).toBe(true);
@@ -408,7 +328,7 @@ describe('5. ensureTargetForeground — no-op without targetWindow', () => {
 
   it('click result text does NOT contain "·raised" when no target window set', async () => {
     const ctx = makeCtx({ targetWindow: undefined });
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     const result = await clickTool.execute({ x: 100, y: 200 }, ctx);
     expect(result.text).not.toContain('raised');
@@ -425,7 +345,7 @@ describe('5. ensureTargetForeground — no-op without targetWindow', () => {
       processId: 42,
       bounds: { x: 0, y: 0, width: 1920, height: 1080 },
     });
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     const result = await clickTool.execute({ x: 100, y: 200 }, ctx);
     expect(result.success).toBe(true);
@@ -445,7 +365,7 @@ describe('5. ensureTargetForeground — no-op without targetWindow', () => {
       processId: 99,
       bounds: { x: 0, y: 0, width: 800, height: 600 },
     });
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const clickTool = findTool(tools, 'click');
     const result = await clickTool.execute({ x: 100, y: 200 }, ctx);
     expect(result.success).toBe(true);
@@ -468,7 +388,7 @@ describe('6. resolveAgentPid — active-window pid fallback', () => {
       title: 'TestApp', processName: 'test.exe', processId: 42,
       bounds: { x: 0, y: 0, width: 1920, height: 1080 },
     });
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const invokeTool = findTool(tools, 'invoke_element');
     // Note: invoke_element does NOT call resolveAgentPid (uses processId from args directly)
     // But a11y_expand DOES use resolveAgentPid
@@ -487,7 +407,7 @@ describe('6. resolveAgentPid — active-window pid fallback', () => {
   it('a11y_expand: getActiveWindow throws → tool still returns a result (no hang)', async () => {
     const ctx = makeCtx();
     (ctx.platform.getActiveWindow as any).mockRejectedValue(new Error('platform error'));
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const expandTool = findTool(tools, 'a11y_expand');
     // Should not throw
     const result = await expandTool.execute({ name: 'SomeMenu' }, ctx);
@@ -501,7 +421,7 @@ describe('6. resolveAgentPid — active-window pid fallback', () => {
 
   it('a11y_toggle: explicit processId overrides active-window fallback', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const toggleTool = findTool(tools, 'a11y_toggle');
     await toggleTool.execute({ name: 'DarkMode', processId: 77 }, ctx);
     expect(ctx.platform.invokeElement).toHaveBeenCalledWith(
@@ -524,7 +444,7 @@ describe('7. type tool — paste fast-path', () => {
 
   it('type tool result text contains "(paste)" — not per-char', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const typeTool = findTool(tools, 'type');
     const result = await typeTool.execute({ text: 'Hello World' }, ctx);
     expect(result.success).toBe(true);
@@ -536,7 +456,7 @@ describe('7. type tool — paste fast-path', () => {
 
   it('type tool uses clipboard write + mod+v for paste (not typeText)', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const typeTool = findTool(tools, 'type');
     await typeTool.execute({ text: 'Hello World' }, ctx);
     // Should write to clipboard
@@ -551,7 +471,7 @@ describe('7. type tool — paste fast-path', () => {
     const ctx = makeCtx();
     // Mock prior clipboard content
     (ctx.platform.readClipboard as any).mockResolvedValue('my-prior-content');
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const typeTool = findTool(tools, 'type');
     await typeTool.execute({ text: 'Hello' }, ctx);
     // First write = the text we want to type
@@ -563,7 +483,7 @@ describe('7. type tool — paste fast-path', () => {
 
   it('type tool: empty text returns success without any I/O', async () => {
     const ctx = makeCtx();
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const typeTool = findTool(tools, 'type');
     const result = await typeTool.execute({ text: '' }, ctx);
     expect(result.success).toBe(true);
@@ -575,7 +495,7 @@ describe('7. type tool — paste fast-path', () => {
   it('type tool: falls back to typeText when clipboard write throws', async () => {
     const ctx = makeCtx();
     (ctx.platform.writeClipboard as any).mockRejectedValue(new Error('clipboard denied'));
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const typeTool = findTool(tools, 'type');
     const result = await typeTool.execute({ text: 'Hello' }, ctx);
     expect(result.success).toBe(true);
@@ -591,8 +511,8 @@ describe('7. type tool — paste fast-path', () => {
 
 describe('8. done — HEDGING_PATTERN enforcement', () => {
 
-  async function callDone(evidence: string, mode: 'blind' | 'hybrid' | 'vision' = 'blind') {
-    const tools = buildUnifiedTools(mode);
+  async function callDone(evidence: string) {
+    const tools = buildUnifiedTools();
     const doneTool = findTool(tools, 'done');
     return doneTool.execute({ evidence }, makeCtx());
   }
@@ -655,15 +575,15 @@ describe('8. done — HEDGING_PATTERN enforcement', () => {
     expect(result.success).toBe(false);
   });
 
-  it('concrete done in vision mode also works (HEDGING_PATTERN is mode-agnostic)', async () => {
-    const result = await callDone('The YouTube video "Never Gonna Give You Up" is playing at 0:10', 'vision');
+  it('concrete done works (HEDGING_PATTERN is mode-agnostic)', async () => {
+    const result = await callDone('The YouTube video "Never Gonna Give You Up" is playing at 0:10');
     expect(result.success).toBe(true);
     expect(result.stop).toBe(true);
     expect(result.terminalExit).toBe('done');
   });
 
-  it('hedging done in vision mode is also rejected', async () => {
-    const result = await callDone('the video should be playing', 'vision');
+  it('hedging done is rejected regardless of scenario', async () => {
+    const result = await callDone('the video should be playing');
     expect(result.success).toBe(false);
     expect(result.stop).toBeUndefined();
   });
@@ -676,7 +596,7 @@ describe('8. done — HEDGING_PATTERN enforcement', () => {
 describe('9. Terminal actions — stop and terminalExit', () => {
 
   it('done (concrete): stop=true, terminalExit="done", success=true', async () => {
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const doneTool = findTool(tools, 'done');
     const result = await doneTool.execute({ evidence: 'The "File saved" toast is visible in the bottom-right corner.' }, makeCtx());
     expect(result.stop).toBe(true);
@@ -685,7 +605,7 @@ describe('9. Terminal actions — stop and terminalExit', () => {
   });
 
   it('done (hedging): stop is absent (undefined), no terminalExit', async () => {
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const doneTool = findTool(tools, 'done');
     const result = await doneTool.execute({ evidence: 'the email should have been sent' }, makeCtx());
     expect(result.stop).toBeUndefined();
@@ -694,7 +614,7 @@ describe('9. Terminal actions — stop and terminalExit', () => {
   });
 
   it('give_up: stop=true, terminalExit="give_up", success=false', async () => {
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const giveUpTool = findTool(tools, 'give_up');
     const result = await giveUpTool.execute({ reason: 'captcha requires human' }, makeCtx());
     expect(result.stop).toBe(true);
@@ -704,40 +624,19 @@ describe('9. Terminal actions — stop and terminalExit', () => {
     expect(result.text).toContain('captcha');
   });
 
-  it('cannot_read: stop=true, terminalExit="cannot_read", success=false', async () => {
-    const tools = buildUnifiedTools('blind');
-    const cannotReadTool = findTool(tools, 'cannot_read');
-    const result = await cannotReadTool.execute({ reason: 'a11y tree is empty, custom canvas' }, makeCtx());
-    expect(result.stop).toBe(true);
-    expect(result.terminalExit).toBe('cannot_read');
-    expect(result.success).toBe(false);
-    expect(result.text).toContain('cannot_read');
-  });
-
-  it('cannot_read exists in blind mode', () => {
-    const tools = buildUnifiedTools('blind');
-    expect(tools.find(t => t.name === 'cannot_read')).toBeDefined();
-  });
-
-  it('cannot_read is absent in hybrid mode', () => {
-    const tools = buildUnifiedTools('hybrid');
+  it('cannot_read is absent from the flat catalog (no escalation path)', () => {
+    const tools = buildUnifiedTools();
     expect(tools.find(t => t.name === 'cannot_read')).toBeUndefined();
   });
 
-  it('cannot_read is absent in vision mode', () => {
-    const tools = buildUnifiedTools('vision');
-    expect(tools.find(t => t.name === 'cannot_read')).toBeUndefined();
-  });
-
-  it('all three terminals have terminal:true flag', () => {
-    const tools = buildUnifiedTools('blind');
+  it('both terminals (done, give_up) have terminal:true flag', () => {
+    const tools = buildUnifiedTools();
     expect(findTool(tools, 'done').terminal).toBe(true);
     expect(findTool(tools, 'give_up').terminal).toBe(true);
-    expect(findTool(tools, 'cannot_read').terminal).toBe(true);
   });
 
   it('non-terminal tools do NOT have terminal:true', () => {
-    const tools = buildUnifiedTools('blind');
+    const tools = buildUnifiedTools();
     const click = findTool(tools, 'click');
     expect(click.terminal).not.toBe(true);
     const type = findTool(tools, 'type');
@@ -745,16 +644,9 @@ describe('9. Terminal actions — stop and terminalExit', () => {
   });
 
   it('give_up: result text includes the reason', async () => {
-    const tools = buildUnifiedTools('vision');
+    const tools = buildUnifiedTools();
     const giveUpTool = findTool(tools, 'give_up');
-    const result = await giveUpTool.execute({ reason: 'credentials missing' }, makeCtx({ mode: 'vision' }));
+    const result = await giveUpTool.execute({ reason: 'credentials missing' }, makeCtx());
     expect(result.text).toContain('credentials missing');
-  });
-
-  it('cannot_read: result text includes the reason', async () => {
-    const tools = buildUnifiedTools('blind');
-    const crTool = findTool(tools, 'cannot_read');
-    const result = await crTool.execute({ reason: 'webview, a11y snapshot empty' }, makeCtx());
-    expect(result.text).toContain('webview');
   });
 });
