@@ -49,7 +49,6 @@ import type {
   AgentToolContext,
   UnifiedTool,
   AgentExit,
-  AgentMode,
 } from './types';
 
 // Backstop turn cap. With the runaway guard (repeated identical actions) and
@@ -110,15 +109,11 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
   const correlationId = getCorrelationId();
   const log = correlationId ? logger.with({ correlationId }) : logger;
 
-  // Select the LLM config per mode. Vision mode REQUIRES a vision model;
-  // hybrid prefers vision if available but falls back to text if not
-  // (text models with tool_use still work — they just can't see pixels).
-  const llmConfig = selectLlmConfig(input.mode, deps.llm);
+  // Prefer text model; fall back to vision model if text is absent
+  // (vision models handle tool_use without images too).
+  const llmConfig: AgentLlmConfig | undefined = deps.llm.text || deps.llm.vision;
   if (!llmConfig) {
-    const text = input.mode === 'vision'
-      ? 'No vision model configured. Run `clawdcursor doctor` to set AI_VISION_MODEL.'
-      : 'No text model configured. Run `clawdcursor doctor` to set AI_TEXT_MODEL.';
-    return earlyExit('give_up', text, startedAt);
+    return earlyExit('give_up', 'No model configured. Run `clawdcursor doctor` to set AI_TEXT_MODEL.', startedAt);
   }
 
   // Set up perception state.
@@ -139,7 +134,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
   const toolMap = new Map(tools.map(t => [t.name, t]));
   const llmTools = toUnifiedLLMTools(tools);
 
-  const systemPrompt = buildSystemPromptWithGuide(input);
+  const systemPrompt = buildSystemPrompt();
 
   // Seed the conversation.
   const history: LLMToolTurn[] = [];
@@ -183,41 +178,19 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       focusProcessId: firstSnapshot.activeWindow?.processId,
     });
 
-    // DPI/scale header — tells the model how screenshot pixels map to
-    // tool-input pixels. The mouse_* tools accept IMAGE-SPACE coords
-    // (matching whatever the screenshot was sized at) and scale them
-    // internally. The model still needs to know to NOT pre-multiply
-    // when looking at the screenshot — passing image coords straight
-    // through is correct. Spelled out here because models that DO
-    // know about DPI sometimes try to "help" by pre-scaling.
-    // The TRUE screenshot scale is physical→1280-image (what the model sees),
-    // NOT physicalWidth/logicalWidth — on a 2560-wide screen with dpiRatio 1
-    // those differ: physical/logical is 1.0 but the screenshot is still
-    // downsampled 2× (2560→1280). Use the real image scale so the note matches
-    // what the tools actually do.
+    // DPI/scale header — tells the model how screenshot pixels map to tool coords.
     const imgScaleNum = screen.physicalWidth > LLM_TARGET_WIDTH
       ? screen.physicalWidth / LLM_TARGET_WIDTH
       : 1;
     const ssScale = imgScaleNum.toFixed(2);
-    const dpiNote =
-      input.mode === 'vision'
-        ? `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical. Screenshots are downsampled to ${LLM_TARGET_WIDTH}px wide (×${ssScale}). Pass screenshot pixel coords DIRECTLY to mouse_* tools — they scale internally. Do NOT pre-multiply.`
-        : `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, screenshot ${LLM_TARGET_WIDTH}px wide (×${ssScale} to screen).`;
+    const dpiNote = `\nDISPLAY: ${screen.physicalWidth}×${screen.physicalHeight} physical, screenshot ${LLM_TARGET_WIDTH}px wide (×${ssScale} to screen).`;
     log.info('agent.coordinate_space', {
-      mode: input.mode,
       physical: `${screen.physicalWidth}×${screen.physicalHeight}`,
       screenshotScale: ssScale,
       snapshotSpace: 'screen',
-      note: 'a11y coords = screen space (pass-through); screenshot coords = image space (need space:image)',
     });
 
-    // Cross-rung handoff: if a previous agent (the morph's other half) worked
-    // this same task and escalated to us, lead with its note so we continue
-    // rather than restart. Generic — it's just the prior agent's trace summary.
-    const handoffPreamble = input.priorHandoff
-      ? `${input.priorHandoff}\n\n`
-      : '';
-    // Anchor the agent to its working window (when the pipeline resolved one)
+    // Anchor the agent to its working window (when the caller resolved one)
     // so it refocuses there instead of thrashing to unrelated apps/tools.
     const windowAnchor = input.targetWindow
       ? `WORKING WINDOW: the "${input.targetWindow.processName}" window ("${input.targetWindow.title}") — perform this task there. If focus drifts to another window, refocus it with focus_window(processName:"${input.targetWindow.processName}") rather than opening new apps, tabs, or tools.\n\n`
@@ -225,51 +198,12 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     const initialBlocks: LLMUserBlock[] = [
       {
         type: 'text',
-        text: `${handoffPreamble}${windowAnchor}TASK: ${input.task}${dpiNote}\n\nACCESSIBILITY SNAPSHOT:\n${wrapUntrustedScreenContent(snapshotText)}\n\nPICK ONE TOOL CALL.`,
+        text: `${windowAnchor}TASK: ${input.task}${dpiNote}\n\nACCESSIBILITY SNAPSHOT:\n${wrapUntrustedScreenContent(snapshotText)}\n\nPICK ONE TOOL CALL.`,
       },
     ];
-    if (input.priorHandoff) log.info('agent.handoff.received', { mode: input.mode, chars: input.priorHandoff.length });
-    if (input.targetWindow) log.info('agent.window_anchor', { mode: input.mode, window: input.targetWindow.title, process: input.targetWindow.processName });
-
-    if (input.mode === 'vision') {
-      const shot = await deps.adapter.screenshot({ maxWidth: 1280 });
-      screenshotsCaptured.n += 1;
-      initialBlocks.push({ type: 'text', text: '\nINITIAL SCREENSHOT:' });
-      initialBlocks.push(shotToBlock(shot));
-    }
+    if (input.targetWindow) log.info('agent.window_anchor', { window: input.targetWindow.title, process: input.targetWindow.processName });
 
     history.push({ role: 'user', content: initialBlocks });
-
-    // Reflector hint (PR9): if the pipeline is retrying this task after a
-    // verifier rejection, inject the previous rung's failure summary as a
-    // synthetic `tool_result` so the planner sees why the last attempt failed.
-    // This is a synthetic message — there is no real preceding tool_use block,
-    // so we use a sentinel id. The model treats it as an informational result.
-    if (input.reflectorHint) {
-      const REFLECTOR_TOOL_ID = 'reflector_feedback_0';
-      // The Anthropic contract requires an assistant turn with a tool_use
-      // block before a tool_result. We insert a minimal assistant turn so the
-      // history stays well-formed.
-      history.push({
-        role: 'assistant',
-        content: [{
-          type: 'tool_use',
-          id: REFLECTOR_TOOL_ID,
-          name: 'read_screen',
-          input: {},
-        }],
-      } as LLMToolTurn);
-      history.push({
-        role: 'user',
-        content: [{
-          type: 'tool_result',
-          tool_use_id: REFLECTOR_TOOL_ID,
-          content: [{ type: 'text', text: `[REFLECTOR] Previous attempt failed: ${input.reflectorHint}` }],
-          is_error: false,
-        }],
-      } as LLMToolTurn);
-      log.info('agent.reflector.hint_injected', { hint: input.reflectorHint });
-    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.warn('agent.perception.initial.failed', { error: msg });
@@ -282,7 +216,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     for (let turn = 1; turn <= maxTurns; turn++) {
       if (isAborted()) return finish('aborted', 'aborted by user', steps, llmCalls, screenshotsCaptured.n, startedAt);
 
-      log.info(EVENTS.AGENT_TURN_START, { turn, mode: input.mode, historyTurns: history.length });
+      log.info(EVENTS.AGENT_TURN_START, { turn, historyTurns: history.length });
       const turnStart = Date.now();
 
       // 1. Call the LLM with tools. Retry TRANSIENT failures (overload, rate
@@ -308,13 +242,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
               messages: history,
               maxTokens: llmConfig.maxTokens ?? 1024,
               timeoutMs: 45_000,
-              // Pipeline-driven batching: force a `batch` on turn 1 so the model
-              // plans the deterministic stretch up front instead of defaulting
-              // to one call per turn. Only when batch is actually in this rung's
-              // palette; auto thereafter (re-planning / done).
-              toolChoice: (turn === 1 && input.forceBatchFirst && tools.some(t => t.name === 'batch'))
-                ? { name: 'batch' }
-                : 'auto',
+              toolChoice: 'auto',
             });
             llmCalls += 1;
             break;
@@ -619,53 +547,12 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         // tight window covers the legitimate "I just located the element by
         // a11y; coord-click as fallback" pattern while rejecting guesses.
         //
-        // Refusal consumes one turn (the runaway-guard above caps infinite
-        // retries) and routes the agent to either call `cannot_read` (the
-        // explicit blind→vision escape) or use an a11y-aware variant first.
-        // Refusal is NOT a tool success — it surfaces as an error in
-        // tool_result so the verifier won't read it as evidence of progress.
-        if (call.name === 'click' && input.mode === 'blind') {
-          const A11Y_RECENCY = 2; // last N step entries
-          const A11Y_RESOLVERS = new Set([
-            'invoke_element', 'set_field_value', 'focus_element',
-            'a11y_select', 'a11y_toggle', 'a11y_expand', 'a11y_collapse',
-            'wait_for_element', 'find_element',
-          ]);
-          const recentA11y = steps.slice(-A11Y_RECENCY).some(s =>
-            A11Y_RESOLVERS.has(s.toolName) && s.result.success,
-          );
-          if (!recentA11y) {
-            log.warn('agent.blind_coord_click.refused', {
-              turn,
-              args: compactArgs(call.args),
-              reason: 'no recent successful a11y selection',
-              recency: A11Y_RECENCY,
-            });
-            toolResults.push({
-              id: call.id,
-              text: 'raw coordinate click rejected in blind mode: no a11y element was selected in the last 2 turns, so (x,y) is a guess. Either (a) call invoke_element / focus_element / set_field_value with the element\'s a11y name from the snapshot, or (b) emit cannot_read to escalate to vision and get pixel evidence first. Guessing coordinates from a text snapshot can navigate the app to an unintended state.',
-              isError: true,
-            });
-            steps.push({
-              turn,
-              toolName: call.name,
-              toolArgs: call.args,
-              result: { success: false, text: 'blind-mode coord-click refused (no recent a11y selection)' },
-              durationMs: Date.now() - turnStart,
-              fingerprintChanged: false,
-              thought: llmResult.text,
-            });
-            continue;
-          }
-        }
-
         // 5b. Log and execute.
         log.info(EVENTS.AGENT_TOOL_CALL, { turn, tool: call.name, args: compactArgs(call.args) });
         const toolStart = Date.now();
         const ctx: AgentToolContext = {
           platform: deps.adapter,
           task: input.task,
-          mode: input.mode,
           screen,
           screenshotsCaptured,
           activeApp,
@@ -745,7 +632,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         const content: Array<{ type: 'text'; text: string } | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }> = [
           { type: 'text', text: tr.text },
         ];
-        if (tr.screenshot && (input.mode === 'hybrid' || input.mode === 'vision')) {
+        if (tr.screenshot) {
           content.push(shotToInnerBlock(tr.screenshot));
         }
         nextBlocks.push({ type: 'tool_result', tool_use_id: tr.id, content, is_error: tr.isError });
@@ -804,27 +691,17 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       // build_uri to construct a mailto URI and was one turn away from
       // dispatching it via open_uri when the stagnation hard-abort fired.
       const stagnant = fph.isStagnant(STAGNATION_WINDOW);
-      // The a11y fingerprint only drives stagnation in BLIND mode. In vision
-      // and hybrid modes the agent perceives via SCREENSHOTS, and the a11y
-      // fingerprint is an unreliable progress signal: on a canvas / custom-
-      // rendered app (or inside a browser, where the a11y tree is the static
-      // chrome) it stays CONSTANT while the screen advances every action.
-      // Counting it falsely aborted a legitimately-progressing vision run
-      // mid-exam — the agent itself logged "the a11y fingerprint isn't changing
-      // but the screen IS changing" right before the hard-abort fired (live
-      // test 2026-05-28). In vision/hybrid the backstops are the runaway guard
-      // (repeated identical ACTIONS) and max_turns. Blind mode is unchanged:
-      // a11y is its only perception channel, so stale a11y genuinely means
-      // stuck (the blind stagnation regression test stays green).
-      const a11yStagnationApplies = input.mode === 'blind';
-      if (stagnant && anyScreenChangingTool && a11yStagnationApplies) {
+      // In the hybrid loop the agent perceives via both a11y and screenshots.
+      // The a11y fingerprint can stay constant while the screen advances (canvas,
+      // browser WebView). Only count stagnation when the agent tried a screen-
+      // changing action but the fingerprint stayed the same. The runaway guard
+      // and max_turns are the primary backstops for non-stagnation scenarios.
+      if (stagnant && anyScreenChangingTool) {
         consecutiveStagnantTurns += 1;
       } else if (!stagnant) {
         consecutiveStagnantTurns = 0;
       }
-      // else: neutral turn (compute-only tool, or a screenshot-driven mode
-      // where the a11y fingerprint is not a valid stuck signal) — leave the
-      // counter alone.
+      // else: neutral turn (compute-only tool) — leave the counter alone.
 
       if (consecutiveStagnantTurns >= STAGNATION_HARD_LIMIT) {
         log.warn(EVENTS.AGENT_STAGNATION, {
@@ -842,7 +719,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         );
       }
 
-      if (stagnant && a11yStagnationApplies) {
+      if (stagnant) {
         log.warn(EVENTS.AGENT_STAGNATION, {
           turn,
           window: STAGNATION_WINDOW,
@@ -881,18 +758,6 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-function selectLlmConfig(mode: AgentMode, llm: AgentLlmDeps): AgentLlmConfig | undefined {
-  if (mode === 'vision') return llm.vision;
-  // blind/hybrid: prefer text, fall back to vision if text isn't there
-  // (vision models can still drive tool_use without images).
-  return llm.text || llm.vision;
-}
-
-function buildSystemPromptWithGuide(input: AgentInput): string {
-  const base = buildSystemPrompt(input.mode);
-  if (!input.guide) return base;
-  return `${base}\n\n--- APP KNOWLEDGE (from bundled guide / user override) ---\n${input.guide.promptFragment}`;
-}
 
 function toUnifiedLLMTools(tools: UnifiedTool[]): LLMTool[] {
   return tools.map(t => ({

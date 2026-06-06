@@ -162,7 +162,7 @@ describe('runAgent — happy path', () => {
     llmTurnQueue.push(turnCall('done', { evidence: 'screen shows the expected content' }));
 
     const result = await runAgent(
-      { task: 'orient and finish', mode: 'blind', maxTurns: 10 },
+      { task: 'orient and finish', maxTurns: 10 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 
@@ -194,7 +194,7 @@ describe('runAgent — stagnation exit', () => {
     for (const key of keys) llmTurnQueue.push(turnCall('key', { key }));
 
     const result = await runAgent(
-      { task: 'pointless loop', mode: 'blind', maxTurns: 20 },
+      { task: 'pointless loop', maxTurns: 20 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 
@@ -229,7 +229,7 @@ describe('runAgent — stagnation exit', () => {
     for (const t of sequence) llmTurnQueue.push(turnCall(t.name, t.args));
 
     const result = await runAgent(
-      { task: 'use compute tools', mode: 'blind', maxTurns: 20 },
+      { task: 'use compute tools', maxTurns: 20 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 
@@ -258,7 +258,7 @@ describe('runAgent — vision/canvas guards must not misfire (live-test regressi
     llmTurnQueue.push(turnCall('done', { evidence: 'the event log shows the exam advanced' }));
 
     const result = await runAgent(
-      { task: 'drive a canvas exam by vision', mode: 'vision', maxTurns: 20 },
+      { task: 'drive a canvas exam by vision', maxTurns: 20 },
       { adapter: makeAdapter(), llm: VISION_CONFIG },
     );
 
@@ -276,7 +276,7 @@ describe('runAgent — vision/canvas guards must not misfire (live-test regressi
     llmTurnQueue.push(turnCall('done', { evidence: 'the target row is now visible and selected' }));
 
     const result = await runAgent(
-      { task: 'scroll a long list to the target', mode: 'vision', maxTurns: 20 },
+      { task: 'scroll a long list to the target', maxTurns: 20 },
       { adapter: makeAdapter(), llm: VISION_CONFIG },
     );
 
@@ -296,7 +296,7 @@ describe('runAgent — vision/canvas guards must not misfire (live-test regressi
     llmTurnQueue.push(turnCall('done', { evidence: 'reached the results page' }));
 
     const result = await runAgent(
-      { task: 'click through canvas challenges', mode: 'vision', maxTurns: 30 },
+      { task: 'click through canvas challenges', maxTurns: 30 },
       { adapter: makeAdapter(), llm: VISION_CONFIG },
     );
 
@@ -317,7 +317,7 @@ describe('runAgent — transient LLM-error resilience (live-test regression 2026
     llmTurnQueue.push(turnCall('done', { evidence: 'screen shows the expected content' }));
 
     const result = await runAgent(
-      { task: 'survive an API blip', mode: 'blind', maxTurns: 10 },
+      { task: 'survive an API blip', maxTurns: 10 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 
@@ -331,7 +331,7 @@ describe('runAgent — transient LLM-error resilience (live-test regression 2026
     llmTurnQueue.push(turnCall('done', { evidence: 'unreached' }));
 
     const result = await runAgent(
-      { task: 'fatal request', mode: 'blind', maxTurns: 10 },
+      { task: 'fatal request', maxTurns: 10 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 
@@ -346,26 +346,24 @@ describe('runAgent — cross-rung handoff (text↔vision communication)', () => 
     capturedLlmCalls.length = 0;
   });
 
-  it('injects a priorHandoff note into the receiving agent\'s context', async () => {
-    // When the morph escalates, the next agent must SEE what the previous one
-    // did — so it continues rather than restarts.
-    llmTurnQueue.push(turnCall('done', { evidence: 'continued from where blind left off' }));
-    const handoff = 'PRIOR ATTEMPT — blind agent (exited: cannot_read). Already done (do NOT repeat): set_value(name=To) → set To. Why handed to you: drive it by the screenshot instead.';
+  it('task text appears in the initial context', async () => {
+    // The task description must be visible to the model in the initial message.
+    llmTurnQueue.push(turnCall('done', { evidence: 'task completed' }));
+    const task = 'finish sending the message via email';
 
     await runAgent(
-      { task: 'finish sending the message', mode: 'vision', maxTurns: 5, priorHandoff: handoff },
+      { task, maxTurns: 5 },
       { adapter: makeAdapter(), llm: VISION_CONFIG },
     );
 
     const firstCallMessages = JSON.stringify(capturedLlmCalls[0]?.messages ?? []);
-    expect(firstCallMessages).toContain('PRIOR ATTEMPT — blind agent');
-    expect(firstCallMessages).toContain('set_value(name=To)');
+    expect(firstCallMessages).toContain('finish sending the message');
   });
 
-  it('does not add a handoff preamble when none is provided (back-compat)', async () => {
+  it('task text is present without handoff prefix (no priorHandoff field any more)', async () => {
     llmTurnQueue.push(turnCall('done', { evidence: 'fresh start' }));
     await runAgent(
-      { task: 'do a thing', mode: 'blind', maxTurns: 5 },
+      { task: 'do a thing', maxTurns: 5 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
     const firstCallMessages = JSON.stringify(capturedLlmCalls[0]?.messages ?? []);
@@ -385,7 +383,7 @@ describe('runAgent — no-tool-call loop exit', () => {
     for (let i = 0; i < 8; i++) llmTurnQueue.push(turnNoCall(`turn ${i} thinking`));
 
     const result = await runAgent(
-      { task: 'degenerate model', mode: 'blind', maxTurns: 20 },
+      { task: 'degenerate model', maxTurns: 20 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 

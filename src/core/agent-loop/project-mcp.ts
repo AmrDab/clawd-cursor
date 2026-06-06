@@ -140,7 +140,6 @@ export async function toolContextToAgent(ctx: ToolContext): Promise<AgentToolCon
   return {
     platform,
     task: '',           // No task context available in the MCP surface layer.
-    mode: 'blind',      // Default; the projected handler doesn't use mode for logic.
     screen,
     screenshotsCaptured: { n: 0 },
     cdp: ctx.cdp ?? null,

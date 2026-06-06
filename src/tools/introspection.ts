@@ -40,12 +40,14 @@ export function getIntrospectionTools(): ToolDefinition[] {
       compactGroup: 'system',
       safetyTier: 0,
       handler: async ({ mode }) => {
+        // Mode arg is accepted for backward compatibility but ignored;
+        // the thin loop always uses the same unified prompt.
         const m: 'blind' | 'hybrid' | 'vision' =
           mode === 'vision' ? 'vision' : mode === 'blind' ? 'blind' : 'hybrid';
         return {
           text: JSON.stringify({
             mode: m,
-            prompt: buildSystemPrompt(m),
+            prompt: buildSystemPrompt(),
           }),
         };
       },

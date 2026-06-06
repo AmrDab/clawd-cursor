@@ -47,18 +47,13 @@ describe('get_system_prompt', () => {
     expect(out.prompt).toMatch(/WEB-SERVICE POLICY/i);
   });
 
-  it('switches phrasing for vision mode', async () => {
+  it('returns the same prompt regardless of mode arg (mode is now ignored)', async () => {
     const hybrid = JSON.parse((await findTool('get_system_prompt').handler({ mode: 'hybrid' }, makeCtx())).text).prompt;
     const vision = JSON.parse((await findTool('get_system_prompt').handler({ mode: 'vision' }, makeCtx())).text).prompt;
-    expect(hybrid).not.toBe(vision);
-    expect(vision).toMatch(/initial screenshot/i);
-  });
-
-  it('returns blind mode when requested', async () => {
-    const r = await findTool('get_system_prompt').handler({ mode: 'blind' }, makeCtx());
-    const out = JSON.parse(r.text);
-    expect(out.mode).toBe('blind');
-    expect(out.prompt).toMatch(/BLIND/i);
+    const blind = JSON.parse((await findTool('get_system_prompt').handler({ mode: 'blind' }, makeCtx())).text).prompt;
+    // All modes return the same unified prompt (no mode-branching in thin loop)
+    expect(hybrid).toBe(vision);
+    expect(hybrid).toBe(blind);
   });
 
   it('coerces unknown mode to hybrid', async () => {

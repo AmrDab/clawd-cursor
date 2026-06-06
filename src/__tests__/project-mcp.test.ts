@@ -314,7 +314,6 @@ describe('toolContextToAgent', () => {
 
     expect(agentCtx.platform).toBeDefined();
     expect(agentCtx.task).toBe('');
-    expect(agentCtx.mode).toBe('blind');
     expect(agentCtx.screen).toMatchObject({
       physicalWidth: 1920,
       physicalHeight: 1080,
@@ -386,7 +385,6 @@ describe('projectToToolDefinition', () => {
   });
 
   it('applies the screenshot → desktop_screenshot MCP name mapping', () => {
-    // screenshot is only in hybrid and vision modes.
     const hybridTools = buildUnifiedTools();
     const shot = hybridTools.find(t => t.name === 'screenshot');
     expect(shot).toBeDefined();

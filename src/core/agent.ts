@@ -165,14 +165,12 @@ export class Agent {
     // Resolve CDP driver if wired externally.
     const cdp = (this as { cdpDriver?: import('../platform/cdp-driver').CDPDriver }).cdpDriver ?? null;
 
-    // Run the thin agent loop with the FULL toolbox (hybrid mode — a11y + screenshot).
-    // The mode is fixed to 'hybrid' so the agent has access to both the a11y tree
-    // and screenshots. A capable model will prefer a11y-first (cheapest) and only
-    // call screenshot when it genuinely needs pixels.
+    // Run the thin agent loop with the FULL toolbox.
+    // The agent loop prefers a11y-first (cheapest) and only calls screenshot
+    // when it genuinely needs pixels.
     const agentResult = await runAgent(
       {
         task,
-        mode: 'hybrid',
         isAborted: () => this.aborted,
       },
       {

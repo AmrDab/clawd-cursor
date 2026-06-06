@@ -61,7 +61,6 @@ vi.mock('../platform/ocr-engine', () => ({
 
 import { buildUnifiedTools } from '../core/agent-loop/tools';
 import { TOOL_META } from '../core/agent-loop/tool-meta';
-import { COMPOUND_REPLACES } from '../core/agent-loop/compound';
 
 // ── Exclusion sets ────────────────────────────────────────────────────────────
 
@@ -147,17 +146,11 @@ describe('TOOL_META coverage (Step 1 — enforced)', () => {
     expect(intersection).toEqual([]);
   });
 
-  it('COMPOUND_REPLACES names are not in TOOL_META (they are projected via compounds)', () => {
-    // COMPOUND_REPLACES = Set of granular names replaced in vision mode.
-    // In blind/hybrid these granular tools DO appear and DO need TOOL_META.
-    // In vision, the compound tools replace them — but we still project from
-    // blind/hybrid mode where granulars appear.
-    // This test only validates that COMPOUND_REPLACES are not double-counted
-    // as vision-compound TOOLS themselves (which would mean they appear TWICE
-    // in the catalog under different shapes).
-    // The three compound TOOLS (mouse, keyboard, window) must be in VISION_COMPOUNDS.
+  it('vision compound tool names (mouse/keyboard/window) are not in the flat catalog', () => {
+    // The thin loop does not use compound tools — they were vision-only.
+    // None of them should appear in the flat catalog returned by buildUnifiedTools().
     for (const name of VISION_COMPOUNDS) {
-      expect(COMPOUND_REPLACES).not.toContain(name);
+      expect(allNames.has(name)).toBe(false);
     }
   });
 
