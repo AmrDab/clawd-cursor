@@ -6,72 +6,11 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import type { ToolDefinition } from './types';
 import { DEFAULT_CDP_PORT } from '../llm/browser-config';
 import { resolveAlias } from '../core/router/aliases';
 
 const execFileAsync = promisify(execFile);
-
-/** Read auth token from ~/.clawdcursor/token for agent API calls. */
-function loadAgentToken(): string {
-  try {
-    return fs.readFileSync(path.join(os.homedir(), '.clawdcursor', 'token'), 'utf-8').trim();
-  } catch {
-    return '';
-  }
-}
-function agentHeaders(): Record<string, string> {
-  const token = loadAgentToken();
-  return {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json, text/event-stream',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-  };
-}
-/** Map common agent-server errors to actionable messages. */
-function formatAgentError(err: any): string {
-  const code = err?.cause?.code ?? err?.code ?? '';
-  const msg = err?.message ?? String(err);
-  if (code === 'ECONNREFUSED' || msg.includes('ECONNREFUSED')) {
-    return 'The clawdcursor agent daemon is not running. Start it first with: clawdcursor agent';
-  }
-  return `clawdcursor agent unavailable: ${msg}`;
-}
-
-/** Map HTTP status from agent API to an actionable message. */
-function formatAgentHttpError(status: number, body: string, statusText: string): string {
-  switch (status) {
-    case 404:
-      return 'The /mcp endpoint was not found. Make sure you\'re running clawdcursor v0.9.0+ with: clawdcursor agent';
-    case 401:
-      return 'Authentication failed. The server token may have changed. Try: clawdcursor stop && clawdcursor agent';
-    default:
-      return `clawdcursor agent API error ${status}: ${body || statusText}`;
-  }
-}
-
-let mcpRpcId = 0;
-async function mcpCall(toolName: string, args: Record<string, unknown> = {}): Promise<any> {
-  mcpRpcId += 1;
-  const resp = await fetch('http://127.0.0.1:3847/mcp', {
-    method: 'POST',
-    headers: agentHeaders(),
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: mcpRpcId,
-      method: 'tools/call',
-      params: { name: toolName, arguments: args },
-    }),
-  });
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
-    throw Object.assign(new Error(formatAgentHttpError(resp.status, body, resp.statusText)), { status: resp.status });
-  }
-  const data: any = await resp.json();
-  if (data?.error) throw new Error(`MCP error: ${data.error.message ?? JSON.stringify(data.error)}`);
-  return data?.result;
-}
 
 async function commandExists(cmd: string): Promise<boolean> {
   try {

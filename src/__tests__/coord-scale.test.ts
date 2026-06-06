@@ -3,6 +3,15 @@
  * window. On a 2560-wide screen the screenshot is 1280px, so image-space coords
  * must be ×2 to reach the screen; a11y/screen coords pass through unchanged.
  *
+ * Also covers the macOS Retina fix (#154): on darwin, nut-js drives the cursor
+ * in LOGICAL POINTS, not physical pixels. imageScale() must therefore target
+ * logicalWidth on macOS so a 2× Retina panel (4480 physical / 2240 logical)
+ * yields scale=1.75 (logical/1280) not 3.5 (physical/1280).
+ *
+ * NEEDS REAL-MAC VERIFICATION for Items 1 & 2 — these tests are deterministic
+ * on any platform via the injectable _platform field, but real-device mouse
+ * accuracy can only be confirmed on a physical Retina Mac.
+ *
  * Verifies both the pure scale helper and the granular `click` tool's `space`
  * behavior end-to-end with a mock adapter (OS-agnostic).
  */
@@ -13,13 +22,13 @@ import type { AgentToolContext } from '../core/agent-loop/types';
 
 describe('imageScale / scaleCoord', () => {
   it('scales by physicalWidth/1280 when the screen is wider than the screenshot', () => {
-    expect(imageScale({ screen: { physicalWidth: 2560 } })).toBe(2);
-    expect(imageScale({ screen: { physicalWidth: 3840 } })).toBe(3);
+    expect(imageScale({ screen: { physicalWidth: 2560 }, _platform: 'win32' })).toBe(2);
+    expect(imageScale({ screen: { physicalWidth: 3840 }, _platform: 'win32' })).toBe(3);
   });
   it('is 1 when the screen is no wider than the screenshot', () => {
-    expect(imageScale({ screen: { physicalWidth: 1280 } })).toBe(1);
-    expect(imageScale({ screen: { physicalWidth: 1024 } })).toBe(1);
-    expect(imageScale({ screen: {} })).toBe(1);
+    expect(imageScale({ screen: { physicalWidth: 1280 }, _platform: 'win32' })).toBe(1);
+    expect(imageScale({ screen: { physicalWidth: 1024 }, _platform: 'win32' })).toBe(1);
+    expect(imageScale({ screen: {}, _platform: 'win32' })).toBe(1);
   });
   it('LLM_TARGET_WIDTH is the 1280 screenshot width', () => {
     expect(LLM_TARGET_WIDTH).toBe(1280);
@@ -27,6 +36,60 @@ describe('imageScale / scaleCoord', () => {
   it('scaleCoord rounds', () => {
     expect(scaleCoord(1107, 2)).toBe(2214);
     expect(scaleCoord(100.4, 1)).toBe(100);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// macOS Retina fix (#154) — NEEDS REAL-MAC VERIFICATION
+//
+// On macOS, nut-js drives in logical points. A 2× Retina Mac has:
+//   physicalWidth = 4480, logicalWidth = 2240 (backingScaleFactor=2)
+// The mouse scale must target LOGICAL coords → 2240/1280 = 1.75, not 3.5.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('imageScale — macOS Retina (#154)', () => {
+  it('2× Retina (4480 physical / 2240 logical): returns logicalWidth/1280 = 1.75', () => {
+    // physicalWidth=4480 would give 3.5 (wrong); logicalWidth=2240 gives 1.75 (correct).
+    const scale = imageScale({
+      screen: { physicalWidth: 4480, logicalWidth: 2240 },
+      _platform: 'darwin',
+    });
+    expect(scale).toBeCloseTo(1.75, 5);
+  });
+
+  it('1× non-Retina Mac (1440 physical = 1440 logical): returns 1.125 (1440/1280)', () => {
+    const scale = imageScale({
+      screen: { physicalWidth: 1440, logicalWidth: 1440 },
+      _platform: 'darwin',
+    });
+    expect(scale).toBeCloseTo(1.125, 5);
+  });
+
+  it('standard 1280-wide Mac screen: returns 1 (no downscale)', () => {
+    expect(imageScale({
+      screen: { physicalWidth: 1280, logicalWidth: 1280 },
+      _platform: 'darwin',
+    })).toBe(1);
+  });
+
+  it('falls back to physicalWidth when logicalWidth is absent/zero (best-effort)', () => {
+    // Should not silently use 1; should use physical as best guess.
+    expect(imageScale({
+      screen: { physicalWidth: 2560, logicalWidth: 0 },
+      _platform: 'darwin',
+    })).toBe(2); // physicalWidth fallback
+  });
+
+  it('non-darwin platforms still use physicalWidth (Windows / Linux unchanged)', () => {
+    // A 2× Windows HiDPI screen: physical=3840, logical=1920.
+    // Windows nut-js is physical-pixel-aware → scale = physical/1280 = 3.
+    expect(imageScale({
+      screen: { physicalWidth: 3840, logicalWidth: 1920 },
+      _platform: 'win32',
+    })).toBe(3);
+    expect(imageScale({
+      screen: { physicalWidth: 3840, logicalWidth: 1920 },
+      _platform: 'linux',
+    })).toBe(3);
   });
 });
 

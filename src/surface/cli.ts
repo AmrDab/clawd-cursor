@@ -1191,17 +1191,26 @@ async function createToolContext() {
       await desktop.connect();
       platform = await getPlatform();
       screenshotScaleFactor = desktop.getScaleFactor();
-      // mouseScaleFactor: image-space → driver input coords.
-      // Use screenshotScaleFactor (= physical/image) as the source of
-      // truth — recent nut-js on Windows is physical-pixel-aware, and
-      // macOS / Linux X11 don't have logical/physical divergence to
-      // worry about. Earlier code derived this from `logicalW / 1280`
-      // which is wrong on HiDPI (Windows reports logical bounds at the
-      // scaled size, so 2× DPI yielded factor=1 and clicks landed
-      // half-way across the screen). screenshotScaleFactor is the
-      // physical/image ratio captured from the actual screen, the
-      // single value that's right on every platform we ship.
-      mouseScaleFactor = screenshotScaleFactor;
+      // mouseScaleFactor: image-space → mouse-driver coords.
+      //  • Windows / Linux-X11: nut-js drives in PHYSICAL pixels → use the
+      //    physical/image ratio (screenshotScaleFactor).
+      //  • macOS: nut-js drives in LOGICAL points (Cocoa/CGEvent space). On a
+      //    Retina panel physical≠logical, so the physical scale double-counts
+      //    the backing scale and every click lands ~2× off (#154). Map
+      //    image-space → LOGICAL instead, using NSScreen's logical width.
+      //    (Mirrors imageScale() in agent-loop/coord-scale.ts for System B.)
+      if (process.platform === 'darwin') {
+        try {
+          const { LLM_TARGET_WIDTH } = await import('../core/agent-loop/coord-scale');
+          const lsize = await platform.getScreenSize(); // NSScreen logical + physical dims
+          const lw = lsize?.logicalWidth ?? 0;
+          mouseScaleFactor = lw > LLM_TARGET_WIDTH ? lw / LLM_TARGET_WIDTH : 1;
+        } catch {
+          mouseScaleFactor = screenshotScaleFactor; // best-effort fallback
+        }
+      } else {
+        mouseScaleFactor = screenshotScaleFactor;
+      }
       await a11y.warmup();
       initialized = true;
       console.log(`Subsystems initialized (mouseScale=${mouseScaleFactor}, screenshotScale=${screenshotScaleFactor})`);

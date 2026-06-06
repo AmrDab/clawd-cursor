@@ -316,10 +316,32 @@ export class MacOSAdapter implements PlatformAdapter {
   }
 
   async focusWindow(query: { processName?: string; processId?: number; title?: string }): Promise<boolean> {
+    // focus-window.jxa accepts -processId <N> and/or -title <string>.
+    // The old implementation passed -FocusedProcessId / -ProcessName / -WindowTitle
+    // which the JXA run(argv) parser never matched, so ANY processId-only or
+    // processName-only query silently fell to "no match" and returned false.
+    //
+    // Resolution strategy (matches Windows adapter behaviour):
+    //   1. If processId is given, use it directly.
+    //   2. Else if processName is given, resolve it to a processId via listWindows
+    //      (avoids conflating process names with window titles — e.g. "Safari" is
+    //      process name "Safari" but window title could be "Apple - iPhone 16").
+    //   3. Pass title as the disambiguation hint when it is also provided.
+    let processId = query.processId;
+    if (processId === undefined && query.processName) {
+      const target = query.processName.toLowerCase();
+      const windows = await this.listWindows();
+      const hit = windows.find(w => w.processName.toLowerCase() === target)
+        ?? windows.find(w => w.processName.toLowerCase().includes(target));
+      if (hit) processId = hit.processId;
+    }
+
     const args: string[] = [];
-    if (query.processId !== undefined) args.push('-FocusedProcessId', String(query.processId));
-    if (query.processName) args.push('-ProcessName', query.processName);
-    if (query.title) args.push('-WindowTitle', query.title);
+    if (processId !== undefined) args.push('-processId', String(processId));
+    if (query.title) args.push('-title', query.title);
+
+    if (args.length === 0) return false; // nothing to match on
+
     try {
       const scriptPath = path.join(SCRIPTS_DIR, 'focus-window.jxa');
       const { stdout } = await execFileAsync('osascript', ['-l', 'JavaScript', scriptPath, ...args], {
