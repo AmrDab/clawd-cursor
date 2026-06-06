@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
-    AGENT-READABLE SUMMARY (v1.0.0)
+    AGENT-READABLE SUMMARY (v1.0.1)
     clawdcursor: the local MCP server that gives any agent safe desktop control.
 
     ── WHAT IT IS ──────────────────────────────────────────────────────────────
@@ -39,8 +39,9 @@
     primitive as a top-level MCP tool, or for direct debugging.
 
     ── INSTALL ─────────────────────────────────────────────────────────────────
-    Windows (PowerShell):  powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
-    macOS / Linux:         curl -fsSL https://clawdcursor.com/install.sh | bash
+    Recommended (any OS): npm i -g clawdcursor    (Node 20+; macOS: also run clawdcursor grant)
+    Windows one-liner:  powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
+    macOS / Linux:      curl -fsSL https://clawdcursor.com/install.sh | bash
 
     After install, run in this order:
       clawdcursor consent --accept   # one-time desktop-control authorization (required)
@@ -140,6 +141,8 @@
     @keyframes grad { 0%,100% { background-position:0% center; } 50% { background-position:100% center; } }
 
     .hero p { font-size: 1.05rem; color: var(--text2); max-width: 540px; margin: 0 auto 28px; line-height: 1.6; }
+
+    .hero-badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 
     .hero-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
     .btn-p {
@@ -435,6 +438,17 @@
       </a>
       <a href="#install" class="btn-s">Quick Start</a>
     </div>
+    <div class="hero-badges">
+      <a href="https://www.npmjs.com/package/clawdcursor" target="_blank" rel="noopener" aria-label="npm version">
+        <img src="https://img.shields.io/npm/v/clawdcursor?style=flat-square&color=22c55e&label=npm" alt="npm version" height="20">
+      </a>
+      <a href="https://www.npmjs.com/package/clawdcursor" target="_blank" rel="noopener" aria-label="npm downloads per month">
+        <img src="https://img.shields.io/npm/dm/clawdcursor?style=flat-square&color=3b82f6&label=downloads%2Fmo" alt="npm downloads per month" height="20">
+      </a>
+      <a href="https://github.com/AmrDab/clawdcursor" target="_blank" rel="noopener" aria-label="GitHub stars">
+        <img src="https://img.shields.io/github/stars/AmrDab/clawdcursor?style=flat-square&color=a855f7&label=stars" alt="GitHub stars" height="20">
+      </a>
+    </div>
   </div>
 
   <!-- Stats -->
@@ -693,14 +707,14 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
   <!-- Install -->
   <section id="install" class="sect">
     <div class="sect-label">Quick Start</div>
-    <h2>One line. Any OS.</h2>
+    <h2>Install in seconds. Any OS.</h2>
 
     <div class="code-box install-card">
       <div class="code-hd install-hd">
         <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
         <div class="inst-methods">
-          <button class="inst-tab active" data-m="oneliner" onclick="pickMethod('oneliner')">One-liner</button>
-          <button class="inst-tab" data-m="npm" onclick="pickMethod('npm')">npm</button>
+          <button class="inst-tab" data-m="oneliner" onclick="pickMethod('oneliner')">One-liner</button>
+          <button class="inst-tab active" data-m="npm" onclick="pickMethod('npm')">npm</button>
           <button class="inst-tab" data-m="source" onclick="pickMethod('source')">Source</button>
         </div>
         <div class="inst-os">
@@ -713,7 +727,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-prompt">$</span> <span id="inst-cmd"></span></code></pre>
     </div>
 
-    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. The one-liner installs Node if needed, builds, and links the global shim; <code style="font-size:0.95em">npm</code> is the leanest. After install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>. Pin a version with <code style="font-size:0.95em">VERSION=v1.0.1</code>.</p>
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). On macOS also run <code style="font-size:0.95em">clawdcursor grant</code> for the native accessibility helper. The one-liner installs Node if needed and links the global shim. After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>.</p>
   </section>
 
 </div>
@@ -869,7 +883,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
     npm: '# Simplest — any OS. (macOS: also run `clawdcursor grant` for the native helper.)',
     source: '# Clone, build, link — for hacking on clawdcursor itself.',
   };
-  let _instM = 'oneliner', _instO = 'win';
+  let _instM = 'npm', _instO = 'win';
   function renderInstall() {
     const cmd = document.getElementById('inst-cmd');
     const comment = document.getElementById('inst-comment');
