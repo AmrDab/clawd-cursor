@@ -52,7 +52,7 @@ It's **model-agnostic** (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), **
 
 ## Toolbox &mdash; 6 compound tools (recommended)
 
-Two catalogs ship side-by-side. The **toolbox** (this section) is 6 compound tools, each with an `action` enum that covers ~10-15 verbs. **Tools** (next section) is the 97 underlying granular primitives, one schema per verb.
+Two catalogs ship side-by-side. The **toolbox** (this section) is 6 compound tools, each with an `action` enum that covers ~10-15 verbs. **Tools** (next section) is the 94 underlying granular primitives, one schema per verb.
 
 Compound is the default surface. Catalog footprint is ~1,500 tokens (about 12&times; smaller than granular), which keeps small models focused on the action choice instead of drowning in primitives. Same `computer_20250124` shape Anthropic uses, so editor hosts already know how to drive it.
 
@@ -93,7 +93,7 @@ Sixty seconds from zero to a tool-calling agent on your desktop.
 |---|---|---|
 | AI lives in your editor (Claude Code, Cursor, Windsurf, Zed) | **`clawdcursor mcp`** | stdio MCP server. **You never run this yourself** &mdash; the editor/MCP host spawns it on demand from its config (you just add the JSON below). No daemon, no port. |
 | You're building an agent that runs unattended | **`clawdcursor agent`** | HTTP MCP daemon on `127.0.0.1:3847`. Has its own LLM brain optionally configured via `doctor`. |
-| Your agent has its own brain &mdash; you just want the tools as an HTTP endpoint | **`clawdcursor agent --no-llm`** | Same daemon, no built-in pipeline, no scheduler startup, no credential validation. Pure tool surface. |
+| Your agent has its own brain &mdash; you just want the tools as an HTTP endpoint | **`clawdcursor agent --no-llm`** | Same daemon, no built-in agent loop, no scheduler startup, no credential validation. Pure tool surface. |
 
 **Simplest &mdash; any OS (now on npm):**
 
@@ -294,7 +294,7 @@ Both forms produce identical effects through the same `safety.evaluate()` chokep
 
 ## Cost Tiers
 
-The pipeline picks the cheapest rung that works. Apply the same logic when you call compound tools by hand.
+Every perception source has a cost. Start at the cheapest rung that works and climb only when it fails &mdash; the same discipline whether your agent drives the tools directly or hands a sub-task to the built-in loop via `task`.
 
 | Tier | Label | Cost | Source | When to use |
 |---|---|---|---|---|
@@ -304,9 +304,6 @@ The pipeline picks the cheapest rung that works. Apply the same logic when you c
 | **T4** | vision | expensive | `smart_click`, `smart_read`, `smart_type` | Canvas-only apps (Paint, Figma, games) or spatial reasoning that text can't express. Last resort. |
 
 **Rule: start at T1. Escalate only when the current tier fails.** Apply the same discipline when calling compound tools directly; the built-in thin loop follows it too.
-
----
-
 
 ---
 
@@ -337,7 +334,7 @@ Five directories. Everything else is a leaf module.
 | Directory | What lives here |
 |---|---|
 | `src/core/` | Thin agent loop (`agent.ts`, `runAgent`), sense layer (a11y/snapshot/fingerprint), focus guard, safety gate. |
-| `src/tools/` | The 94 granular tools + 6 compound aggregators + `batch`, playbooks (`compose-send`, `find-replace`), tool registry, dispatch. |
+| `src/tools/` | The 94 granular tools + 6 compound aggregators + `batch`, playbooks (`find-replace`, `extract-compose`), tool registry, dispatch. |
 | `src/platform/` | `PlatformAdapter` interface + Windows / macOS / Linux / Wayland implementations, OCR engine, CDP driver, URI handler. |
 | `src/llm/` | Provider clients (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), credentials, model config. |
 | `src/surface/` | CLI (`clawdcursor`), MCP server (stdio + HTTP), dashboard, doctor, onboarding, readiness probes. |

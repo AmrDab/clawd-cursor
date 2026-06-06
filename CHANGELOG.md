@@ -2,7 +2,7 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
-## [2.0.0] - 2026-06-06 — toolbox-first: pipeline removed, tools unified, thin agent loop
+## [1.0.0] - 2026-06-06 — toolbox-first: pipeline removed, tools unified, thin agent loop
 
 > **Breaking (major).** clawdcursor is now a desktop MCP **toolbox** for any agent, plus a thin *optional* autonomous loop. The autonomous morph pipeline (router → blind/hybrid/vision, decompose, verify, reflector) is gone — a capable model is its own pipeline. The `task` tool still hands a whole task to a cheaper configured model that "takes the wheel"; 4 pipeline-introspection tools were removed (catalog 98 → 94).
 
@@ -48,8 +48,8 @@ argument — they return the full unified toolbox.
 
 ### Changed — MCP tool count
 
-Granular catalog drops from 97 to **94 tools** (the four pipeline-only tools removed).
-Compact surface: 6 compound tools + `task` + `batch` = **7 entries on the compact surface**.
+Granular catalog drops from 98 to **94 tools** (the four pipeline-only tools removed).
+Compact surface: `computer` · `accessibility` · `window` · `system` · `browser` · `task` · `batch` = **7 entries**.
 
 ### Changed — `task` delegation
 
@@ -67,7 +67,7 @@ without executing. The efficiency lever for a driving agent: N calls → 1.
 
 ---
 
-### Tool-unification migration (also part of 2.0.0)
+### Tool-unification migration (also part of 1.0.0)
 
 ### Changed — one tool implementation, used everywhere
 
@@ -216,7 +216,7 @@ Callers that pass no params are fully unaffected. The no-param path returns the 
 
 ---
 
-## [1.0.0] - 2026-06-03 — adaptive pipeline + cost tiers + desktop grounding
+## [1.0.0-autonomous] - 2026-06-03 — adaptive pipeline variant (superseded by the toolbox 1.0.0; preserved on branch `v1.0.0-autonomous`)
 
 ### Upgrading from 0.9.x
 

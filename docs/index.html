@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawd Cursor v2.0.0 — the local MCP server for safe desktop control</title>
-  <meta name="description" content="Clawd Cursor v2.0.0 — the local MCP server that gives any agent safe desktop control. 6 compact compound tools (computer, accessibility, window, system, browser, task), MCP stdio + HTTP, single safety.evaluate() chokepoint, no telemetry, Windows + macOS + Linux.">
-  <meta property="og:title" content="Clawd Cursor v2.0.0">
+  <title>Clawd Cursor v1.0.0 — the local MCP server for safe desktop control</title>
+  <meta name="description" content="Clawd Cursor v1.0.0 — the local MCP server that gives any agent safe desktop control. 6 compact compound tools (computer, accessibility, window, system, browser, task), MCP stdio + HTTP, single safety.evaluate() chokepoint, no telemetry, Windows + macOS + Linux.">
+  <meta property="og:title" content="Clawd Cursor v1.0.0">
   <meta property="og:description" content="The local MCP server that gives any agent safe desktop control. Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry.">
 
   <meta property="og:type" content="website">
@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
-    AGENT-READABLE SUMMARY (v0.9.7)
+    AGENT-READABLE SUMMARY (v1.0.0)
     clawdcursor: the local MCP server that gives any agent safe desktop control.
 
     ── WHAT IT IS ──────────────────────────────────────────────────────────────
@@ -29,12 +29,12 @@
       computer      — mouse, keyboard, screenshot (raw I/O)
       accessibility — drive UI by element name, not pixel
       window        — launch, focus, resize apps
-      system        — clipboard, OCR, shortcuts, pipeline introspection
+      system        — clipboard, OCR, shortcuts, webview detection
       browser       — Chrome DevTools Protocol for Electron/WebView2 apps
       task          — hand off a full task to the built-in autonomous loop
 
     ── COMPATIBILITY / DEBUGGING ────────────────────────────────────────────────
-    97 granular tools (one schema per verb) available via --granular flag or
+    94 granular tools (one schema per verb) available via --granular flag or
     `tools/list` on either transport. Use when your runtime requires every
     primitive as a top-level MCP tool, or for direct debugging.
 
@@ -64,15 +64,8 @@
 
     ── SAFETY ──────────────────────────────────────────────────────────────────
     Single safety.evaluate() chokepoint — every tool call routes through it
-    regardless of transport or pipeline. Sensitive actions auto-elevate to
+    regardless of transport. Sensitive actions auto-elevate to
     Confirm. Bearer token required on HTTP. Local-only by default.
-
-    ── GUIDES MARKETPLACE ──────────────────────────────────────────────────────
-    Public registry at https://clawdcursor.com/app-guides — community-curated
-    keyboard shortcuts + workflows for popular apps (gmail, outlook, slack,
-    youtube, figma, discord, excel, mspaint, olk, spotify). PR-based
-    submissions at github.com/AmrDab/clawdcursor-guides. Fetched on demand,
-    cached locally. Manage with `clawdcursor guides list / install / submit`.
 
     ── PLATFORMS ───────────────────────────────────────────────────────────────
     Windows 10/11 (x64 + ARM64), macOS 12+ (Intel + Apple Silicon),
@@ -172,7 +165,7 @@
     }
     .star-count[hidden] { display: none; }
 
-    /* Pipeline flow — Router → VisionAgent → Verifier */
+    /* How-it-works flow — Accessibility → Escalate → Safety */
     .pipe-flow {
       display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch;
       gap: 10px; margin-bottom: 16px;
@@ -428,9 +421,9 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v2.0.0 — latest stable</div>
+    <div class="hero-badge"><div class="pulse"></div> v1.0.0 — latest stable</div>
     <h1>A cursor and a keyboard<br><span class="gr">for any AI agent</span></h1>
-    <p>Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry. v0.9: MCP-only protocol, Reflector feedback, guides marketplace.</p>
+    <p>Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry. Cheap paths first &mdash; accessibility before pixels, vision only as a last resort.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -447,7 +440,7 @@
   <!-- Stats -->
   <div class="stats">
     <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Toolbox &mdash; compound tools (recommended)</div></div>
-    <div class="stat"><div class="stat-val">97</div><div class="stat-lbl">Tools &mdash; granular (compat / debug)</div></div>
+    <div class="stat"><div class="stat-val">94</div><div class="stat-lbl">Tools &mdash; granular (compat / debug)</div></div>
     <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Operating Systems</div></div>
   </div>
 
@@ -496,7 +489,7 @@
   }
 }</code></pre>
         <div class="mode-stats">
-          <div><div class="mode-stat-val">6 / 97</div><div class="mode-stat-lbl">Compact / Granular tools</div></div>
+          <div><div class="mode-stat-val">6 / 94</div><div class="mode-stat-lbl">Compact / Granular tools</div></div>
           <div><div class="mode-stat-val">stdio</div><div class="mode-stat-lbl">Transport</div></div>
         </div>
       </div>
@@ -515,21 +508,21 @@
       </div>
       <div class="mode-card c">
         <h3>clawdcursor agent --no-llm <span style="font-size:0.7rem;font-weight:500;color:var(--text3);letter-spacing:0.04em;">— BYO brain</span></h3>
-        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">Your agent already has a brain — you just want HTTP tools. Same daemon, no built-in pipeline.</p>
+        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">Your agent already has a brain — you just want HTTP tools. Same daemon, no built-in agent loop.</p>
         <ol>
           <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor agent --no-llm</code></li>
-          <li>97 tools on <code style="font-size:0.82em">:3847/mcp</code></li>
+          <li>94 tools on <code style="font-size:0.82em">:3847/mcp</code></li>
           <li>Stateless — no session init needed</li>
         </ol>
         <div class="mode-stats">
-          <div><div class="mode-stat-val">97</div><div class="mode-stat-lbl">Granular tools (compat)</div></div>
+          <div><div class="mode-stat-val">94</div><div class="mode-stat-lbl">Granular tools (compat)</div></div>
           <div><div class="mode-stat-val">any</div><div class="mode-stat-lbl">HTTP client</div></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Unified Pipeline -->
+  <!-- How it works — cheap paths first -->
   <section class="sect" id="pipeline">
     <div class="sect-label">How it works</div>
     <h2>Cheap paths first.</h2>
@@ -537,15 +530,15 @@
 
     <div class="pipe-flow">
       <div class="pipe-step router">
-        <h4><span class="pipe-num">1</span> Router</h4>
-        <span class="pipe-tag">Zero LLM</span>
-        <p>Pattern-match shortcuts for common tasks. Sub-second.</p>
+        <h4><span class="pipe-num">1</span> Accessibility</h4>
+        <span class="pipe-tag">Zero pixels</span>
+        <p>Read the a11y tree, act on element names. No screenshot, no vision LLM.</p>
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step agent">
-        <h4><span class="pipe-num">2</span> Agent</h4>
-        <span class="pipe-tag">One loop, three modes</span>
-        <p>Blind reads the a11y tree. Hybrid adds on-demand screenshots. Vision is the fallback for canvas UIs.</p>
+        <h4><span class="pipe-num">2</span> Escalate as needed</h4>
+        <span class="pipe-tag">Cheapest rung that works</span>
+        <p>OCR when the tree is sparse, screenshot when you need pixels, vision only for canvas UIs.</p>
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step verifier">
@@ -600,64 +593,10 @@
         <p>Platform-aware key combos — Cmd on macOS, Ctrl elsewhere. No LLM cost.</p>
       </div>
       <div class="feat-card">
-        <div class="feat-icon">📖</div>
-        <h4>Guides marketplace</h4>
-        <p>Community shortcuts &amp; workflows for popular apps. Fetched on demand. <a href="https://github.com/AmrDab/clawdcursor-guides" style="color:var(--accent2)">Contribute via PR →</a></p>
+        <div class="feat-icon">📦</div>
+        <h4>batch &mdash; one round-trip</h4>
+        <p>Collapse N deterministic tool calls into a single guarded, safety-gated batch. N calls &rarr; 1.</p>
       </div>
-    </div>
-  </section>
-
-  <!-- Guides Marketplace -->
-  <section class="sect" id="guides">
-    <div class="sect-label">Guides Marketplace</div>
-    <h2>Community knowledge for popular apps.</h2>
-    <p class="sub">The agent reasons from scratch on unfamiliar apps. For popular ones, fetch the shortcuts.</p>
-
-    <div class="feat-grid" style="grid-template-columns: repeat(3, 1fr);">
-      <div class="feat-card">
-        <div class="feat-icon">⚡</div>
-        <h4>5–10× faster on known apps</h4>
-        <p>Guides ship keyboard shortcuts, workflow patterns, layout cues, and failure modes. The agent skips the discovery loop.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">🌐</div>
-        <h4>Fetched on demand</h4>
-        <p>Cached locally for 7 days, LRU at 50 entries. Agent never blocks on the network — offline falls back to first-principles reasoning.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">🛡️</div>
-        <h4>Linter every load</h4>
-        <p>Schema check + prompt-injection patterns + dangerous-prose detection on every guide before injection. Defense-in-depth.</p>
-      </div>
-    </div>
-
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-top:32px;">
-      <h4 style="margin-bottom:12px;font-size:0.95rem;letter-spacing:-0.01em;">10 verified guides at launch</h4>
-      <p style="color:var(--text2);font-size:0.85rem;margin-bottom:16px;">
-        <code style="font-size:0.85em">discord</code> &middot;
-        <code style="font-size:0.85em">excel</code> &middot;
-        <code style="font-size:0.85em">figma</code> &middot;
-        <code style="font-size:0.85em">gmail</code> &middot;
-        <code style="font-size:0.85em">mspaint</code> &middot;
-        <code style="font-size:0.85em">olk</code> (new Outlook) &middot;
-        <code style="font-size:0.85em">outlook</code> &middot;
-        <code style="font-size:0.85em">slack</code> &middot;
-        <code style="font-size:0.85em">spotify</code> &middot;
-        <code style="font-size:0.85em">youtube</code> (19 workflows, 36 shortcuts, 13 tips)
-      </p>
-      <pre style="background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:0.78rem;color:var(--accent2);overflow-x:auto;"><code><span style="color:var(--text2)"># browse + manage cache</span>
-clawdcursor guides available
-clawdcursor guides install youtube
-clawdcursor guides list
-
-<span style="color:var(--text2)"># submit your own</span>
-clawdcursor guides lint my-app.json
-clawdcursor guides submit my-app.json</code></pre>
-      <p style="color:var(--text3);font-size:0.78rem;margin-top:12px;">
-        Source: <a href="https://github.com/AmrDab/clawdcursor-guides" style="color:var(--accent2)">github.com/AmrDab/clawdcursor-guides</a>
-        &middot; Served at <a href="/app-guides" style="color:var(--accent2)">clawdcursor.com/app-guides</a>
-        &middot; PRs via GitHub &middot; Ratings via 👍/👎 on <code style="font-size:0.85em">vote: &lt;app&gt;</code> issues
-      </p>
     </div>
   </section>
 
@@ -666,8 +605,8 @@ clawdcursor guides submit my-app.json</code></pre>
     <details class="cli-details">
       <summary class="cli-summary">
         <span class="sect-label" style="margin-bottom:0;">Tools</span>
-        <span class="cli-summary-title">6 compact tools + 97 granular <span class="cli-summary-chev" aria-hidden="true">›</span></span>
-        <span class="cli-summary-sub">The 6 compact compounds are the recommended public surface. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. The 97 granular tools (one schema per verb) are listed below for compatibility and debugging — use them when your runtime requires every primitive as a top-level MCP tool.</span>
+        <span class="cli-summary-title">6 compact tools + 94 granular <span class="cli-summary-chev" aria-hidden="true">›</span></span>
+        <span class="cli-summary-sub">The 6 compact compounds are the recommended public surface. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. The 94 granular tools (one schema per verb) are listed below for compatibility and debugging — use them when your runtime requires every primitive as a top-level MCP tool. (94 total.)</span>
       </summary>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-top:18px;overflow:hidden;">
@@ -697,8 +636,8 @@ clawdcursor guides submit my-app.json</code></pre>
             </tr>
             <tr style="border-bottom:1px solid var(--border);">
               <td style="padding:12px 16px;vertical-align:top;"><code style="color:var(--accent2);font-weight:600;">system</code></td>
-              <td style="padding:12px 16px;vertical-align:top;color:var(--text2);">Clipboard, OCR, shortcuts &mdash; plus pipeline introspection (classify, app-guide, system-prompt). The meta surface for an external brain.</td>
-              <td style="padding:12px 16px;vertical-align:top;color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:0.78rem;line-height:1.7;"><code>clipboard_read</code> · <code>clipboard_write</code> · <code>system_time</code> · <code>ocr</code> · <code>undo</code> · <code>shortcuts_list</code> · <code>shortcuts_run</code> · <code>delegate</code> · <code>detect_webview</code> · <code>relaunch_with_cdp</code> · <code>app_guide</code> · <code>detect_app</code> · <code>classify_task</code> · <code>system_prompt</code></td>
+              <td style="padding:12px 16px;vertical-align:top;color:var(--text2);">Clipboard, OCR, shortcuts, undo, webview detection + CDP relaunch, the active system prompt, and task delegation. The meta surface for an external brain.</td>
+              <td style="padding:12px 16px;vertical-align:top;color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:0.78rem;line-height:1.7;"><code>clipboard_read</code> · <code>clipboard_write</code> · <code>system_time</code> · <code>ocr</code> · <code>undo</code> · <code>shortcuts_list</code> · <code>shortcuts_run</code> · <code>delegate</code> · <code>detect_webview</code> · <code>relaunch_with_cdp</code> · <code>system_prompt</code></td>
             </tr>
             <tr style="border-bottom:1px solid var(--border);">
               <td style="padding:12px 16px;vertical-align:top;"><code style="color:var(--accent2);font-weight:600;">browser</code></td>
@@ -716,7 +655,7 @@ clawdcursor guides submit my-app.json</code></pre>
 
       <p style="color:var(--text3);font-size:0.78rem;margin-top:14px;line-height:1.6;">
         <strong style="color:var(--text2);">Compact form (recommended):</strong> <code style="font-size:0.9em;color:var(--accent2);">computer({ "action": "key", "combo": "mod+s" })</code> &mdash; ~1,500 tokens of catalog.
-        <strong style="color:var(--text2);">Granular form (compat / debug):</strong> <code style="font-size:0.9em;color:var(--accent2);">key_press({ "key": "mod+s" })</code> &mdash; 97 individual tools, one schema per verb.
+        <strong style="color:var(--text2);">Granular form (compat / debug):</strong> <code style="font-size:0.9em;color:var(--accent2);">key_press({ "key": "mod+s" })</code> &mdash; 94 individual tools, one schema per verb.
         Both produce identical effects through the same <code>safety.evaluate()</code> chokepoint.
         Pass <code style="color:var(--accent2);">--granular</code> (instead of <code style="color:var(--accent2);">--compact</code>) to expose the granular surface over MCP.
         See <a href="https://github.com/AmrDab/clawdcursor/blob/main/schema.snapshot.json" target="_blank" rel="noopener" style="color:var(--accent2);">schema.snapshot.json</a> for every parameter.
@@ -730,7 +669,7 @@ clawdcursor guides submit my-app.json</code></pre>
       <summary class="cli-summary">
         <span class="sect-label" style="margin-bottom:0;">CLI</span>
         <span class="cli-summary-title">Every command <span class="cli-summary-chev" aria-hidden="true">›</span></span>
-        <span class="cli-summary-sub">The CLI is for humans diagnosing an install or managing the guide cache. Agents connect via MCP.</span>
+        <span class="cli-summary-sub">The CLI is for humans diagnosing an install. Agents connect via MCP.</span>
       </summary>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-top:18px;">
@@ -746,10 +685,7 @@ clawdcursor mcp --compact    <span style="color:var(--text3)"># same, with 6 com
 clawdcursor agent            <span style="color:var(--text3)"># HTTP MCP daemon at :3847/mcp, optional built-in LLM</span>
 clawdcursor agent --no-llm   <span style="color:var(--text3)"># tool surface only — your agent brings its own brain</span>
 clawdcursor stop             <span style="color:var(--text3)"># stop every running mode</span>
-clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawdcursor config and data</span>
-
-<span style="color:var(--text3)"># Guides — see the Guides Marketplace section above, or run</span>
-<span style="color:var(--text3"># `clawdcursor guides --help` for the full set.</span></code></pre>
+clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawdcursor config and data</span></code></pre>
       </div>
     </details>
   </section>
@@ -777,7 +713,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-prompt">$</span> <span id="inst-cmd"></span></code></pre>
     </div>
 
-    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. The one-liner installs Node if needed, builds, and links the global shim; <code style="font-size:0.95em">npm</code> is the leanest. After install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>. Pin a version with <code style="font-size:0.95em">VERSION=v2.0.0</code>.</p>
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. The one-liner installs Node if needed, builds, and links the global shim; <code style="font-size:0.95em">npm</code> is the leanest. After install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>. Pin a version with <code style="font-size:0.95em">VERSION=v1.0.0</code>.</p>
   </section>
 
 </div>
@@ -795,11 +731,10 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 </div>
 
 <footer>
-  <p>clawd<strong>cursor</strong> v2.0.0 · localhost only · MIT ·
+  <p>clawd<strong>cursor</strong> v1.0.0 · localhost only · MIT ·
     <a href="https://clawdcursor.com">Home</a> ·
     <a href="https://github.com/AmrDab/clawdcursor">GitHub</a> ·
     <a href="https://github.com/AmrDab/clawdcursor/blob/main/CHANGELOG.md">Changelog</a> ·
-    <a href="https://github.com/AmrDab/clawdcursor-guides">Guides repo</a> ·
     <a href="https://discord.gg/hW29nrEZ8G">Discord</a>
   </p>
 </footer>

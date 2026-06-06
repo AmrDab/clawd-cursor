@@ -1,7 +1,7 @@
 #!/bin/bash
 # Clawd Cursor Installer for macOS / Linux
 # Usage: curl -fsSL https://clawdcursor.com/install.sh | bash
-# Specify version: VERSION=v2.0.0 curl -fsSL https://clawdcursor.com/install.sh | bash
+# Specify version: VERSION=v1.0.0 curl -fsSL https://clawdcursor.com/install.sh | bash
 
 set -e
 set -o pipefail  # Capture failures in pipelines (critical for build error detection)
