@@ -199,7 +199,20 @@ export function getBatchTools(): ToolDefinition[] {
         'act on the right window/element instead of guessing. Set dryRun:true to pre-scan safety tiers without ' +
         'executing; allowConfirm:true to let confirm-tier steps proceed.',
       parameters: {
-        steps: { type: 'string', description: 'JSON array of ordered steps: [{ "name": "<tool>", "arguments": {...}, "expect": {"window"?,"element"?} }] (a real array is also accepted).', required: true },
+        steps: {
+          type: 'array',
+          required: true,
+          description: 'Ordered steps to run. Each step is a normal tool call: { "name": "<tool>", "arguments": {...}, "expect"?: {"window"?,"element"?} }. (A JSON-encoded string of the same array is also accepted.)',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Tool to call — a compound ("computer"/"window"/...) or a granular tool.' },
+              arguments: { type: 'object', description: 'Arguments for that tool, e.g. {"action":"type","text":"hi"}.' },
+              expect: { type: 'object', description: 'Optional precondition re-checked by perceiving before the step: {"window":"..."} or {"element":"..."}.' },
+            },
+            required: ['name'],
+          },
+        },
         allowConfirm: { type: 'boolean', description: 'Allow confirm-tier steps to run (default false → halt at them).', required: false },
         dryRun: { type: 'boolean', description: 'Only report each step\'s safety tier; do not execute.', required: false },
         maxSteps: { type: 'number', description: `Hard cap on executed steps (default ${DEFAULT_MAX_STEPS}).`, required: false },

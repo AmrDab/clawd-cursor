@@ -97,6 +97,11 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
       let schema: any;
       if (def.type === 'number') schema = z.number();
       else if (def.type === 'boolean') schema = z.boolean();
+      // 'array' params accept a real array (preferred) OR a JSON-encoded string,
+      // matching dual-accept handlers (e.g. batch.steps). Without this branch the
+      // default below coerced arrays to z.string() and rejected the array form
+      // the README/inputSchema advertise ("Expected string, received array").
+      else if (def.type === 'array') schema = z.union([z.array(z.any()), z.string()]);
       else schema = z.string();
       if (def.enum) schema = z.enum(def.enum as [string, ...string[]]);
       schema = schema.describe(def.description);

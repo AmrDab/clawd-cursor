@@ -51,7 +51,20 @@ export function buildBatchTool(): UnifiedTool {
     inputSchema: {
       type: 'object',
       properties: {
-        steps: { type: 'string', description: 'JSON array of {name, args, expect?} steps (max 10).' },
+        steps: {
+          type: 'array',
+          maxItems: 10,
+          description: 'The steps to run (max 10). Each step is a normal tool call: {"name","args","expect"?}, e.g. {"name":"type","args":{"text":"hi"}}.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Tool to call (e.g. "type", "computer", "window").' },
+              args: { type: 'object', description: 'Arguments object for that tool.' },
+              expect: { type: 'object', description: 'Optional precondition re-checked by perceiving before the step: {"window":"..."} or {"element":"..."}.' },
+            },
+            required: ['name'],
+          },
+        },
       },
       required: ['steps'],
       additionalProperties: false,

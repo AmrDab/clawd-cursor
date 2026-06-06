@@ -38,6 +38,21 @@ describe('agent batch — happy path', () => {
     expect(r.text).toMatch(/all 2 steps completed/);
     expect(unified.type.execute).toHaveBeenCalled();
   });
+
+  it('accepts steps as a raw array, not only a JSON string (matches the README/MCP schema)', async () => {
+    // Regression for the schema/contract mismatch: the MCP inputSchema used to
+    // declare steps:string, so an agent following the README (`batch({steps:[...]})`)
+    // got "Expected string, received array". Schema is now an array; the handler
+    // still accepts a JSON string for resilience. Pass the array DIRECTLY here.
+    unified.open_app = uTool('open_app');
+    unified.type = uTool('type');
+    const r = await buildBatchTool().execute(
+      { steps: [{ name: 'open_app', args: { name: 'notepad' } }, { name: 'type', args: { text: 'hi' } }] },
+      ctx,
+    );
+    expect(r.success).toBe(true);
+    expect(r.text).toMatch(/all 2 steps completed/);
+  });
 });
 
 describe('agent batch — halting', () => {

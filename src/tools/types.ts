@@ -11,13 +11,15 @@
 
 /** Parameter definition for a tool (maps to JSON Schema) */
 export interface ParameterDef {
-  type: 'string' | 'number' | 'boolean';
+  type: 'string' | 'number' | 'boolean' | 'array';
   description: string;
   required?: boolean;
   enum?: string[];
   minimum?: number;
   maximum?: number;
   default?: any;
+  /** For type:'array' — the JSON Schema each element must match. */
+  items?: Record<string, any>;
 }
 
 /** Result returned by a tool handler */
@@ -167,6 +169,7 @@ export function toJsonSchema(params: Record<string, ParameterDef>): object {
     if (def.minimum !== undefined) prop.minimum = def.minimum;
     if (def.maximum !== undefined) prop.maximum = def.maximum;
     if (def.default !== undefined) prop.default = def.default;
+    if (def.items !== undefined) prop.items = def.items;
     properties[key] = prop;
     if (def.required !== false) required.push(key);
   }
