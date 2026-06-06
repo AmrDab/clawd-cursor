@@ -495,7 +495,7 @@
     },
     {
       "name": "delegate_to_agent",
-      "description": "**Requires the `clawdcursor agent` daemon to be running** (binds 127.0.0.1:3847). Delegates a task to clawdcursor's autonomous pipeline (runs independently with its own LLM reasoning). Returns when the task completes or times out. If you see ECONNREFUSED, start the daemon with `clawdcursor agent` and retry.",
+      "description": "Hand a whole task to clawdcursor's built-in thin agent loop, which drives the toolbox with the model configured via `clawdcursor doctor` (perceive → act → iterate until done). For an expensive frontier model this is the delegation lever: hand grunt work to a cheaper configured model that takes the wheel. Requires `clawdcursor agent` running WITH a model configured; in tools-only / --no-llm mode there is no model to drive it.",
       "category": "orchestration",
       "parameters": {
         "type": "object",
@@ -506,7 +506,7 @@
           },
           "timeout": {
             "type": "number",
-            "description": "Timeout in seconds (default: 300)"
+            "description": "Advisory; the agent enforces its own wall-clock timeout"
           }
         },
         "required": [

@@ -87,49 +87,38 @@ export function getOrchestrationTools(): ToolDefinition[] {
     {
       name: 'delegate_to_agent',
       description:
-        "**Requires the `clawdcursor agent` daemon to be running** (binds 127.0.0.1:3847). " +
-        "Delegates a task to clawdcursor's autonomous pipeline (runs independently with its own LLM reasoning). " +
-        "Returns when the task completes or times out. If you see ECONNREFUSED, start the daemon with `clawdcursor agent` and retry.",
+        "Hand a whole task to clawdcursor's built-in thin agent loop, which drives the toolbox with the model configured via `clawdcursor doctor` (perceive → act → iterate until done). " +
+        "For an expensive frontier model this is the delegation lever: hand grunt work to a cheaper configured model that takes the wheel. " +
+        "Requires `clawdcursor agent` running WITH a model configured; in tools-only / --no-llm mode there is no model to drive it.",
       parameters: {
         task: { type: 'string', description: 'Natural language task description', required: true },
-        timeout: { type: 'number', description: 'Timeout in seconds (default: 300)', required: false },
+        timeout: { type: 'number', description: 'Advisory; the agent enforces its own wall-clock timeout', required: false },
       },
       category: 'orchestration',
       compactGroup: 'task',
       safetyTier: 1,
-      handler: async ({ task, timeout }) => {
-        const timeoutMs = (timeout ?? 300) * 1000;
-        const start = Date.now();
+      handler: async ({ task }, ctx) => {
+        // Run the task IN-PROCESS on the daemon's configured-model agent.
+        // (This previously self-called the daemon's own /mcp via mcpCall, which
+        // the streamable-HTTP transport rejects with "Already connected to a
+        // transport" — a re-entrant MCP call. Calling ctx.agent directly avoids
+        // the self-call and returns a clean error when no model is configured.)
+        if (!ctx?.agent) {
+          return { text: 'delegate_to_agent: no model-backed agent attached. This needs `clawdcursor agent` running WITH a model configured (run `clawdcursor doctor`). In tools-only / --no-llm mode there is no model to drive the task — drive the toolbox tools directly instead.', isError: true };
+        }
         try {
-          // Submit via MCP submit_task — non-blocking; returns immediately.
-          await mcpCall('submit_task', { task });
-
-          // Poll agent_status until idle or timeout.
-          while (Date.now() - start < timeoutMs) {
-            await new Promise(r => setTimeout(r, 2000));
-            try {
-              const result = await mcpCall('agent_status');
-              const text = result?.content?.[0]?.text ?? '';
-              const data: any = text ? JSON.parse(text) : null;
-              if (data?.status === 'idle') {
-                const last = data.lastResult;
-                return {
-                  text: JSON.stringify({
-                    success: last?.success ?? false,
-                    verified: last?.verified ?? false,
-                    steps: last?.steps?.length ?? 0,
-                    duration: `${((Date.now() - start) / 1000).toFixed(1)}s`,
-                    lastAction: last?.steps?.slice(-1)?.[0]?.description ?? '(unknown)',
-                  }, null, 2),
-                };
-              }
-            } catch { /* keep polling */ }
-          }
-          await mcpCall('abort_task').catch(() => {});
-          return { text: `Agent timed out after ${timeout ?? 300}s. Task aborted.`, isError: true };
+          const result = await ctx.agent.executeTask(String(task ?? ''));
+          return {
+            text: JSON.stringify({
+              success: result.success,
+              steps: result.steps?.length ?? 0,
+              duration: `${((result.duration ?? 0) / 1000).toFixed(1)}s`,
+              lastAction: result.steps?.slice(-1)?.[0]?.description ?? '(unknown)',
+            }, null, 2),
+            isError: !result.success,
+          };
         } catch (err: any) {
-          if (err?.status) return { text: err.message, isError: true };
-          return { text: formatAgentError(err), isError: true };
+          return { text: `delegate_to_agent: ${err?.message ?? String(err)}`, isError: true };
         }
       },
     },
