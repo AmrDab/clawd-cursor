@@ -20,7 +20,7 @@
  *  9. Terminal actions (done/give_up/cannot_read) carry stop:true + correct terminalExit
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // ── Mock heavy native deps BEFORE any imports ────────────────────────────────
 
@@ -394,7 +394,6 @@ describe('6. resolveAgentPid — active-window pid fallback', () => {
       bounds: { x: 0, y: 0, width: 1920, height: 1080 },
     });
     const tools = buildUnifiedTools();
-    const invokeTool = findTool(tools, 'invoke_element');
     // Note: invoke_element does NOT call resolveAgentPid (uses processId from args directly)
     // But a11y_expand DOES use resolveAgentPid
     const expandTool = findTool(tools, 'a11y_expand');

@@ -2,6 +2,13 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.0.1] - 2026-06-06 — first npm publish + code-scanning cleanup
+
+- First v1.x release published to the npm registry (`npm i -g clawdcursor`).
+- Cleaned 4 CodeQL `js/unused-local-variable` notes (dead `shotToBlock` helper in
+  agent.ts, unused `beforeEach`/`invokeTool` in the characterization test, unused
+  `STEPS` const in scripts/measure-batch-tokens.ts). No behavior change.
+
 ## [1.0.0] - 2026-06-06 — toolbox-first: pipeline removed, tools unified, thin agent loop
 
 > **Breaking (major).** clawdcursor is now a desktop MCP **toolbox** for any agent, plus a thin *optional* autonomous loop. The autonomous morph pipeline (router → blind/hybrid/vision, decompose, verify, reflector) is gone — a capable model is its own pipeline. The `task` tool still hands a whole task to a cheaper configured model that "takes the wheel"; 4 pipeline-introspection tools were removed (catalog 98 → 94).

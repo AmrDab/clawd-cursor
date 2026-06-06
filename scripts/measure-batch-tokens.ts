@@ -30,7 +30,6 @@ const BATCH_OUT_PER_STEP = 18;// generating one step of the list
 const TRACE_PER_STEP = 35;    // one line of the batch result trace (perception FILTERED to a summary)
 
 // A representative perceive→act task: open app, then (perceive form, type field)×3, then send.
-const STEPS = ['act', 'perceive', 'act', 'perceive', 'act', 'perceive', 'act', 'act'] as const;
 
 function perCall(steps: readonly string[], catalog: number) {
   let input = 0, output = 0, history = 0;

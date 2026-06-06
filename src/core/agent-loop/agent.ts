@@ -788,13 +788,6 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
 }
 
-function shotToBlock(shot: ScreenshotResult): LLMUserBlock {
-  return {
-    type: 'image',
-    source: { type: 'base64', media_type: 'image/png', data: shot.buffer.toString('base64') },
-  };
-}
-
 function shotToInnerBlock(shot: ScreenshotResult): { type: 'image'; source: { type: 'base64'; media_type: string; data: string } } {
   return {
     type: 'image',
