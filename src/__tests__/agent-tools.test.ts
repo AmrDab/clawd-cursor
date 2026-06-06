@@ -291,45 +291,4 @@ describe('extras — daemon diagnostics', () => {
     expect(JSON.parse(result.text)).toHaveLength(10);
   });
 
-  it('learn_app rejects missing processName', async () => {
-    const result = await findTool(tools, 'learn_app').handler({}, makeCtx());
-    expect(result.isError).toBe(true);
-    expect(result.text).toMatch(/processName/);
-  });
-
-  it('learn_app returns the resolved app key in the success payload', async () => {
-    // Supply a real lesson payload so the handler has something to persist.
-    // Previously this test passed only `processName` and asserted
-    // `saved: true` — that masked the silent no-op bug fixed in 0.9.3
-    // (the handler returned saved:true even when nothing was written).
-    const result = await findTool(tools, 'learn_app').handler(
-      {
-        processName: 'EXCEL',
-        // `task` is a direct string parameter on the schema, not `taskJson`.
-        // `actionsJson` IS the JSON-string convention.
-        task: 'format cells',
-        actionsJson: JSON.stringify([{ action: 'click', description: 'Home tab' }]),
-      },
-      makeCtx(),
-    );
-    expect(result.isError).toBeFalsy();
-    const payload = JSON.parse(result.text);
-    expect(payload.saved).toBe(true);
-    expect(payload.processName).toBe('EXCEL');
-    expect(payload.app).toBe('excel'); // detectApp lower-cased it via TITLE_FALLBACKS
-    expect(payload.wrote?.lesson).toBe(true);
-  });
-
-  it('learn_app returns saved:false + reason when no writable payload is supplied', async () => {
-    // Regression guard for the silent no-op bug fixed in 0.9.3.
-    const result = await findTool(tools, 'learn_app').handler(
-      { processName: 'EXCEL' },
-      makeCtx(),
-    );
-    expect(result.isError).toBe(true);
-    const payload = JSON.parse(result.text);
-    expect(payload.saved).toBe(false);
-    expect(payload.reason).toMatch(/no writable payload/);
-    expect(payload.app).toBe('excel');
-  });
 });

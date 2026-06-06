@@ -886,40 +886,6 @@
       "costClass": "act"
     },
     {
-      "name": "learn_app",
-      "description": "Persist a newly-learned workflow, shortcut, or tip for an app into the local guides registry. Supports merging shortcut maps and tip lists into the existing guide JSON. Use this at the end of a successful exploration so future runs can short-circuit the same task.",
-      "category": "orchestration",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "processName": {
-            "type": "string",
-            "description": "Process / app name (matches an existing guide JSON file)"
-          },
-          "task": {
-            "type": "string",
-            "description": "Optional task description that was learned"
-          },
-          "actionsJson": {
-            "type": "string",
-            "description": "Optional JSON array of {action, …} steps that achieved the task"
-          },
-          "shortcutsJson": {
-            "type": "string",
-            "description": "Optional JSON object of { name: keystroke } shortcut additions"
-          },
-          "tipsJson": {
-            "type": "string",
-            "description": "Optional JSON array of free-text tips"
-          }
-        },
-        "required": [
-          "processName"
-        ]
-      },
-      "costClass": "perceive-text"
-    },
-    {
       "name": "list_displays",
       "description": "Enumerate connected displays with logical bounds + DPI ratio. Use before display-specific screenshots.",
       "category": "window",

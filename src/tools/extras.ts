@@ -20,7 +20,6 @@
  */
 
 import type { ToolDefinition } from './types';
-import { saveLearnedLesson, mergeIntoUserGuide, resolveAppKey } from '../llm/knowledge/loader';
 
 function notSupported(tool: string): { text: string; isError: true } {
   return {
@@ -864,110 +863,5 @@ export function getExtraTools(): ToolDefinition[] {
       },
     },
 
-    {
-      name: 'learn_app',
-      description:
-        'Persist a newly-learned workflow, shortcut, or tip for an app into ' +
-        'the local guides registry. Supports merging shortcut maps and tip ' +
-        'lists into the existing guide JSON. Use this at the end of a ' +
-        'successful exploration so future runs can short-circuit the same task.',
-      parameters: {
-        processName: {
-          type: 'string',
-          description: 'Process / app name (matches an existing guide JSON file)',
-          required: true,
-        },
-        task: {
-          type: 'string',
-          description: 'Optional task description that was learned',
-          required: false,
-        },
-        actionsJson: {
-          type: 'string',
-          description: 'Optional JSON array of {action, …} steps that achieved the task',
-          required: false,
-        },
-        shortcutsJson: {
-          type: 'string',
-          description: 'Optional JSON object of { name: keystroke } shortcut additions',
-          required: false,
-        },
-        tipsJson: {
-          type: 'string',
-          description: 'Optional JSON array of free-text tips',
-          required: false,
-        },
-      },
-      category: 'orchestration',
-      compactGroup: 'system',
-      safetyTier: 2,
-      handler: async ({ processName, task, actionsJson, shortcutsJson, tipsJson }) => {
-        try {
-          if (!processName || typeof processName !== 'string') {
-            return { text: 'learn_app: processName is required', isError: true };
-          }
-          const parseSafe = (raw: unknown): unknown => {
-            if (typeof raw !== 'string' || !raw.trim()) return undefined;
-            try { return JSON.parse(raw); } catch { return undefined; }
-          };
-          const actions   = parseSafe(actionsJson);
-          const shortcuts = parseSafe(shortcutsJson);
-          const tips      = parseSafe(tipsJson);
-
-          // Writes go through the live loader → user-override dir
-          // (`~/.clawdcursor/ui-knowledge/{app}.json`). The bundled source
-          // tree is never modified. detectApp resolves "EXCEL"/"winword"/etc.
-          // to the canonical app key so writes don't fork the filename space.
-          //
-          // Track what we actually wrote so the response can't claim
-          // `saved: true` when the caller passed only `processName` (or
-          // only invalid JSON in the *Json fields) and both branches
-          // skipped — the previous shape lied silently in that case.
-          const wroteLesson = typeof task === 'string' && !!task && Array.isArray(actions);
-          const wroteGuide = !!(shortcuts || tips);
-          if (wroteLesson) {
-            saveLearnedLesson(
-              processName,
-              task as string,
-              actions as Array<{ action: string; description?: string }>,
-            );
-          }
-          if (wroteGuide) {
-            mergeIntoUserGuide(processName, {
-              shortcuts: shortcuts && typeof shortcuts === 'object'
-                ? shortcuts as Record<string, string>
-                : undefined,
-              tips: Array.isArray(tips) ? tips as string[] : undefined,
-            });
-          }
-
-          if (!wroteLesson && !wroteGuide) {
-            return {
-              text: JSON.stringify({
-                saved: false,
-                processName,
-                app: resolveAppKey(processName),
-                reason: 'no writable payload — supply taskJson+actionsJson (lesson) and/or shortcutsJson/tipsJson (guide overrides)',
-              }),
-              isError: true,
-            };
-          }
-
-          return {
-            text: JSON.stringify({
-              saved: true,
-              processName,
-              app: resolveAppKey(processName),
-              wrote: {
-                lesson: wroteLesson,
-                guide: wroteGuide,
-              },
-            }),
-          };
-        } catch (err) {
-          return { text: `learn_app: ${(err as Error).message}`, isError: true };
-        }
-      },
-    },
   ];
 }
