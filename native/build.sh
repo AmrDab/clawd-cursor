@@ -98,11 +98,16 @@ if [[ -n "$CLAWDCURSOR_SIGN_IDENTITY" ]]; then
         "ClawdCursor.app"
     echo "✅ Signed with Developer ID"
 else
-    # Ad-hoc sign by default — CRITICAL for TCC to recognize the app
+    # Ad-hoc sign by default — CRITICAL for TCC to recognize the app.
+    # NOTE: do NOT use --options runtime (hardened runtime) on the ad-hoc build.
+    # It makes macOS evaluate the helper's Screen-Recording TCC by its OWN
+    # identity (com.clawdcursor.helper) instead of letting it inherit the
+    # daemon host's grant — so a daemon-spawned screenshot-helper is denied and
+    # silently falls back to nut-js (#149). Hardened runtime is only needed on
+    # the Developer-ID/notarized branch above.
     echo "🔐 Ad-hoc signing (required for TCC permissions)..."
     if [ -f "entitlements.plist" ]; then
         codesign --sign - \
-            --options runtime \
             --entitlements entitlements.plist \
             --force \
             --deep \
