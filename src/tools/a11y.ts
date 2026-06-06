@@ -138,7 +138,7 @@ export function getA11yTools(): ToolDefinition[] {
   return [
     {
       name: 'read_screen',
-      description: 'Read the accessibility tree of the screen. Returns structured text showing: WINDOWS, FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT (keyboard focus). When the focused window is a browser with CDP attached, also appends a BROWSER DOM section with interactive page elements (UIA stops at chrome — this is how to see canvas / SPA content). Fast, small, and structured — prefer this over screenshots.',
+      description: 'START HERE — cheapest perception. Read the accessibility tree of the screen: returns WINDOWS, FOCUSED WINDOW UI TREE (buttons, inputs, text elements with coordinates), and FOCUSED ELEMENT. If the focused window is a browser with CDP attached, also appends a BROWSER DOM section for canvas/SPA content. Fast, structured, no image bytes — always prefer this over OCR or screenshots. Only escalate to ocr_read_screen when this tree is empty or sparse.',
       parameters: {
         processId: { type: 'number', description: 'Focus on a specific process ID (optional — reads foreground window by default)', required: false },
       },

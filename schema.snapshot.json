@@ -517,7 +517,7 @@
     },
     {
       "name": "desktop_screenshot",
-      "description": "Take a screenshot of the entire screen, resized to 1280px wide. Returns the image and scale metadata. Use read_screen (accessibility tree) first — only screenshot when you need visual confirmation.",
+      "description": "LAST RESORT — take a screenshot only when the accessibility tree and OCR are both insufficient (custom canvas, icon-only UI, pixel-level verification). Prefer read_screen first, then ocr_read_screen; escalate to screenshot only when those fail. Returns the image resized to 1280px wide.",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -1360,7 +1360,7 @@
     },
     {
       "name": "ocr_read_screen",
-      "description": "Read all text on screen using OS-level OCR. Returns text elements with pixel coordinates (bounding boxes). Much cheaper than a screenshot — use this to find text, buttons, labels, and their positions. Coordinates are in real screen pixels.",
+      "description": "Step 2 of cheap-first perception: use when the a11y tree (read_screen) is empty or too sparse to identify your target. OS-level OCR returns text elements with pixel coordinates — no image bytes, no vision model. Much cheaper than a screenshot. Coordinates are in real screen pixels.",
       "category": "perception",
       "parameters": {
         "type": "object",
@@ -1452,7 +1452,7 @@
     },
     {
       "name": "read_screen",
-      "description": "Refresh the accessibility snapshot of the focused window (already attached each turn — call this only if you suspect staleness).",
+      "description": "START HERE — cheapest perception. Read the accessibility tree of the focused window: buttons, inputs, text elements with coordinates. The snapshot is auto-attached each turn; call this again only when you expect the screen changed since the last turn. If the tree is empty, escalate to read_text (OCR) next, then screenshot only as a last resort.",
       "category": "perception",
       "parameters": {
         "type": "object",

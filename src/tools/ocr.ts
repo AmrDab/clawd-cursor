@@ -21,7 +21,7 @@ export function getOcrTools(): ToolDefinition[] {
     {
       name: 'ocr_read_screen',
       description:
-        'Read all text on screen using OS-level OCR. Returns text elements with pixel coordinates (bounding boxes). Much cheaper than a screenshot — use this to find text, buttons, labels, and their positions. Coordinates are in real screen pixels.',
+        'Step 2 of cheap-first perception: use when the a11y tree (read_screen) is empty or too sparse to identify your target. OS-level OCR returns text elements with pixel coordinates — no image bytes, no vision model. Much cheaper than a screenshot. Coordinates are in real screen pixels.',
       parameters: {},
       category: 'perception',
       compactGroup: 'system',

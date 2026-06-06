@@ -101,7 +101,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
     // ─── PERCEPTION ─────────────────────────────────────────────
     {
       name: 'read_screen',
-      description: 'Refresh the accessibility snapshot of the focused window (already attached each turn — call this only if you suspect staleness).',
+      description: 'START HERE — cheapest perception. Read the accessibility tree of the focused window: buttons, inputs, text elements with coordinates. The snapshot is auto-attached each turn; call this again only when you expect the screen changed since the last turn. If the tree is empty, escalate to read_text (OCR) next, then screenshot only as a last resort.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1268,7 +1268,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
     // ─── VISION (hybrid + vision modes only) ────────────────────
     {
       name: 'screenshot',
-      description: 'Take a screenshot to inspect pixels. Expensive — use only when a11y is insufficient (custom canvas, icon-only UI, verification after action).',
+      description: 'LAST RESORT — expensive: sends image bytes into LLM context. Escalation order: read_screen (a11y tree, free) → read_text (OCR, cheap) → screenshot (this, expensive). Only call this when both a11y and OCR failed to provide what you need (canvas-only app, icon-only UI, pixel-level verification).',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       changesScreen: false,
       async execute(_args, ctx) {

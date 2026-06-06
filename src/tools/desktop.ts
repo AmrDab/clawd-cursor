@@ -42,7 +42,7 @@ export function getDesktopTools(): ToolDefinition[] {
 
     {
       name: 'desktop_screenshot',
-      description: 'Take a screenshot of the entire screen, resized to 1280px wide. Returns the image and scale metadata. Use read_screen (accessibility tree) first — only screenshot when you need visual confirmation.',
+      description: 'LAST RESORT — take a screenshot only when the accessibility tree and OCR are both insufficient (custom canvas, icon-only UI, pixel-level verification). Prefer read_screen first, then ocr_read_screen; escalate to screenshot only when those fail. Returns the image resized to 1280px wide.',
       parameters: {},
       category: 'perception',
       compactGroup: 'computer',
