@@ -105,6 +105,10 @@ export interface AgentToolContext {
    *  dedicated, agent-owned browser instance via the DOM (selectors, not
    *  pixels). Null when the daemon didn't wire CDP. Tools degrade to OCR. */
   cdp?: CDPDriver | null;
+  /** Test-only platform override consumed by imageScale() (defaults to
+   *  process.platform in production). Lets coordinate-scaling tests pin the
+   *  OS branch deterministically instead of depending on the CI runner's OS. */
+  _platform?: string;
 }
 
 /**

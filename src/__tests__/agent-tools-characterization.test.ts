@@ -75,6 +75,11 @@ function makeCtx(overrides: Partial<AgentToolContext> = {}): AgentToolContext {
     platform: makeMockPlatform(),
     task: 'test task',
     mode: 'blind',
+    // Pin a non-darwin platform so these GENERIC physical-scaling tests are
+    // deterministic on every CI runner. imageScale() uses LOGICAL width on
+    // darwin (#154) → scale 1.5 here, which broke these tests only on macOS.
+    // The darwin/logical path is covered separately in coord-scale.test.ts.
+    _platform: 'linux',
     screen: {
       logicalWidth: 1920,
       logicalHeight: 1080,
