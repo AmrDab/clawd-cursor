@@ -12,7 +12,7 @@
  */
 
 import type { PlatformAdapter } from '../../platform/types';
-import type { Snapshot, SnapshotElement, Platform } from '../pipeline-types';
+import type { Snapshot, SnapshotElement, Platform } from './types';
 import { fingerprint } from './fingerprint';
 
 function normPlatform(p: 'darwin' | 'win32' | 'linux'): Platform {

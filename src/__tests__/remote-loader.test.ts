@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { DEFAULT_REGISTRY_URL, fetchGuide, fetchIndex } from '../llm/knowledge/remote-loader';
 import { clearCache as clearGuideCache, getCached } from '../llm/knowledge/cache';
-import type { AppGuide } from '../core/pipeline-types';
+import type { AppGuide } from '../llm/knowledge/types';
 
 const goodGuide: AppGuide = { app: 'reddit', name: 'Reddit', shortcuts: { search: '/' } };
 const poisonedGuide = {

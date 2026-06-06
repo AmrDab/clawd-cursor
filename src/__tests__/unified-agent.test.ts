@@ -16,7 +16,7 @@ import {
 } from '../core/agent-loop/prompt';
 import { rankElements, scoreElement } from '../core/sense/rank';
 import { tryParseProseToolCall } from '../llm/client';
-import type { Snapshot, SnapshotElement } from '../core/pipeline-types';
+import type { Snapshot, SnapshotElement } from '../core/sense/types';
 
 function mkSnapshot(elements: Partial<SnapshotElement>[] = []): Snapshot {
   return {

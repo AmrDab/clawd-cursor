@@ -12,7 +12,7 @@
  */
 
 import * as crypto from 'crypto';
-import type { SnapshotElement } from '../pipeline-types';
+import type { SnapshotElement } from './types';
 
 /**
  * Produce a deterministic short hash of the screen state.

@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { AppGuide, AppWorkflow } from '../../core/pipeline-types';
+import type { AppGuide, AppWorkflow } from './types';
 import { detectApp } from './domain-map';
 import { getCached, touchUsage } from './cache';
 import { fetchGuide } from './remote-loader';

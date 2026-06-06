@@ -32,7 +32,7 @@
  * contract every Windows/macOS/Linux UI toolkit does.
  */
 
-import type { SnapshotElement } from '../pipeline-types';
+import type { SnapshotElement } from './types';
 
 /**
  * Score weights. Tuned to be monotonic: the sum for a typical interactive

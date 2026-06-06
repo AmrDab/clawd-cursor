@@ -10,7 +10,7 @@ import * as os from 'os';
 import {
   getCached, setCached, touchUsage, listCached, evict, clearCache, CACHE_INTERNALS,
 } from '../llm/knowledge/cache';
-import type { AppGuide } from '../core/pipeline-types';
+import type { AppGuide } from '../llm/knowledge/types';
 
 const sampleGuide = (app: string): AppGuide => ({
   app,

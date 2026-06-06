@@ -10,7 +10,7 @@ import {
   resolveById,
 } from '../core/sense/a11y-resolver';
 import { fingerprint, FingerprintHistory } from '../core/sense/fingerprint';
-import type { SnapshotElement } from '../core/pipeline-types';
+import type { SnapshotElement } from '../core/sense/types';
 
 describe('a11y-resolver bounds sanity', () => {
   it('accepts normal bounds', () => {

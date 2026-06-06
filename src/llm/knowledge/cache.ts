@@ -26,7 +26,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { AppGuide } from '../../core/pipeline-types';
+import type { AppGuide } from './types';
 
 const TTL_MS         = 7 * 24 * 60 * 60 * 1000; // 7 days
 const LRU_CAPACITY   = 50;                       // entries

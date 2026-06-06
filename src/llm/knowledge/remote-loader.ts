@@ -44,7 +44,7 @@
 
 import { lintGuide } from './guide-linter';
 import { getCached, setCached, touchUsage } from './cache';
-import type { AppGuide } from '../../core/pipeline-types';
+import type { AppGuide } from './types';
 
 export const DEFAULT_REGISTRY_URL = 'https://clawdcursor.com/app-guides';
 const DEFAULT_TIMEOUT_MS = 4000;

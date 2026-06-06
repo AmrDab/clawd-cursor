@@ -22,7 +22,7 @@
  * regex lists, not the dispatch logic.
  */
 
-import type { AppGuide } from '../../core/pipeline-types';
+import type { AppGuide } from './types';
 
 export type LintSeverity = 'error' | 'warning';
 

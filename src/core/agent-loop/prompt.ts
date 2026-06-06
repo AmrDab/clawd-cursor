@@ -17,7 +17,7 @@
  */
 
 import type { AgentMode, AgentStep } from './types';
-import type { Snapshot, SnapshotElement } from '../pipeline-types';
+import type { Snapshot, SnapshotElement } from '../sense/types';
 import { rankElements } from '../sense/rank';
 
 /**
