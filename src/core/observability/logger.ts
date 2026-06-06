@@ -214,6 +214,27 @@ function mapStrategyTag(strategy: string): { label: string; color: Style } {
   }
 }
 
+/**
+ * Observe-vs-act badge derived from a tool's cost class (+ name for the
+ * a11y / OCR / DOM split). Rendered on each tool-call line so the reader can
+ * watch the cheap-first ladder happen: WHEN the agent read the screen and HOW
+ * — `obs·a11y` (accessibility tree), `obs·ocr` (OCR), `obs·dom` (browser DOM),
+ * `obs·vision` (screenshot) — vs WHEN it `act`ed on it. `null` ⇒ no badge
+ * (terminal/control verbs like `done`, which carry no cost class).
+ */
+function observeActBadge(costClass: string, tool: string): { label: string; color: Style } | null {
+  switch (costClass) {
+    case 'act':     return { label: 'act',      color: C.blue };
+    case 'inspect': return { label: 'obs·a11y', color: C.green };
+    case 'perceive-text':
+      if (/ocr/i.test(tool))             return { label: 'obs·ocr', color: C.yellow };
+      if (/cdp|dom|browser/i.test(tool)) return { label: 'obs·dom', color: C.cyan };
+      return { label: 'obs·a11y', color: C.green };
+    case 'perceive-image': return { label: 'obs·vision', color: C.magenta };
+    default: return null;
+  }
+}
+
 function colorize(text: string, color: Style): string {
   return color(text);
 }
@@ -420,7 +441,11 @@ function prettyEmit(level: Level, event: string, meta?: Record<string, unknown>)
       ? ` ${colorize(`· safety=${safety.decision}(${safety.tier})`, C.red)}`
       : '';
     taskState.lastSafety = null;
-    writePrettyLine(`${tagStr} ${colorize('    →', C.cyan)} ${colorize(tool, C.bold)}(${argsStr})${safetyInline}`);
+    // Observe-vs-act badge so the cheap-first ladder is visible at a glance:
+    // which calls read the screen (a11y / OCR / DOM / vision) vs which act.
+    const badge = observeActBadge(String(meta?.costClass ?? ''), tool);
+    const badgeStr = badge ? colorize(pad(badge.label, 10), badge.color) : pad('', 10);
+    writePrettyLine(`${tagStr} ${colorize('    →', C.cyan)} ${badgeStr} ${colorize(tool, C.bold)}(${argsStr})${safetyInline}`);
     return;
   }
 

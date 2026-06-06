@@ -40,6 +40,7 @@ import {
 import { buildSystemPrompt, renderSnapshot, renderHistory, wrapUntrustedScreenContent } from './prompt';
 import { LLM_TARGET_WIDTH } from './coord-scale';
 import { buildUnifiedTools } from './tools';
+import { TOOL_META } from './tool-meta';
 import type {
   AgentInput,
   AgentLlmConfig,
@@ -548,7 +549,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         // a11y; coord-click as fallback" pattern while rejecting guesses.
         //
         // 5b. Log and execute.
-        log.info(EVENTS.AGENT_TOOL_CALL, { turn, tool: call.name, args: compactArgs(call.args) });
+        log.info(EVENTS.AGENT_TOOL_CALL, { turn, tool: call.name, args: compactArgs(call.args), costClass: TOOL_META[call.name]?.costClass });
         const toolStart = Date.now();
         const ctx: AgentToolContext = {
           platform: deps.adapter,
