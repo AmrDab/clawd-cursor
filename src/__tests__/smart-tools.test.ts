@@ -248,6 +248,16 @@ describe('Smart Tools', () => {
       expect(() => JSON.parse(result.text)).toThrow();
     });
 
+    it('accepts `name` as an alias for `target` (the rest of the a11y surface uses `name`)', async () => {
+      // Shipped in 704311a — without this test a regression deleting the alias
+      // would pass the whole suite silently.
+      mockInvokeElement.mockResolvedValue({ success: false });
+      const ctx = createCtx();
+      const result = await smartClick.handler({ name: 'Submit' }, ctx);
+      expect(result.isError).toBeUndefined();
+      expect(result.text).toMatch(/^Clicked "Submit"/);
+    });
+
     it('returns structured JSON with error: "deadline_exceeded" when the deadline fires', async () => {
       // Force both OCR and a11y invoke to outlast the 50ms deadline.
       // The OLD bare-Promise.race would have thrown a bare timeout and
@@ -270,7 +280,9 @@ describe('Smart Tools', () => {
       // instead use a target the OCR mock won't match so OCR returns null
       // quickly — what we're testing is the a11y branch overrunning the deadline.
       const result = await smartClick.handler(
-        { target: 'NeverGonnaMatchAnythingInOcr', timeout: 50 },
+        // 200ms deadline (was 50ms — too tight under CI event-loop jitter);
+        // still fires well before the 5000ms slow a11y invoke above.
+        { target: 'NeverGonnaMatchAnythingInOcr', timeout: 200 },
         ctx,
       );
       expect(result.isError).toBe(true);

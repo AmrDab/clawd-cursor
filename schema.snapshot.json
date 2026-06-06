@@ -1107,7 +1107,7 @@
           },
           "space": {
             "type": "string",
-            "description": "Coordinate space of the x/y you pass. \"screen\" (default) = accessibility-snapshot coords, already correct for the real screen. \"image\" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use \"image\" ONLY when the target is not in the a11y snapshot and you read it off the picture.",
+            "description": "Coordinate space. Omit (default) → image-space coords from the latest screenshot (scaled to physical pixels). Pass \"screen\" → a11y-snapshot coords (already physical, not scaled).",
             "enum": [
               "screen",
               "image"
@@ -1189,7 +1189,7 @@
           },
           "space": {
             "type": "string",
-            "description": "Coordinate space of the x/y you pass. \"screen\" (default) = accessibility-snapshot coords, already correct for the real screen. \"image\" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use \"image\" ONLY when the target is not in the a11y snapshot and you read it off the picture.",
+            "description": "Coordinate space. Omit (default) → image-space coords from the latest screenshot (scaled to physical pixels). Pass \"screen\" → a11y-snapshot coords (already physical, not scaled).",
             "enum": [
               "screen",
               "image"
@@ -1344,7 +1344,7 @@
           },
           "space": {
             "type": "string",
-            "description": "Coordinate space of the x/y you pass. \"screen\" (default) = accessibility-snapshot coords, already correct for the real screen. \"image\" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use \"image\" ONLY when the target is not in the a11y snapshot and you read it off the picture.",
+            "description": "Coordinate space. Omit (default) → image-space coords from the latest screenshot (scaled to physical pixels). Pass \"screen\" → a11y-snapshot coords (already physical, not scaled).",
             "enum": [
               "screen",
               "image"

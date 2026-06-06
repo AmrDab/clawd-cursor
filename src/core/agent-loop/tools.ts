@@ -177,6 +177,9 @@ export function buildUnifiedTools(
         const rawName = typeof args.name === 'string' ? args.name : '';
         const automationId = typeof args.automationId === 'string' ? args.automationId : undefined;
         const name = rawName || automationId || '';
+        if (!name) {
+          return { success: false, text: 'invoke_element: "name" or "automationId" is required (the accessibility name of the element to invoke).' };
+        }
         const controlType = typeof args.controlType === 'string' ? args.controlType : undefined;
         const processId = typeof args.processId === 'number' ? args.processId : undefined;
         const VALID_ACTIONS = ['click', 'set-value', 'get-value', 'focus', 'expand', 'collapse'] as const;

@@ -15,8 +15,10 @@ detection/reporting, automatic pid-scoping for a11y searches, the clipboard
 paste fast-path, and conditional coordinate scaling.
 
 - ~34 tools migrated (window, keyboard, mouse, a11y/perception, CDP). **Tool names
-  and parameters are backward-compatible — no renames** (the MCP catalog stays at
-  98 tools), so existing editor/agent permission allowlists keep working.
+  are unchanged — no renames** (the MCP catalog stays at 98 tools), so existing
+  editor/agent permission allowlists keep working. Parameters are backward-compatible
+  with one exception: `mouse_drag` drops the `x1/y1/x2/y2` convenience aliases (use the
+  canonical `startX/startY/endX/endY`, which are unchanged).
 - Tools where System A is richer or unique are **kept on System A**: `ocr_read_screen`
   (structured `elements[]`+bounds output), `smart_*`, `find_element`,
   `navigate_browser` (the browser *launcher*), `cdp_evaluate/select/wait/tabs/scroll`,
@@ -36,7 +38,7 @@ paste fast-path, and conditional coordinate scaling.
   (without it the `.app` is an invalid, unsignable bundle) and `entitlements.plist` no
   longer contains XML comments that `codesign`'s AMFI parser rejects. Unblocks the
   signed-bundle path that TCC (Accessibility / Screen Recording) and #149 depend on.
-  *(Authored on Windows — needs a macOS `./build.sh` + screenshot smoke test to confirm.)*
+  (Final macOS sign/run verification is tracked in #150 / #149.)
 - **Compact-surface friction:** native-name aliases stop the MCP validator from
   silently dropping a correctly-intended arg; a central required-arg guard converts the
   crash-on-undefined class into actionable errors; `open_app`/`open_file`/`open_url` are

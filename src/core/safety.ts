@@ -193,7 +193,7 @@ const TOOL_TIER: Record<string, Tier> = {
   'smart_click': 'input',
   'invoke_element': 'input',
   'key_press': 'input',
-  'write_clipboard': 'input',
+  'write_clipboard': 'destructive',  // matches its declared safetyTier:2 (overwrites the user's clipboard); the tool's own tier already wins, this keeps the fallback consistent
   'cdp_click': 'input',
   'cdp_type': 'input',
   'cdp_select_option': 'input',

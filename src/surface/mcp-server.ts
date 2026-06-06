@@ -118,7 +118,16 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
         if (safetyError) {
           return { content: [{ type: 'text', text: safetyError.text }], isError: true };
         }
-        const result = await tool.handler(params, ctx);
+        let result;
+        try {
+          result = await tool.handler(params, ctx);
+        } catch (err: any) {
+          // A handler throw (e.g. projected tools' toolContextToAgent when the
+          // platform adapter failed to init) must NOT propagate to the MCP SDK
+          // — in stdio mode an unhandled rejection can corrupt the JSON-RPC
+          // stream. Convert to a clean isError result.
+          return { content: [{ type: 'text', text: `${tool.name}: ${err?.message ?? String(err)}` }], isError: true };
+        }
         const content: any[] = [];
         if (result.image) {
           content.push({ type: 'image', data: result.image.data, mimeType: result.image.mimeType });

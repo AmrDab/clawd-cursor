@@ -167,8 +167,28 @@ function projectedMouseTools(): ToolDefinition[] {
     .map(t => {
       const base = projectToToolDefinition(t);
 
+      // mouse_move_relative: System A scaled dx/dy by the DPI factor; System B
+      // passes them raw. Restore the scaling on the MCP surface so relative
+      // moves don't undershoot 2-3x on HiDPI/retina screens. MCP-only — the
+      // internal agent keeps System B's raw behavior.
+      if (t.name === 'mouse_move_relative') {
+        const sysBHandler = base.handler;
+        return {
+          ...base,
+          handler: (params: Record<string, unknown>, ctx: ToolContext) => {
+            const sf = ctx.getMouseScaleFactor();
+            const dx = Number(params.dx);
+            const dy = Number(params.dy);
+            const scaled = { ...params };
+            if (Number.isFinite(dx)) scaled.dx = Math.round(dx * sf);
+            if (Number.isFinite(dy)) scaled.dy = Math.round(dy * sf);
+            return sysBHandler(scaled, ctx);
+          },
+        };
+      }
+
       if (!COORD_SENSITIVE_SYSB_NAMES.has(t.name)) {
-        // mouse_move_relative, mouse_down, mouse_up — no coord-space concern.
+        // mouse_down, mouse_up — button-only, no coords to scale.
         return base;
       }
 
@@ -176,9 +196,17 @@ function projectedMouseTools(): ToolDefinition[] {
       // to 'image' (image-space scaling) rather than System B's 'screen' default.
       // This keeps every existing external MCP caller unaffected — they never
       // pass `space` and expect their screenshot coords to be scaled.
-      //
       // When a caller explicitly passes `space:'screen'` (a11y-sourced coords),
-      // they now get pass-through — the intended double-scale bug fix.
+      // they get pass-through — the intended double-scale bug fix.
+      //
+      // Correct the published `space` description too: System B's own schema
+      // text says "screen (default)", which is the INTERNAL default and the
+      // opposite of the MCP projection's default (image). An agent reading the
+      // MCP schema must see the accurate contract or it double-scales a11y coords.
+      if (base.parameters.space) {
+        base.parameters.space.description =
+          'Coordinate space. Omit (default) → image-space coords from the latest screenshot (scaled to physical pixels). Pass "screen" → a11y-snapshot coords (already physical, not scaled).';
+      }
       const sysBHandler = base.handler;
       return {
         ...base,
