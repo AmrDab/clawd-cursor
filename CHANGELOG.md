@@ -2,7 +2,20 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
-## [Unreleased] — v2 — pipeline removal + toolbox + thin agent loop
+## [2.0.0] - 2026-06-06 — toolbox-first: pipeline removed, tools unified, thin agent loop
+
+> **Breaking (major).** clawdcursor is now a desktop MCP **toolbox** for any agent, plus a thin *optional* autonomous loop. The autonomous morph pipeline (router → blind/hybrid/vision, decompose, verify, reflector) is gone — a capable model is its own pipeline. The `task` tool still hands a whole task to a cheaper configured model that "takes the wheel"; 4 pipeline-introspection tools were removed (catalog 98 → 94).
+
+### macOS
+
+- **#154 (HiDPI/Retina mouse):** clicks/drags/moves no longer land ~2× off-target — mouse coords now map image-space → **logical** points on macOS (nut-js drives in logical points), physical on Windows/Linux. *(Correct by construction; needs real-Mac verification.)*
+- **#150 / #151:** native helper bundle is signable (Info.plist generated, comment-free entitlements) and the mac/linux runtime scripts ship in the package. *(Confirmed on a real Mac, macOS 26.)*
+- **#149:** screenshot helper inherits the daemon's Screen-Recording grant — ad-hoc signing no longer uses hardened runtime. *(Pending real-Mac re-verification.)*
+- `window focus` by `processId` / `processName` now works on macOS (the JXA flag names were wrong).
+
+### Perception — cheap-first guidance made explicit
+
+The MCP connect-time instructions and tool descriptions now spell out the escalation: read the accessibility tree first → OCR when the tree is empty/sparse → screenshot only as a last resort; prefer named-target actions over pixel coordinates. Every tool also carries a `[act] < [inspect] < [perceive-text] < [perceive-image]` cost-class prefix.
 
 ### Removed — autonomous pipeline cluster (~13,000 LOC)
 
@@ -54,7 +67,7 @@ without executing. The efficiency lever for a driving agent: N calls → 1.
 
 ---
 
-## [Unreleased] — v2 — tool-unification migration
+### Tool-unification migration (also part of 2.0.0)
 
 ### Changed — one tool implementation, used everywhere
 
