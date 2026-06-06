@@ -8,8 +8,8 @@
  * that drive ladder escalation:
  *
  *   - happy path: model returns one tool call, then `done`
- *   - stagnation: STAGNATION_HARD_LIMIT consecutive stale-fingerprint
- *                 turns → `exit: 'stagnation'`
+ *   - stagnation: a stale a11y fingerprint NUDGES, never aborts (v1.0.0
+ *                 removed the rung it used to escalate to)
  *   - no-tool-call loop: NO_TOOL_CALL_LIMIT consecutive turns where the
  *                        model produces text but no parseable tool
  *                        call → `exit: 'give_up'`
@@ -174,34 +174,38 @@ describe('runAgent — happy path', () => {
   });
 });
 
-describe('runAgent — stagnation exit', () => {
+describe('runAgent — stagnation is a nudge, not an abort', () => {
   beforeEach(() => {
     llmTurnQueue.length = 0;
   });
 
-  it('aborts with exit:"stagnation" when the fingerprint stays stale across STAGNATION_HARD_LIMIT consecutive turns', async () => {
-    // Every turn: key_press with a UNIQUE key value. Two properties
-    // matter:
+  it('does NOT abort when the a11y fingerprint stays stale across many turns (v1.0.0 removed the rung to escalate to)', async () => {
+    // Every turn: key_press with a UNIQUE key value. Two properties matter:
     //   1. Unique args each turn keeps the runaway guard (which counts
     //      identical-args repeats in the last 6 turns) below threshold.
     //   2. key_press is `changesScreen:true` so the loop re-snapshots
-    //      post-action and pushes the new fingerprint into FingerprintHistory.
-    //      Because the adapter stub returns IDENTICAL window/active/etc
-    //      state every call, the fingerprint is stable across turns and
-    //      `isStagnant(STAGNATION_WINDOW=3)` keeps firing; the counter
-    //      accumulates and `STAGNATION_HARD_LIMIT=5` trips the exit.
-    const keys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'F13', 'F14'];
+    //      post-action. The adapter stub returns IDENTICAL screen state every
+    //      call, so the a11y fingerprint never moves and `isStagnant` keeps
+    //      firing well past STAGNATION_HARD_LIMIT (5).
+    //
+    // Pre-v1.0.0 this hard-aborted with exit:'stagnation' to climb the
+    // pipeline ladder — but v1.0.0 deleted the ladder, and the a11y
+    // fingerprint is blind to sparse-a11y form apps (new Outlook) that are
+    // really progressing, so the abort killed winnable runs. Post-fix:
+    // stagnation only NUDGES; the agent keeps every turn and reaches done().
+    const keys = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10'];
     for (const key of keys) llmTurnQueue.push(turnCall('key', { key }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'completed the sequence' }));
 
     const result = await runAgent(
-      { task: 'pointless loop', maxTurns: 20 },
+      { task: 'long stagnant-but-progressing sequence', maxTurns: 20 },
       { adapter: makeAdapter(), llm: LLM_CONFIG },
     );
 
-    expect(result.exit).toBe('stagnation');
-    expect(result.success).toBe(false);
-    // We should have stopped well before maxTurns (20).
-    expect(result.steps.length).toBeLessThan(20);
+    // 10 stale-fingerprint turns (2× the old hard-abort limit) must NOT abort.
+    expect(result.exit).toBe('done');
+    expect(result.success).toBe(true);
+    expect(result.steps.length).toBeGreaterThan(5);
   });
 
   it('does NOT count pure-compute tools (build_uri, list_windows) toward stagnation', async () => {

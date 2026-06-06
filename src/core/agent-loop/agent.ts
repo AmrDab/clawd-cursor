@@ -66,15 +66,17 @@ const DEFAULT_MAX_TURNS = 70;
  */
 const STAGNATION_WINDOW = 3;
 /**
- * Number of consecutive turns where stagnation kept firing before we abort
- * the rung with `exit: 'stagnation'`. Triggers the pipeline ladder to
- * escalate to the next strategy (blind → hybrid → vision). The previous
- * behavior was warn-only, which let the agent keep typing into a stale
- * screen for the rest of its turn budget — exactly the "agent kept going
- * blind, called done() with hedged evidence" pattern observed live.
+ * Number of consecutive stagnant turns after which the stagnation NUDGE
+ * escalates from soft to firm (a stronger, method-switching reminder).
  *
- * Tuned conservatively (5) so a couple of legitimate stagnant turns —
- * waiting on a slow window, an a11y blip — don't trip it.
+ * This is NOT a task-kill. v1.0.0 removed the pipeline ladder, so there is
+ * no rung to "escalate" to — and the stagnation signal is the a11y/OCR
+ * fingerprint, which is structurally blind to sparse-a11y form apps (new
+ * Outlook / `olk`, web & canvas UIs) where the agent may still be making
+ * real progress. Aborting on it killed winnable runs. True stuck-loops are
+ * caught by the runaway guard (same tool+args repeated); genuine flailing is
+ * capped by max_turns. After a firm nudge the counter re-arms so the
+ * reminder recurs in waves rather than every turn.
  */
 const STAGNATION_HARD_LIMIT = 5;
 const MAX_HISTORY_SCREENSHOTS = 2;
@@ -143,11 +145,11 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
   let llmCalls = 0;
   let activeApp: string | undefined;
   /**
-   * Counts consecutive turns where stagnation fired. Reset to 0 when the
-   * fingerprint changes. When this hits `STAGNATION_HARD_LIMIT` the rung
-   * exits with `'stagnation'` so the pipeline ladder can climb. Without
-   * this, the agent kept looping on stale screens until max_turns and
-   * then fabricated `done()` evidence.
+   * Counts consecutive turns where stagnation fired (a11y fingerprint flat
+   * after a screen-changing action). Reset to 0 when the fingerprint moves —
+   * or after a firm nudge at `STAGNATION_HARD_LIMIT` (the nudge re-arms in
+   * waves; it does NOT abort the task). The runaway guard + max_turns are the
+   * terminators.
    */
   let consecutiveStagnantTurns = 0;
   /**
@@ -704,33 +706,37 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       }
       // else: neutral turn (compute-only tool) — leave the counter alone.
 
-      if (consecutiveStagnantTurns >= STAGNATION_HARD_LIMIT) {
-        log.warn(EVENTS.AGENT_STAGNATION, {
-          turn,
-          window: STAGNATION_WINDOW,
-          consecutiveStagnantTurns,
-          hardLimit: STAGNATION_HARD_LIMIT,
-          aborting: true,
-          fingerprint: fph.getHistory().slice(-1)[0],
-        });
-        return finish(
-          'stagnation',
-          `aborted: ${consecutiveStagnantTurns} consecutive turns with no screen change — escalating strategy`,
-          steps, llmCalls, screenshotsCaptured.n, startedAt,
-        );
-      }
-
+      // Stagnation in the thin loop is a NUDGE, never a task-kill. The old
+      // code here returned exit:'stagnation' to force the pipeline ladder to
+      // climb to a hybrid/vision rung — but v1.0.0 removed the ladder, so the
+      // abort just killed the task. Worse, the fingerprint is a11y/OCR
+      // STRUCTURE only (see fingerprint.ts) — it cannot see a sparse-a11y form
+      // app advancing (new Outlook / `olk`, web & canvas UIs). That false
+      // signal aborted the Outlook send-email run at turn 33 while it was
+      // genuinely progressing (focusing To, typing the recipient). Real stuck-
+      // loops (same tool+args repeated) are already caught by the runaway guard
+      // above; genuine flailing is capped by max_turns. So here we only
+      // ESCALATE the nudge — and steer toward the methods that work when the
+      // a11y tree is blind: keyboard-only navigation and focus verification.
       if (stagnant) {
+        const firm = consecutiveStagnantTurns >= STAGNATION_HARD_LIMIT;
         log.warn(EVENTS.AGENT_STAGNATION, {
           turn,
           window: STAGNATION_WINDOW,
           consecutiveStagnantTurns,
           fingerprint: fph.getHistory().slice(-1)[0],
+          ...(firm ? { firm: true } : {}),
         });
         nextBlocks.push({
           type: 'text',
-          text: `\n⚠ STAGNATION (${consecutiveStagnantTurns}/${STAGNATION_HARD_LIMIT}): the last ${STAGNATION_WINDOW} actions did not change the screen. Try a DIFFERENT approach (keyboard shortcut, different target, wait, list_windows to check focus) or give_up with a reason. Two more stagnant turns and this rung will abort and escalate.`,
+          text: firm
+            ? `\n⚠ STAGNATION (${consecutiveStagnantTurns} turns, no accessibility change). The screen may still be advancing — this app likely has a sparse a11y tree (new Outlook, web/canvas UIs), so trust a fresh screenshot/OCR over the a11y view. STOP repeating the last action. Switch to a FUNDAMENTALLY different method now: prefer keyboard-only flow (e.g. open a fresh compose, then the recipient field is focused — type it, Tab to the next field, type, Tab again, type the body), call focus_window first to confirm the right window is active, or give_up with a concrete reason if truly blocked.`
+            : `\n⚠ STAGNATION (${consecutiveStagnantTurns}/${STAGNATION_HARD_LIMIT}): the last ${STAGNATION_WINDOW} actions did not change the accessibility tree. Try a DIFFERENT approach (keyboard shortcut, Tab between fields, different target, focus_window to check the active window) — or, if the screen really is changing, verify with a screenshot. give_up if you're truly stuck.`,
         });
+        // Re-arm after a firm nudge so it recurs in waves (not every turn) and a
+        // later genuine change cleanly resets the cadence. max_turns + the
+        // runaway guard remain the actual terminators.
+        if (firm) consecutiveStagnantTurns = 0;
       }
 
       history.push({ role: 'user', content: nextBlocks });
