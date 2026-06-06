@@ -36,40 +36,24 @@ metadata:
     skill_dir: ~/.openclaw/workspace/skills/clawdcursor
 ---
 
-> **👋 If you are a human evaluating this project:** the file you actually
-> want is [`README.md`](README.md). This document is the AI-facing manual —
-> it's written *to* an LLM, in the second person, and it's dense on purpose.
-> The README is the human pitch with a hero GIF and a 5-minute quickstart.
+> **If you are a human:** see [`README.md`](README.md). This file is the AI-facing manual — dense on purpose.
 >
-> **If you are an LLM reading this: welcome. Keep going.**
+> **If you are an LLM: keep going.**
 
 ---
 
-> **USE AS A FALLBACK - NOT FIRST CHOICE**
+> **FALLBACK ONLY.** Check these first — they're cheaper, faster, more reliable:
+> 1. Native API (Gmail, GitHub, Slack, Stripe …) → use the API.
+> 2. CLI (`git`, `gh`, `aws`, `npm`, `curl`) → use the CLI.
+> 3. Direct file edit → do that.
+> 4. Existing browser automation (Playwright, Puppeteer) → use that.
 >
-> Before reaching for any clawdcursor tool, ask:
-> 1. Is there a native API? (Gmail API, GitHub API, Slack API, Stripe API) → **use the API.**
-> 2. Is there a CLI? (`git`, `gh`, `aws`, `npm`, `curl`) → **use the CLI.**
-> 3. Can you edit the file directly? → **do that.**
-> 4. Is there a browser automation already wired up (Playwright, Puppeteer) for this exact site? → **use that.**
->
-> **None of the above work? Now use clawdcursor.** It's for the last mile - when the only remaining surface is a GUI.
+> **None apply? Now use clawdcursor.** It's the last mile — when the only remaining surface is a GUI. If a human can do it on a screen, you can too.
 
-**Once you've ruled the better options out - confidence:** if a human can do it on a screen, you can too. No API? No integration? No problem.
-
-> **No task is impossible.** If the user has a GUI, a mouse, and a keyboard - you have everything you need. There is no "I can't do that in this app." There is only the right sequence of reads, clicks, keys, and waits to get it done. Clawdcursor gives you all of them.
-
-> **IMPORTANT - READ THIS BEFORE ANYTHING ELSE**
->
-> You have a desktop agent running on the user's machine. This means:
-> 1. You **CAN** open apps, click buttons, type text, fill forms.
-> 2. You **CAN** see what is on screen (a11y tree, OCR, screenshots).
-> 3. You **CAN** drive browsers, native apps, and system settings.
-> 4. You **MUST** respect safety tiers - Auto runs freely, Confirm requires user approval.
-> 5. You **MUST** ask the user before touching email, banking, messaging, or password managers.
-> 6. You **SHOULD** prefer direct tools (API, CLI, file edit) over GUI automation when available.
->
-> clawdcursor is your hands and eyes on the user's computer - used with their permission.
+> **Capabilities & rules:**
+> - CAN: open apps, click, type, fill forms, read the screen (a11y tree / OCR / screenshot), drive browsers and native apps.
+> - MUST: respect safety tiers (Auto = free, Confirm = ask user). Ask before touching email, banking, messaging, or password managers.
+> - clawdcursor is your hands and eyes on the user's machine — used with their permission.
 
 ---
 
@@ -94,28 +78,14 @@ task({"instruction": "send an email in Outlook to amy@x.com saying I'll be late"
 task({"instruction": "find the file README.md in Downloads and open it"})
 ```
 
-clawdcursor's built-in agent loop takes the wheel: it perceives the desktop,
-acts with the toolbox, and iterates until the task is done, then returns a trace.
+clawdcursor's built-in agent loop takes the wheel: it perceives the desktop, acts with the toolbox, and iterates until done, then returns a trace.
 
-**WHEN TO USE `task` vs. THE COMPOUND TOOLS — PICK ONE, NEVER BOTH:**
+**`task` vs. compound tools — pick one, never both:**
 
-- **You are an editor-host LLM** (Claude Code, Cursor, Windsurf, Zed, OpenClaw,
-  Claude Agent SDK, or anything else with its own agent loop): **DO NOT call
-  `task`.** Use the compound tools (`computer` / `accessibility` / `window` /
-  `system` / `browser`) directly. Calling `task` from inside an agent loop is
-  a loop-inside-a-loop — you pay for two models to plan the same work, and
-  the inner loop can't see your higher-level goal. The compound tools are
-  what you want.
+- **Editor-host LLM** (Claude Code, Cursor, Windsurf, Zed, OpenClaw, Claude Agent SDK — anything with its own agent loop): **use compound tools directly.** Calling `task` creates a loop-inside-a-loop; the inner loop can't see your higher-level goal and you pay for two models to plan the same work.
+- **External script / one-shot client with no agent loop** — or a frontier model delegating grunt work: `task({"instruction": "..."})` is what you want. clawdcursor reasons AND acts using the model configured via `clawdcursor doctor`.
 
-- **You are an external script / shell command / one-shot client without your
-  own agent loop** — or an expensive frontier model that wants to delegate grunt
-  work to clawdcursor's cheaper configured model: `task({"instruction": "..."})` is
-  exactly what you want. clawdcursor's thin agent loop takes the wheel, reasons
-  AND acts on your behalf using the model configured via `clawdcursor doctor`,
-  returns a trace. No external loop required.
-
-If you're unsure which you are: **you are almost certainly the first one.**
-Use the compound tools. `task` exists for the second case.
+**If unsure: you are almost certainly the first case. Use the compound tools.**
 
 ---
 
@@ -186,31 +156,14 @@ than the granular surface - so small models (Haiku, Kimi, Ollama) stay focused.
 
 ## When to reach for this skill
 
-Pick clawdcursor when the task requires a cursor and a keyboard on a real desktop. Concretely:
-
-- The user names an app, a window, or "my screen" - Outlook, Figma, Zoom, a PDF
-  they have open, a legacy enterprise tool with no REST endpoint.
+Use clawdcursor when:
+- The user names an app, window, or "my screen" (Outlook, Figma, Zoom, a legacy tool with no REST endpoint).
 - The task is "click / type / read / open / focus / drag" on something visible.
-- A web task needs to work without a Playwright script - drive the live browser
-  through the `browser` (CDP) compound.
-- A previous approach (API, CLI, file edit, direct HTTP) has already failed and
-  the only remaining surface is a GUI.
-- The user mentions a workflow a person would normally do by hand: "export this
-  report from Excel", "send this email through the GUI", "transfer text from
-  Notes to Slack".
+- A web task must work without a Playwright script — drive the live browser via the `browser` (CDP) compound.
+- A previous approach (API, CLI, file edit) already failed and the only remaining surface is a GUI.
+- The user describes a workflow done by hand: "export from Excel", "send via GUI", "copy text from Notes to Slack".
 
-## When NOT to use this skill
-
-**Always check these first** - they're cheaper, faster, and more reliable:
-
-1. Is there a native API? (Gmail API, GitHub API, Slack API, Stripe API) → **use the API.**
-2. Is there a CLI? (`git`, `gh`, `aws`, `npm`, `curl`, `sqlite3`) → **use the CLI.**
-3. Can you edit the file directly on disk? → **do that.**
-4. Is there a browser automation already wired up (Playwright, Puppeteer) for this exact site? → **use that.**
-
-If and only if none of those apply, use clawdcursor. It's the last mile.
-
-In OpenClaw terminology: clawdcursor is a **skill** (packaged workflow) that ultimately dispatches to **tools** (primitive API / CLI / GUI ops). Route API / CLI / file-edit tools first; reach for clawdcursor when only the GUI surface remains.
+In OpenClaw terminology: clawdcursor is a **skill** that dispatches to **tools** (API / CLI / GUI primitives). Route API / CLI / file-edit first; reach for clawdcursor only when the GUI surface is all that remains.
 
 ### ⚠️ Sensitive App Policy
 
@@ -237,8 +190,6 @@ clawdcursor exposes one protocol (**MCP**) over two transports. The daemon's beh
 | `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in thin agent loop | All of the above PLUS the autonomous task-handoff tool — named `task` on the compact surface, `submit_task` on granular — hand it a plain-English task |
 
 In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor's thin loop reasons AND acts — it perceives the desktop, selects tools, and iterates until done. Call `task` (compact) or `submit_task` (granular) with a natural-language instruction, then poll `agent_status`.
-
-The `start` and `serve` verbs from v0.8 still work as deprecation aliases (they print a warning and proxy to `agent`); they're scheduled for removal in v0.10.
 
 ---
 
@@ -274,7 +225,6 @@ The `start` and `serve` verbs from v0.8 still work as deprecation aliases (they 
 
 ```bash
 clawdcursor agent            # starts on http://127.0.0.1:3847; built-in agent lights up if an LLM is configured
-clawdcursor agent            # same daemon + the autonomous submit_task tool
 ```
 
 The HTTP transport uses **MCP's streamable-HTTP envelope** (JSON-RPC over POST), not REST. All requests go to a single endpoint, `POST /mcp`, with `Authorization: Bearer <token>` from `~/.clawdcursor/token`. Stateless mode - no session-init handshake required for one-shot calls.
@@ -312,19 +262,9 @@ clawdcursor agent
 # wait ~2s, then GET /health to confirm readiness
 ```
 
-### Autonomous-agent mode - `clawdcursor agent`
+### Autonomous-agent mode
 
-An alternative: let clawdcursor handle both the reasoning AND the acting. Run the daemon with an LLM configured (via `clawdcursor doctor`), then call the `submit_task` MCP tool with a natural-language task and poll `agent_status` for completion.
-
-```json
-{"name": "submit_task",  "arguments": {"task": "Open Chrome and go to github.com"}}
-{"name": "agent_status", "arguments": {}}    → {"status": "thinking" | "acting" | "idle", "lastResult": ...}
-{"name": "abort_task",   "arguments": {}}    → stop the current task
-```
-
-The built-in thin agent loop: the configured model perceives the desktop (a11y
-tree → OCR → screenshot as needed), selects and executes tools, and iterates
-until the task is done or the turn budget is exhausted.
+Configure an LLM via `clawdcursor doctor`, then use `submit_task` / `agent_status` / `abort_task` on the granular surface (or `task({...})` on the compact surface) to hand off a plain-English task. The built-in loop perceives the desktop (a11y → OCR → screenshot), acts, and iterates until done or the turn budget is exhausted. See the Modes table above.
 
 ---
 
@@ -358,35 +298,23 @@ Every GUI task follows the same shape regardless of surface:
 
 ## Execution playbook
 
-You drive the toolbox. Apply these rules in order — they encode the wisdom of what works cheapest first.
+You drive the toolbox. Apply these rules in order.
 
-### 1. Observe before you act
-Always read the current state before acting. In order of cost:
-- `accessibility({"action":"read_tree"})` — structured names, roles, bounds. **Start here.**
-- `system({"action":"ocr"})` — raw OS text extraction when the a11y tree is empty or sparse.
-- `computer({"action":"screenshot"})` — pixel image into LLM context. **Last resort — expensive.**
+### 1. Observe → prefer named targets → escalate only when needed
+- **Start:** `accessibility({"action":"read_tree"})` — structured names, roles, bounds.
+- **If sparse/empty:** `system({"action":"detect_webview"})` — Electron/WebView2 apps (Outlook, Teams, Discord, VS Code) render in Chromium; switch to `browser.*` via CDP.
+- **If still insufficient:** `system({"action":"ocr"})` → then `computer({"action":"screenshot"})` (last resort, expensive).
+- Canvas-only apps (Paint, Figma, games): skip a11y, go straight to screenshot + coord click.
+- Click/set by **name** (`accessibility invoke/set_value`) always beats raw pixel coords, which break on layout shifts or DPI changes.
 
-If the a11y tree is empty, check `system({"action":"detect_webview"})`. Electron / WebView2 apps (Outlook, Teams, Discord, VS Code) render inside Chromium — switch to `browser.*` via CDP for real DOM access.
-
-### 2. Prefer named targets over raw pixels
-- Click by name: `accessibility({"action":"invoke","name":"Send"})`. Most reliable.
-- Set a field by name: `accessibility({"action":"set_value","name":"Email","value":"x@y.com"})`.
-- Raw pixel coordinates (`computer({"action":"click","x":...,"y":...})`) are the last resort — they break when the layout shifts or DPI scaling changes.
-
-### 3. Escalate perception only when you must
-```
-a11y tree  →  (empty/sparse?)  →  OCR  →  (still insufficient?)  →  screenshot
-```
-Canvas-only apps (Paint, Figma, games) have no a11y tree. Go straight to screenshot + coord click for those.
-
-### 4. Verify after every consequential act
-Every send, save, delete, form submit needs a post-act check. Use the cheapest signal:
-1. Tool return value (check `isError`).
-2. `window({"action":"active"})` — did a dialog appear? Title change?
+### 2. Verify after every consequential act
+Every send, save, delete, or form submit needs a post-act check (cheapest first):
+1. Tool return value (`isError`).
+2. `window({"action":"active"})` — dialog appear? Title change?
 3. `accessibility({"action":"read_tree"})` — expected text visible?
 4. `computer({"action":"screenshot"})` — only when text signals fail.
 
-### 5. Use `batch` to collapse deterministic stretches into one call
+### 3. Use `batch` to collapse deterministic stretches into one call
 
 When you know the next N steps are deterministic (no branching, no state you need to inspect between steps), collapse them into a single `batch` call instead of N round-trips. Each step still routes through the same safety gate.
 
@@ -553,25 +481,19 @@ Per-OS setup notes:
 | Empty a11y tree on a *native-looking* app | It's probably **Electron or WebView2** - olk (New Outlook), Teams, Discord, Slack, VS Code, Notion, Obsidian all render inside Chromium. Call `system({"action":"detect_webview"})` to confirm, then `system({"action":"relaunch_with_cdp"})` to restart it on the debugging port clawdcursor expects (don't hand-pick a port — `connect` looks on a fixed port and a manual `--remote-debugging-port` will mismatch). Then attach via `browser({"action":"connect"})` and you get the full DOM. |
 | Empty a11y tree on a *truly* custom-canvas app | Real canvas apps (Paint, Figma, games). Escalate to `computer({"action":"screenshot"})` + coord clicks, or `system({"action":"ocr"})` to read visible text with bounds. |
 | "Element not found" on invoke | The element isn't on-screen or has no a11y name. Read the tree first; if sparse, check `system({"action":"detect_webview"})` before falling back to coord click. |
-| Action runs but nothing happens | Wrong window has focus. `window({"action":"active"})` then `window({"action":"focus",...})` before retrying. v0.8.2 `focus_window` force-raises through Windows' foreground lock - if it still doesn't work, the target is likely minimized in a different virtual desktop. |
+| Action runs but nothing happens | Wrong window has focus. `window({"action":"active"})` then `window({"action":"focus",...})` before retrying. `focus_window` force-raises through Windows' foreground lock — if it still doesn't work, the target is likely minimized in a different virtual desktop. |
 | Mouse clicks land in wrong place | DPI / scaling - don't pre-scale. Pass image-space coords from the most recent screenshot exactly as returned. |
 | CDP not connecting | Browser not launched with remote debugging. Use `window({"action":"navigate","url":...})` (auto-enables it) - or for a running app already, `system({"action":"relaunch_with_cdp","appName":"..."})`. |
 | Drag draws disconnected line segments | You're using `mouse_drag` (start → end, one line). For continuous curves or multi-point strokes, use `computer({"action":"drag_path","path":"[{\"x\":...,\"y\":...},...]"})` - holds the button for the entire path. |
-| Tool call returns "Missing required parameter" | v0.8.2+ error messages include the full expected signature. Read the error carefully - the `Expected: toolName(a: number, b?: string)` part tells you exactly what's required. |
+| Tool call returns "Missing required parameter" | Error messages include the full expected signature — the `Expected: toolName(a: number, b?: string)` part tells you exactly what's required. |
 
 ---
 
 ## Reporting a problem
 
-If you hit a genuine **clawdcursor bug** — a tool throws or crashes, or it behaves contrary to this document — help get it fixed. (This is for clawdcursor *defects*, NOT for "I couldn't complete the task" — a task you couldn't finish is not a bug.)
-
-1. **Gather context:** your model name, the user's goal, the exact tool calls you made and what happened (expected vs. actual), and the relevant task log under `~/.clawdcursor/task-logs/` (newest `.jsonl` file).
-2. **Submit with the built-in reporter** — it redacts sensitive data (no screenshots, clipboard, or typed text). In interactive use it shows a preview first; called non-interactively (no TTY — e.g. by an agent) it sends directly, so review your `--note` before running:
-   ```
-   clawdcursor report --note "<one-line summary — include your model name and the goal>"
-   ```
-   Add `--log <path>` to attach a specific task log, or `--save-only` to write the report locally without sending.
-3. **If the user prefers GitHub:** hand them a ready-to-paste issue with the context from step 1, plus the link `https://github.com/AmrDab/clawdcursor/issues/new` — but do **not** open it yourself. You don't have repo credentials, and a raw log may contain private on-screen content the reporter would otherwise redact.
+Hit a clawdcursor bug (a tool throws/crashes or behaves contrary to this doc — not "I couldn't finish the task")? Two ways:
+- **Built-in (preferred):** `clawdcursor report --note "<summary + your model + the goal>"` — redacts sensitive data (no screenshots, clipboard, or typed text) and previews before sending. Non-interactive calls send directly, so check your note first.
+- **GitHub issue:** open https://github.com/AmrDab/clawdcursor/issues with: what you asked, expected vs. actual, OS + `clawdcursor --version`, and relevant lines from `~/.clawdcursor/logs/`. Don't paste private on-screen content.
 
 ---
 

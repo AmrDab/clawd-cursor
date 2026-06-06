@@ -1,15 +1,10 @@
 /**
  * Unified-agent system prompt + perception renderer.
  *
- * Single compact prompt (~70 lines) that covers all three strategy modes
- * (blind / hybrid / vision). The only per-mode variation is:
- *   - blind: no `screenshot` tool in catalog → prompt omits vision guidance
- *   - hybrid: `screenshot` tool available → prompt encourages a11y first
- *   - vision: initial screenshot seeded → prompt still encourages a11y-first
- *
- * Zero app-specific rules. Zero model names. The only "knowledge" the
- * prompt injects is the optional `guide.promptFragment` which comes from
- * the knowledge loader (universal JSON files, no hardcoded behavior).
+ * A single compact prompt (~70 lines) for the thin agent loop: accessibility-
+ * first, screenshot only on demand. No per-mode variation, no app-specific
+ * rules, no model names — the autonomous pipeline and its blind/hybrid/vision
+ * rungs were removed in v1.0.0 (a capable model is its own pipeline).
  *
  * Prompt-injection defense: screen content is wrapped in
  * `<untrusted-screen-content>` delimiters and the prompt explicitly tells
@@ -32,7 +27,7 @@ export function wrapUntrustedScreenContent(text: string): string {
  * Build the system prompt. Compact; kept under budget so the token budget
  * goes to snapshots + tool results, not rules.
  *
- * The thin agent loop runs in hybrid mode: a11y-first, screenshot on demand.
+ * The thin agent loop is accessibility-first: screenshot only on demand.
  */
 export function buildSystemPrompt(): string {
   const visionLine = 'You prefer the a11y snapshot (already attached) over screenshots. Call screenshot() ONLY if the snapshot is empty, if the app uses a custom canvas, or after an action that may have triggered a visual change you need to verify.';

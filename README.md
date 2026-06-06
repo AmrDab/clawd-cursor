@@ -182,7 +182,7 @@ Two mechanisms the others don't have:
 | In your editor (Claude Code, Cursor, Windsurf, Codex, Zed) | Direct tools | `clawdcursor mcp` | Each tool individually, via stdio MCP |
 | In a headless agent with its own LLM (OpenClaw, Claude Agent SDK, your own loop) | Direct tools | `clawdcursor agent --no-llm` | Same, over HTTP MCP |
 | Inside clawdcursor itself (scheduled tasks, "submit a task and walk away") | Thin agent loop | `clawdcursor agent` + `doctor`-configured LLM | `submit_task` (or `scheduled_task_create`) |
-| External brain that delegates grunt work to a cheaper model | Hybrid | `clawdcursor agent` + your client | Direct tools normally; call `task({instruction:...})` to hand off a sub-task to the built-in loop |
+| External brain that delegates sub-tasks to the built-in loop | Direct tools + delegation | `clawdcursor agent` + your client | Direct tools normally; call `task({instruction:...})` to hand off a sub-task to the built-in thin loop |
 
 ### Direct tools &mdash; your agent drives
 
@@ -191,46 +191,52 @@ Your LLM picks the calls; clawdcursor supplies safe actuation and fresh observat
 ```mermaid
 flowchart TB
     task["User task"] --> loop["External agent LLM loop<br/>plans, chooses tools, verifies"]
-    loop --> route{"Cheapest viable path"}
+    loop --> observe{"Cheapest observation<br/>that answers the question"}
 
-    route -- deterministic --> shortcut["Deterministic path<br/>window.open_*<br/>system.shortcuts_run"]
-    route -- a11y first --> a11y["A11y path<br/>read_tree<br/>invoke · set_value · focus"]
-    route -- webview / Electron --> webview["WebView bridge<br/>detect_webview<br/>relaunch_with_cdp<br/>browser.*"]
-    route -- canvas / visual only --> vision["Vision fallback<br/>screenshot + vision LLM<br/>coords back to computer"]
-    route -- delegate subtask --> handoff["task({instruction:...})<br/>hand off to thin loop"]
+    observe -- "obs·a11y — free<br/>accessibility.read_tree/find/get_element<br/>window.list/active" --> a11y["A11y observation<br/>(structured text + element handles)"]
+    observe -- "obs·ocr — cheap<br/>system.ocr<br/>a11y tree empty or sparse" --> ocr["OCR observation<br/>(OS-level text, no vision LLM)"]
+    observe -- "obs·dom — medium<br/>browser.read_text / page_context<br/>WebView / Electron / Chrome" --> dom["DOM observation<br/>(CDP, structured browser content)"]
+    observe -- "obs·vision — expensive<br/>computer.screenshot<br/>canvas-only or pixel reasoning" --> vision["Vision observation<br/>(image bytes into LLM context)"]
 
-    shortcut --> safety
-    a11y --> safety
-    webview --> safety
-    vision --> safety
-    handoff --> p1["Thin agent loop<br/>(daemon LLM)"]
-    p1 --> safety
+    a11y --> act
+    ocr --> act
+    dom --> act
+    vision --> act
 
-    safety["Shared safety gate<br/>allow / confirm / block"] -- allowed --> tools["clawdcursor tool registry"]
+    loop -- "delegate subtask" --> handoff["task({instruction:...})<br/>hand off to thin loop"]
+    handoff --> thinloop["Thin agent loop<br/>(daemon LLM)"]
+    thinloop --> safety
+
+    act["Act on the desktop<br/>computer.click/type/key/drag<br/>accessibility.invoke/set_value<br/>window.open_app<br/>system.shortcuts_run<br/>browser.click/type<br/>batch — N steps in 1 call"] --> safety
+
+    safety["Single safety gate<br/>safety.evaluate()<br/>allow / confirm / block"] -- allowed --> tools["clawdcursor tool registry<br/>94 granular + 6 compound"]
     safety -- needs user --> confirm["Human confirmation"] --> tools
     safety -- denied --> blocked["blocked"]
 
     tools --> desktop["Real desktop<br/>native app · browser · canvas"]
-    desktop --> observe["Fresh observation<br/>a11y tree · OCR<br/>screenshot · CDP DOM"]
-    observe --> verify{"Does state match goal?"}
+    desktop --> freshobs["Fresh observation<br/>(obs·a11y → obs·ocr → obs·dom → obs·vision)"]
+    freshobs --> verify{"Does state match goal?"}
 
     verify -- pass --> done["done"]
     verify -- fail --> retry["retry with new state"]
+    retry --> loop
 
     classDef input fill:#f8fafc,stroke:#64748b,color:#0f172a;
     classDef agentNode fill:#dbeafe,stroke:#2563eb,color:#0f172a;
     classDef gate fill:#ede9fe,stroke:#7c3aed,color:#0f172a;
     classDef desktopNode fill:#dcfce7,stroke:#16a34a,color:#0f172a;
-    classDef expensive fill:#ffedd5,stroke:#ea580c,color:#0f172a;
+    classDef obsNode fill:#fef9c3,stroke:#ca8a04,color:#0f172a;
+    classDef actNode fill:#ffedd5,stroke:#ea580c,color:#0f172a;
     classDef handoffNode fill:#d1fae5,stroke:#047857,color:#0f172a;
     classDef stop fill:#fee2e2,stroke:#dc2626,color:#0f172a;
 
-    class task,done,retry input;
-    class loop,verify agentNode;
+    class task,done input;
+    class loop,verify,retry agentNode;
     class safety,confirm,tools gate;
-    class desktop,observe desktopNode;
-    class shortcut,a11y,webview,vision expensive;
-    class handoff,p1 handoffNode;
+    class desktop,freshobs desktopNode;
+    class observe,a11y,ocr,dom,vision obsNode;
+    class act actNode;
+    class handoff,thinloop handoffNode;
     class blocked stop;
 ```
 
@@ -274,7 +280,7 @@ curl -s -X POST http://127.0.0.1:3847/mcp \
 The flat catalog. Each of the 6 compound toolboxes above dispatches to one of these under the hood. Use this surface directly when:
 
 - **Compatibility** &mdash; your agent runtime requires every action as a top-level MCP tool (no `action` enum). Run the daemon without `--compact` (granular is the default for `clawdcursor agent`) to expose them.
-- **Debugging** &mdash; you want to call a specific primitive directly (`key_press`, `mouse_move`, `get_accessibility_tree`) without going through the compound dispatcher.
+- **Debugging** &mdash; you want to call a specific primitive directly (`key_press`, `mouse_click`, `read_screen`) without going through the compound dispatcher.
 
 The full catalog &mdash; both compact toolboxes and granular tools &mdash; is always visible through MCP `tools/list` on either transport. Authoritative schema lives in [`schema.snapshot.json`](schema.snapshot.json).
 
@@ -284,7 +290,7 @@ A typical turn:
 key_press({ key: "mod+s" })
 invoke_element({ name: "Send" })
 open_app({ name: "Outlook" })
-ocr_screen()
+ocr_read_screen()
 // ...94 tools total
 ```
 
@@ -304,6 +310,26 @@ Every perception source has a cost. Start at the cheapest rung that works and cl
 | **T4** | vision | expensive | `smart_click`, `smart_read`, `smart_type` | Canvas-only apps (Paint, Figma, games) or spatial reasoning that text can't express. Last resort. |
 
 **Rule: start at T1. Escalate only when the current tier fails.** Apply the same discipline when calling compound tools directly; the built-in thin loop follows it too.
+
+---
+
+## Observe vs Act
+
+Every tool call is one of two kinds: **observe** (read the current state of the desktop — zero side effects) or **act** (change it). The log badge on each tool-call line tells you which, and which observation channel was used. This makes the cheap-first ladder visible at a glance as a task runs.
+
+| Kind | Log badge | What it does | Example tools |
+|---|---|---|---|
+| **Observe &mdash; a11y** | `obs·a11y` | Read the accessibility tree (structured text + bounds, free) | `accessibility.read_tree`, `accessibility.find`, `accessibility.get_element`, `accessibility.get_value`, `accessibility.focused`, `window.list`, `window.active`, `accessibility.list_children`, `accessibility.wait_for` |
+| **Observe &mdash; OCR** | `obs·ocr` | Read on-screen text via OS OCR engine (no LLM vision) | `system.ocr` (`ocr_read_screen`), `system.smart_read` |
+| **Observe &mdash; DOM** | `obs·dom` | Read the browser DOM via CDP (Electron / WebView2 / Chrome) | `browser.read_text` (`cdp_read_text`), `browser.page_context` (`cdp_page_context`) |
+| **Observe &mdash; vision** | `obs·vision` | Take a screenshot (image bytes enter LLM context — most expensive) | `computer.screenshot` (`desktop_screenshot`, `desktop_screenshot_region`, `screenshot_full`) |
+| **Act** | `act` | Change the screen: click, type, key, scroll, drag, open, invoke | `computer.click/type/key/drag/scroll`, `accessibility.invoke/set_value/focus`, `window.open_app/open_url/open_file`, `system.clipboard_write`, `browser.click/type`, `batch`, `task` |
+
+**The discipline:** prefer `obs·a11y` first — it returns structured text and element handles for free. If the a11y tree is empty or sparse, try `obs·ocr`. If the target is inside a WebView or Electron shell, use `obs·dom` via CDP. Only escalate to `obs·vision` (screenshot) when pixel context is genuinely needed. Act once you have enough information, then observe again to verify.
+
+The badge column in the live log (`CLAWD_LOG=pretty`, the default on a TTY) shows this ladder in real time: you can watch `obs·a11y` → `act` → `obs·a11y` on a normal turn, and see when the agent is forced to climb to `obs·ocr` or `obs·vision`.
+
+Derived from `src/tools/cost-class.ts` (authoritative cost-class table) + `src/core/observability/logger.ts` (`observeActBadge`).
 
 ---
 
