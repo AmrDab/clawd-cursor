@@ -99,6 +99,9 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
+  "overrides": {
+    "ip-address": "10.1.1"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
