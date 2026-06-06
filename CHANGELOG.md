@@ -2,6 +2,58 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [Unreleased] — v2 — pipeline removal + toolbox + thin agent loop
+
+### Removed — autonomous pipeline cluster (~13,000 LOC)
+
+The router → blind/hybrid/vision morph ladder, preprocessor, decomposer, classifier,
+verifier (ground-truth signals), Reflector, and knowledge/guide loader have all been
+deleted. The file surface removed:
+
+- `src/core/pipeline.ts`, `src/core/verifier.ts`, `src/core/compound.ts`,
+  `src/core/palettes.ts`, `src/core/handoff.ts`, `src/core/desktop-survey.ts`
+- `src/core/classify/` (full directory)
+- `src/core/decompose/` (full directory)
+- `src/core/skills/` (full directory)
+- `src/core/router/` (full directory)
+- `src/core/knowledge/` (full directory)
+
+Four granular tools removed alongside the pipeline:
+`classify_task`, `detect_app`, `get_app_guide`, `learn_app`.
+
+The `clawdcursor guides` CLI command is removed.
+
+### Changed — thin agent loop replaces the morph ladder
+
+`agent.ts` is rewired to a single `runAgent` loop: the configured model perceives the
+desktop (a11y → OCR → screenshot as needed), selects tools, and iterates until done or
+the turn budget is exhausted. No rung selection, no mode flags, no rung escalation.
+`AgentInput` is simplified: `task / maxTurns / isAborted / targetWindow` only.
+
+`buildUnifiedTools()` and `buildSystemPrompt()` no longer accept a mode or capability
+argument — they return the full unified toolbox.
+
+### Changed — MCP tool count
+
+Granular catalog drops from 97 to **94 tools** (the four pipeline-only tools removed).
+Compact surface: 6 compound tools + `task` + `batch` = **7 entries on the compact surface**.
+
+### Changed — `task` delegation
+
+`submit_task` → `agent.executeTask` → `_executeTask` → `runAgent`. The thin loop is the
+configured model self-driving the toolbox. Framing: an expensive external agent can
+delegate grunt work to clawdcursor's cheaper configured model, which takes the wheel.
+
+### Added — `batch` tool
+
+New `batch` tool collapses N tool calls into one round-trip (declarative, guarded,
+safety-gated per step). Each step is `{ name, arguments, expect? }`; optional `expect`
+re-perceives before the step and halts on mismatch. On any guard miss, safety stop, or
+error the batch halts and returns a per-step trace. `dryRun:true` pre-scans safety tiers
+without executing. The efficiency lever for a driving agent: N calls → 1.
+
+---
+
 ## [Unreleased] — v2 — tool-unification migration
 
 ### Changed — one tool implementation, used everywhere

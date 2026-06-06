@@ -79,11 +79,11 @@ metadata:
 >
 > - MCP stdio (editor host): add `"args": ["mcp", "--compact"]` to your config.
 > - MCP over HTTP (daemon mode): start the daemon with `--compact` (or set
->   `CLAWD_MCP_COMPACT=1`) so `/mcp` serves the 6 compound tools. The surface is
->   fixed at startup — a daemon serves EITHER the 6 compact tools OR the 97
+>   `CLAWD_MCP_COMPACT=1`) so `/mcp` serves the 6 compound tools + `batch`. The surface is
+>   fixed at startup — a daemon serves EITHER the compact tools OR the 94
 >   granular ones, not both. Default (no flag) is granular.
 >
-> Granular mode's 97 tools are kept for back-compat. Compact's 6 tools are much smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
+> Granular mode's 94 tools are kept for back-compat. Compact's tools are much smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
 
 If you connect via MCP with `--compact`, you get a single tool that takes the
 whole task:
@@ -94,9 +94,8 @@ task({"instruction": "send an email in Outlook to amy@x.com saying I'll be late"
 task({"instruction": "find the file README.md in Downloads and open it"})
 ```
 
-clawdcursor's pipeline decomposes the instruction, picks the cheapest path
-(router → blind accessibility-first → vision fallback), runs it, and returns a
-trace.
+clawdcursor's built-in agent loop takes the wheel: it perceives the desktop,
+acts with the toolbox, and iterates until the task is done, then returns a trace.
 
 **WHEN TO USE `task` vs. THE COMPOUND TOOLS — PICK ONE, NEVER BOTH:**
 
@@ -104,14 +103,16 @@ trace.
   Claude Agent SDK, or anything else with its own agent loop): **DO NOT call
   `task`.** Use the compound tools (`computer` / `accessibility` / `window` /
   `system` / `browser`) directly. Calling `task` from inside an agent loop is
-  a loop-inside-a-loop — you pay for two agents to plan the same work, and
+  a loop-inside-a-loop — you pay for two models to plan the same work, and
   the inner loop can't see your higher-level goal. The compound tools are
   what you want.
 
 - **You are an external script / shell command / one-shot client without your
-  own agent loop**, talking to a daemon where clawdcursor's built-in agent is
-  enabled: `task({"instruction": "..."})` is exactly what you want. clawdcursor
-  reasons AND acts in one call, returns a trace. No external loop required.
+  own agent loop** — or an expensive frontier model that wants to delegate grunt
+  work to clawdcursor's cheaper configured model: `task({"instruction": "..."})` is
+  exactly what you want. clawdcursor's thin agent loop takes the wheel, reasons
+  AND acts on your behalf using the model configured via `clawdcursor doctor`,
+  returns a trace. No external loop required.
 
 If you're unsure which you are: **you are almost certainly the first one.**
 Use the compound tools. `task` exists for the second case.
@@ -129,7 +130,8 @@ accessibility(action, ...)  Read the a11y tree, click by name, set values, toggl
 window(action, ...)         Open apps / focus / maximize / minimize / close / resize
 system(action, ...)         Clipboard / time / OCR / undo / shortcuts / delegate
 browser(action, ...)        DevTools Protocol - DOM-level control of any CDP-capable browser (Chrome, Edge, Chromium, Brave)
-task({instruction})       See above - hand off a whole task to the pipeline
+task({instruction})         See above - delegate a whole task to the built-in thin agent loop
+batch({steps})              Collapse N tool calls into one round-trip (see "Execution playbook" below)
 ```
 
 Pick a compound FIRST based on what kind of operation it is, then set the
@@ -145,7 +147,7 @@ than the granular surface - so small models (Haiku, Kimi, Ollama) stay focused.
 | T3 | **screenshot** | medium | OCR isn't enough and you need pixel context. `computer({"action":"screenshot"})` - sends an image into the LLM context. Use sparingly. |
 | T4 | **vision** | expensive | Screen is canvas-only (Paint, Figma, games) or the task requires spatial reasoning that text cannot express. `smart_click`, `smart_read`, `smart_type`. Last resort. |
 
-**Rule: start at T1. Escalate to the next tier only when the current one fails.** The pipeline does this automatically via `task({...})`; apply the same logic when you call compound tools manually.
+**Rule: start at T1. Escalate to the next tier only when the current one fails.** Apply this logic when calling compound tools directly; the built-in agent loop (via `task({...})`) follows the same discipline.
 
 ### Quick reference - what action to pick
 
@@ -226,15 +228,15 @@ Never self-approve actions on these surfaces. The safety layer elevates them to 
 
 ## Modes at a glance
 
-v0.9 collapses everything onto **MCP — one protocol, two transports**. There is no REST surface anymore. The daemon's behavior depends on whether an LLM is configured, not on a flag.
+clawdcursor exposes one protocol (**MCP**) over two transports. The daemon's behavior depends on whether an LLM is configured via `clawdcursor doctor`, not on a flag.
 
 | Mode | Command | Transport | Brain | Tools available |
 |------|---------|-----------|-------|-----------------|
-| `mcp` | `clawdcursor mcp [--compact]` | stdio | **You** (editor host) | 97 granular (default) or 6 compact (`--compact`) |
-| `agent --no-llm` or `agent` with no LLM configured | `clawdcursor agent --no-llm [--compact]` | HTTP `/mcp` | **You** (HTTP client) | 97 granular (default) **or** 6 compact — pass `--compact` (or `CLAWD_MCP_COMPACT=1`). One surface per daemon, chosen at startup — NOT both at once |
-| `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in LLM pipeline | All of the above PLUS the autonomous task-handoff tool — named `task` on the compact surface, `submit_task` on granular — hand it a plain-English task |
+| `mcp` | `clawdcursor mcp [--compact]` | stdio | **You** (editor host) | 94 granular (default) or compact surface (`--compact`) |
+| `agent --no-llm` or `agent` with no LLM configured | `clawdcursor agent --no-llm [--compact]` | HTTP `/mcp` | **You** (HTTP client) | 94 granular (default) **or** compact surface — pass `--compact` (or `CLAWD_MCP_COMPACT=1`). One surface per daemon, chosen at startup — NOT both at once |
+| `agent` (LLM configured)    | `clawdcursor agent` | HTTP `/mcp` | Built-in thin agent loop | All of the above PLUS the autonomous task-handoff tool — named `task` on the compact surface, `submit_task` on granular — hand it a plain-English task |
 
-In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor reasons AND acts — call the autonomous handoff tool (`task` in compact mode, `submit_task` in granular) with a natural-language instruction, then poll `agent_status`.
+In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.** There is no built-in LLM in the loop. You call tools, interpret results, decide next steps. In autonomous `agent` mode (LLM configured): clawdcursor's thin loop reasons AND acts — it perceives the desktop, selects tools, and iterates until done. Call `task` (compact) or `submit_task` (granular) with a natural-language instruction, then poll `agent_status`.
 
 The `start` and `serve` verbs from v0.8 still work as deprecation aliases (they print a warning and proxy to `agent`); they're scheduled for removal in v0.10.
 
@@ -256,7 +258,7 @@ The `start` and `serve` verbs from v0.8 still work as deprecation aliases (they 
 }
 ```
 
-**Granular - 97 individual tools (power-user, back-compat, larger prompt budget):**
+**Granular - 94 individual tools (power-user, back-compat, larger prompt budget):**
 ```json
 {
   "mcpServers": {
@@ -312,7 +314,7 @@ clawdcursor agent
 
 ### Autonomous-agent mode - `clawdcursor agent`
 
-An alternative: let clawdcursor handle both the reasoning AND the acting. Run the daemon with the LLM pipeline enabled, then call the `submit_task` MCP tool with a natural-language task and poll `agent_status` for completion.
+An alternative: let clawdcursor handle both the reasoning AND the acting. Run the daemon with an LLM configured (via `clawdcursor doctor`), then call the `submit_task` MCP tool with a natural-language task and poll `agent_status` for completion.
 
 ```json
 {"name": "submit_task",  "arguments": {"task": "Open Chrome and go to github.com"}}
@@ -320,9 +322,9 @@ An alternative: let clawdcursor handle both the reasoning AND the acting. Run th
 {"name": "abort_task",   "arguments": {}}    → stop the current task
 ```
 
-The built-in pipeline: router (zero LLM) → blind agent (a11y-first, cheap) →
-hybrid (blind + screenshot on demand) → vision (full pixels, last resort). It
-automatically picks the cheapest path that works for each subtask.
+The built-in thin agent loop: the configured model perceives the desktop (a11y
+tree → OCR → screenshot as needed), selects and executes tools, and iterates
+until the task is done or the turn budget is exhausted.
 
 ---
 
@@ -351,6 +353,73 @@ Every GUI task follows the same shape regardless of surface:
 
 **You MUST verify** after: sends, saves, deletes, form submissions, purchases, transfers.
 **You MAY skip verification** for: mid-sequence keystrokes, scrolling, hover, mouse-move.
+
+---
+
+## Execution playbook
+
+You drive the toolbox. Apply these rules in order — they encode the wisdom of what works cheapest first.
+
+### 1. Observe before you act
+Always read the current state before acting. In order of cost:
+- `accessibility({"action":"read_tree"})` — structured names, roles, bounds. **Start here.**
+- `system({"action":"ocr"})` — raw OS text extraction when the a11y tree is empty or sparse.
+- `computer({"action":"screenshot"})` — pixel image into LLM context. **Last resort — expensive.**
+
+If the a11y tree is empty, check `system({"action":"detect_webview"})`. Electron / WebView2 apps (Outlook, Teams, Discord, VS Code) render inside Chromium — switch to `browser.*` via CDP for real DOM access.
+
+### 2. Prefer named targets over raw pixels
+- Click by name: `accessibility({"action":"invoke","name":"Send"})`. Most reliable.
+- Set a field by name: `accessibility({"action":"set_value","name":"Email","value":"x@y.com"})`.
+- Raw pixel coordinates (`computer({"action":"click","x":...,"y":...})`) are the last resort — they break when the layout shifts or DPI scaling changes.
+
+### 3. Escalate perception only when you must
+```
+a11y tree  →  (empty/sparse?)  →  OCR  →  (still insufficient?)  →  screenshot
+```
+Canvas-only apps (Paint, Figma, games) have no a11y tree. Go straight to screenshot + coord click for those.
+
+### 4. Verify after every consequential act
+Every send, save, delete, form submit needs a post-act check. Use the cheapest signal:
+1. Tool return value (check `isError`).
+2. `window({"action":"active"})` — did a dialog appear? Title change?
+3. `accessibility({"action":"read_tree"})` — expected text visible?
+4. `computer({"action":"screenshot"})` — only when text signals fail.
+
+### 5. Use `batch` to collapse deterministic stretches into one call
+
+When you know the next N steps are deterministic (no branching, no state you need to inspect between steps), collapse them into a single `batch` call instead of N round-trips. Each step still routes through the same safety gate.
+
+**Without batch — N round-trips:**
+```
+accessibility({"action":"set_value","name":"To","value":"amy@x.com"})
+accessibility({"action":"set_value","name":"Subject","value":"Budget update"})
+accessibility({"action":"invoke","name":"Message"})
+computer({"action":"type","text":"Hi Amy, see attached."})
+```
+
+**With batch — 1 round-trip:**
+```json
+batch({
+  "steps": [
+    {"name":"accessibility","arguments":{"action":"set_value","name":"To","value":"amy@x.com"}},
+    {"name":"accessibility","arguments":{"action":"set_value","name":"Subject","value":"Budget update"}},
+    {"name":"accessibility","arguments":{"action":"invoke","name":"Message"}},
+    {"name":"computer","arguments":{"action":"type","text":"Hi Amy, see attached."}}
+  ]
+})
+```
+
+Add an `expect` precondition to any step that needs a guard — the executor re-perceives before that step and halts if the condition isn't met:
+```json
+{"name":"accessibility","arguments":{"action":"invoke","name":"Send"},
+ "expect":{"window":"outlook","element":"Send"}}
+```
+
+On any guard miss, safety stop, or step error, `batch` halts and returns a per-step trace so you re-plan from real state. Use `dryRun:true` to pre-scan safety tiers without executing. Confirm-tier steps (e.g. Send) halt the batch unless you pass `allowConfirm:true` — a deliberate gate so you confirm before sending.
+
+**When to use `batch`:** deterministic form fills, multi-field sequences, known keystroke chains.
+**When NOT to use `batch`:** when you need to inspect state between steps to decide what to do next — that's a normal tool loop.
 
 ---
 
@@ -415,7 +484,8 @@ with the same semantics. Full reference via the MCP `tools/list` request.
 | `window`        | get_windows, get_active_window, focus_window, maximize_window, minimize_window_to_taskbar, restore_window, close_window, resize_window, list_displays, get_screen_size, open_app, open_file, open_url, switch_tab_os, navigate_browser |
 | `system`        | read_clipboard, write_clipboard, get_system_time, ocr_read_screen, undo_last, shortcuts_list, shortcuts_execute, delegate_to_agent |
 | `browser`       | cdp_connect, cdp_page_context, cdp_read_text, cdp_click, cdp_type, cdp_select_option, cdp_evaluate, cdp_wait_for_selector, cdp_list_tabs, cdp_switch_tab, cdp_scroll |
-| `task`          | full pipeline (router → blind → hybrid → vision fallback) |
+| `task`          | thin agent loop (configured model perceives → acts → iterates until done) |
+| `batch`         | ordered list of tool calls in one round-trip — see Execution playbook |
 
 ---
 
@@ -507,6 +577,6 @@ If you hit a genuine **clawdcursor bug** — a tool throws or crashes, or it beh
 
 ## Full documentation
 
-- **Tool catalog (granular or compact):** `tools/list` JSON-RPC over stdio MCP or HTTP `/mcp`
-- **Architecture detail:** README.md and `docs/internal/v0.9-design.md` in the repo
+- **Tool catalog (94 granular or compact):** `tools/list` JSON-RPC over stdio MCP or HTTP `/mcp`
+- **Architecture detail:** README.md in the repo
 - **Changelog:** CHANGELOG.md
