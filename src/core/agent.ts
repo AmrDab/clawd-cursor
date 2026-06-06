@@ -1,17 +1,19 @@
 /**
- * Agent — thin entry point that routes every task through the unified
- * pipeline. The v0.7 cascade (computer-use, ai-brain, action-router,
- * a11y-reasoner, ocr-reasoner, etc.) was deleted in v0.9.0; the canonical
- * pipeline now lives in `src/core/pipeline.ts`.
+ * Agent — thin entry point that drives the desktop using the unified
+ * agent loop (runAgent) with the configured model. The pipeline morph
+ * machinery has been removed; a capable configured model self-drives
+ * the full toolbox.
  *
  * Construction is intentionally minimal — the agent owns the desktop /
- * a11y / OCR primitives and forwards everything else to the pipeline.
+ * a11y / OCR primitives and forwards everything else to runAgent.
  */
 
 import { NativeDesktop } from '../platform/native-desktop';
 import { AccessibilityBridge } from '../platform/accessibility';
 import { OcrEngine } from '../platform/ocr-engine';
 import { loadPipelineConfig } from '../surface/doctor';
+import { runAgent } from './agent-loop/agent';
+import { getPlatform } from '../platform';
 import type { ClawdConfig, AgentState, TaskResult, StepResult } from '../types';
 import type { ResolvedConfig } from '../llm/config';
 
@@ -44,8 +46,6 @@ export class Agent {
   private aborted = false;
   private taskExecutionLocked = false;
 
-  private pipelineUnified: import('./pipeline').Pipeline | null = null;
-
   constructor(config: ClawdConfig, resolvedConfig?: ResolvedConfig) {
     this.config = config;
     this.resolvedConfig = resolvedConfig ?? null;
@@ -54,15 +54,15 @@ export class Agent {
     this.ocrEngine = new OcrEngine();
 
     // hasApiKey gates the offline-mode banner — true if any cloud key is
-    // configured. Local LLM (Ollama) is always available via the pipeline,
+    // configured. Local LLM (Ollama) is always available via the loop,
     // so absence of cloud keys just means we'll print an offline notice.
     const hasCloudKey = !!(config.ai.apiKey && config.ai.apiKey.length > 0);
     const hasVisionKey = !!(config.ai.visionApiKey && config.ai.visionApiKey.length > 0);
     this.hasApiKey = hasCloudKey || hasVisionKey;
 
     if (!this.hasApiKey) {
-      console.log(`⚡ Running in offline mode (no API key). Router + playbooks only.`);
-      console.log(`   To unlock AI fallback, set AI_API_KEY (or run: clawdcursor doctor)`);
+      console.log(`⚡ Running in offline mode (no API key).`);
+      console.log(`   To unlock AI, set AI_API_KEY (or run: clawdcursor doctor)`);
     }
   }
 
@@ -77,7 +77,7 @@ export class Agent {
   }
 
   /** Safety-net timeout — only fires if task is truly stuck (stagnation + abort didn't catch it) */
-  private static readonly TASK_TIMEOUT_MS = 12 * 60 * 1000; // 12 minutes — a long sequential task (e.g. a 14-step benchmark) legitimately runs several minutes; the real stop signals are stagnation, runaway-guard, and max_turns. Was 5min, which aborted a slow-but-progressing run mid-exam.
+  private static readonly TASK_TIMEOUT_MS = 12 * 60 * 1000; // 12 minutes
 
   async executeTask(task: string): Promise<TaskResult> {
     // Atomic concurrency guard — boolean lock prevents TOCTOU race
@@ -94,11 +94,7 @@ export class Agent {
     this.aborted = false;
     const startTime = Date.now();
 
-    // Wrap the entire task pipeline with a global wall-clock timeout.
-    // Individual layers have their own iteration limits, but a deadlocked
-    // LLM call could still exceed the limit. IMPORTANT: clear the timer
-    // when the task completes to prevent stale timeouts from aborting
-    // future tasks (the aborted flag is shared).
+    // Wrap the entire task with a global wall-clock timeout.
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<TaskResult>((resolve) => {
       timeoutHandle = setTimeout(() => {
@@ -113,145 +109,103 @@ export class Agent {
     });
 
     try {
-      return await Promise.race([this._executeTaskUnified(task, startTime), timeoutPromise]);
+      return await Promise.race([this._executeTask(task, startTime), timeoutPromise]);
     } finally {
-      // Always clear the 5-minute timer so it doesn't keep the process alive
-      // and hold a closure reference to this Agent instance after the task ends.
       if (timeoutHandle !== null) clearTimeout(timeoutHandle);
       this.taskExecutionLocked = false;
     }
   }
 
   /**
-   * v0.8.1 unified pipeline — blind-first by construction; vision is the
-   * fallback, not a competing default. Decomposer splits compound tasks
-   * into subtasks, each of which runs its own full pipeline cycle.
-   *
-   * Routes through: classify → router → knowledge → sense (a11y) →
-   * text-agent (no screenshots) → vision-agent (fallback).
-   *
-   * Model-agnostic: LLM clients are injected from the live provider
-   * config. No premium retry tier, no per-model escape hatch. If vision
-   * also fails, the MCP client is free to retry with a different strategy.
-   *
-   * Lazy-loaded so import cost is paid on first task, not at startup.
+   * Thin task executor — runs the unified agent loop with the configured model.
+   * No pipeline morph, no mode ladder, no verifier. A capable model self-drives
+   * the full toolbox.
    */
-  private async _executeTaskUnified(task: string, startTime: number): Promise<TaskResult> {
-    if (!this.pipelineUnified) {
-      const { Pipeline } = await import('./pipeline');
-      const { getPlatform } = await import('../platform');
-      const adapter = await getPlatform();
-      // Pass the resolved CLI overlay so flags supplied at boot time
-      // (--text-model, --base-url, --api-key, ...) are honoured even
-      // when no .clawdcursor-config.json exists on disk. Without this
-      // the runtime ignores CLI flags and falls back to disk-only,
-      // producing `models=text=off vision=disabled` and short-circuiting
-      // every ladder rung.
-      const pipelineConfig = loadPipelineConfig(this.resolvedConfig);
+  private async _executeTask(task: string, startTime: number): Promise<TaskResult> {
+    // Resolve the LLM configuration from the disk config + CLI overlay.
+    const pipelineConfig = loadPipelineConfig(this.resolvedConfig);
 
-      const hasTextModel   = !!(pipelineConfig?.layer2.model && pipelineConfig.layer2.baseUrl);
-      const hasVisionModel = !!(pipelineConfig?.layer3?.model && pipelineConfig?.layer3?.baseUrl);
+    const hasTextModel   = !!(pipelineConfig?.layer2.model && pipelineConfig.layer2.baseUrl);
+    const hasVisionModel = !!(pipelineConfig?.layer3?.model && pipelineConfig?.layer3?.baseUrl);
 
-      // Build direct LLM configs for the unified agent. The agent uses
-      // native tool_use (Anthropic) / tool_calls (OpenAI) via
-      // callLLMWithTools — so we pass baseUrl/model/apiKey/isAnthropic
-      // rather than wrapping callTextLLM / callVisionLLM.
-      const textConfig = hasTextModel && pipelineConfig
-        ? {
-            baseUrl: pipelineConfig.layer2.baseUrl,
-            model: pipelineConfig.layer2.model,
-            apiKey: pipelineConfig.layer2.apiKey || pipelineConfig.apiKey || '',
-            isAnthropic: isAnthropicEndpoint(pipelineConfig.layer2.baseUrl),
-            maxTokens: 1024,
-          }
-        : undefined;
+    // Build direct LLM configs for the unified agent. Prefer text; fall back
+    // to vision model if text is absent (vision models handle tool_use too).
+    const textConfig = hasTextModel && pipelineConfig
+      ? {
+          baseUrl: pipelineConfig.layer2.baseUrl,
+          model: pipelineConfig.layer2.model,
+          apiKey: pipelineConfig.layer2.apiKey || pipelineConfig.apiKey || '',
+          isAnthropic: isAnthropicEndpoint(pipelineConfig.layer2.baseUrl),
+          maxTokens: 1024,
+        }
+      : undefined;
 
-      const visionLayer = pipelineConfig?.layer3;
-      const visionConfig = hasVisionModel && visionLayer && pipelineConfig
-        ? {
-            baseUrl: visionLayer.baseUrl,
-            model: visionLayer.model,
-            apiKey: visionLayer.apiKey || pipelineConfig.apiKey || '',
-            isAnthropic: isAnthropicEndpoint(visionLayer.baseUrl),
-            maxTokens: 1024,
-          }
-        : undefined;
+    const visionLayer = pipelineConfig?.layer3;
+    const visionConfig = hasVisionModel && visionLayer && pipelineConfig
+      ? {
+          baseUrl: visionLayer.baseUrl,
+          model: visionLayer.model,
+          apiKey: visionLayer.apiKey || pipelineConfig.apiKey || '',
+          isAnthropic: isAnthropicEndpoint(visionLayer.baseUrl),
+          maxTokens: 1024,
+        }
+      : undefined;
 
-      // Prefer resolved config values; fall back to env vars for backward compat
-      // when agent is constructed without a ResolvedConfig (e.g. tool server).
-      const disableVision   = this.resolvedConfig?.disableVision
-                           ?? (process.env.OPENCLAW_DISABLE_VISION   === '1' || process.env.CLAWD_DISABLE_VISION   === '1');
-      const disableVerifier = this.resolvedConfig?.disableVerifier
-                           ?? (process.env.OPENCLAW_DISABLE_VERIFIER === '1' || process.env.CLAWD_DISABLE_VERIFIER === '1');
-
-      this.pipelineUnified = new Pipeline({
-        adapter,
-        llm: {
-          text: textConfig,
-          vision: visionConfig,
-        },
-        disableVision,
-        // Lazy CDP provider for the agent-loop browser_* tools. Resolved on
-        // demand because the CLI attaches `this.cdpDriver` AFTER this
-        // constructor runs (see surface/cli.ts). Returns null until then →
-        // browser_* tools degrade to OCR.
-        cdp: () => (this as { cdpDriver?: import('../platform/cdp-driver').CDPDriver }).cdpDriver ?? null,
-        // Ground-truth verifier is on by default — every successful agent
-        // rung is post-checked against actual screen state, and failed
-        // verification demotes the rung so the ladder climbs. Opt-out
-        // mirrors the vision-disable pattern.
-        disableVerifier,
-      });
-
-      if (!hasTextModel && !hasVisionModel) {
-        console.log('⚡ No AI model configured — only router/playbook tasks will run.');
-        console.log('   Run `clawdcursor doctor` to configure an AI provider (any OpenAI-compatible endpoint).');
-      }
-      // Otherwise the new logger's header block prints the full task banner
-      // (task + correlationId + models) when pipeline.start fires.
+    if (!hasTextModel && !hasVisionModel) {
+      console.log('⚡ No AI model configured. Run `clawdcursor doctor` to configure a provider.');
     }
 
     // Clear lastResult at task start so a poller can't read a stale result
     // from a prior run while a new task is in flight.
     this.state = { ...this.state, status: 'thinking', currentTask: task, stepsCompleted: 0, stepsTotal: 0, lastResult: undefined };
 
-    const result = await this.pipelineUnified.run({
-      task,
-      isAborted: () => this.aborted,
-    });
+    // Get the platform adapter. Lazy-initialised per call (cheap re-call).
+    const adapter = await getPlatform();
 
-    const steps: StepResult[] = result.trace.length > 0
-      ? result.trace.map(t => ({
-          action: (t.action as any).type ?? 'unknown',
-          description: t.result.text,
-          success: t.result.success,
+    // Resolve CDP driver if wired externally.
+    const cdp = (this as { cdpDriver?: import('../platform/cdp-driver').CDPDriver }).cdpDriver ?? null;
+
+    // Run the thin agent loop with the FULL toolbox (hybrid mode — a11y + screenshot).
+    // The mode is fixed to 'hybrid' so the agent has access to both the a11y tree
+    // and screenshots. A capable model will prefer a11y-first (cheapest) and only
+    // call screenshot when it genuinely needs pixels.
+    const agentResult = await runAgent(
+      {
+        task,
+        mode: 'hybrid',
+        isAborted: () => this.aborted,
+      },
+      {
+        adapter,
+        llm: { text: textConfig, vision: visionConfig },
+        cdp,
+      },
+    );
+
+    const steps: StepResult[] = agentResult.steps.length > 0
+      ? agentResult.steps.map(s => ({
+          action: s.toolName,
+          description: s.result.text,
+          success: s.result.success,
           timestamp: Date.now(),
-          layer: result.path === 'text-agent' ? 'ocr' as const : 'unified' as const,
-          method: (t.action as any).type,
-          latencyMs: t.durationMs,
+          layer: 'unified' as const,
+          method: s.toolName,
+          latencyMs: s.durationMs,
         }))
       : [{
-          action: result.success ? 'done' : 'error',
-          description: result.text,
-          success: result.success,
+          action: agentResult.exit,
+          description: agentResult.text,
+          success: agentResult.success,
           timestamp: Date.now(),
-          layer: result.path === 'router' ? 'router' as const : 'unified' as const,
+          layer: 'unified' as const,
         }];
 
-    // The new logger emits a `pipeline.done` footer block (path + cost +
-    // duration, framed in a divider) so we skip the legacy double banner.
-    // Final free-text evidence still goes to stdout for the MCP / REST client.
-    if (result.text) {
-      console.log(`   ${result.text}`);
+    if (agentResult.text) {
+      console.log(`   ${agentResult.text}`);
     }
 
-    // Snapshot the result onto state BEFORE returning so external pollers
-    // (delegate_to_agent compact tool) can read the outcome via agent_status
-    // after seeing status === 'idle'. Without this snapshot the compact
-    // `task` action returned success:false even on successful completion
-    // because lastResult was undefined.
     const taskResult: TaskResult = {
-      success: result.success,
+      success: agentResult.success,
       steps,
       duration: Date.now() - startTime,
     };

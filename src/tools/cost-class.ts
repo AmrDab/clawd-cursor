@@ -67,13 +67,13 @@ export const COST_CLASS_BY_TOOL: Readonly<Record<string, ToolCostClass>> = {
   cdp_evaluate: 'inspect', cdp_wait_for_selector: 'inspect', cdp_list_tabs: 'inspect',
   build_uri: 'inspect', logs_recent: 'inspect', agent_status: 'inspect',
   task_logs_list: 'inspect', task_logs_current: 'inspect', favorites_list: 'inspect',
-  scheduled_task_list: 'inspect', detect_app: 'inspect', classify_task: 'inspect',
+  scheduled_task_list: 'inspect',
 
   // ── perceive-text ── a11y/OCR/DOM dumps + tools that read them internally. ≤10K tok.
   read_screen: 'perceive-text', ocr_read_screen: 'perceive-text', smart_read: 'perceive-text',
   smart_type: 'perceive-text', smart_click: 'perceive-text',
   cdp_page_context: 'perceive-text', cdp_read_text: 'perceive-text',
-  learn_app: 'perceive-text', get_app_guide: 'perceive-text', get_system_prompt: 'perceive-text',
+  learn_app: 'perceive-text', get_system_prompt: 'perceive-text',
 
   // ── perceive-image ── screenshots with image bytes. ≤50K tok incl. base64.
   desktop_screenshot: 'perceive-image', desktop_screenshot_region: 'perceive-image',

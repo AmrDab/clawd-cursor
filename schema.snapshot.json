@@ -471,32 +471,6 @@
       "costClass": "inspect"
     },
     {
-      "name": "classify_task",
-      "description": "Run the autonomous pipeline's preprocessor over a task description and return what it would have decided WITHOUT executing the task. External brains use this to mirror clawdcursor's routing choices: which strategy ladder (router/blind/hybrid/vision/playbook), how to decompose compound tasks into subtasks, which capability is at play (navigation/app_launch/text_input/form_fill/spatial/...), which playbook (if any) matches, the active-app guide reference, and the short telemetry reason for the choice. Pure read; zero side effects.",
-      "category": "orchestration",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "task": {
-            "type": "string",
-            "description": "Natural-language task to classify"
-          },
-          "activeWindowTitle": {
-            "type": "string",
-            "description": "Optional active window title for app-detection context"
-          },
-          "activeWindowProcessName": {
-            "type": "string",
-            "description": "Optional active window process name for app-detection context"
-          }
-        },
-        "required": [
-          "task"
-        ]
-      },
-      "costClass": "inspect"
-    },
-    {
       "name": "close_window",
       "description": "Polite close request (WM_CLOSE / AXCloseAction / _NET_CLOSE_WINDOW). App may prompt.",
       "category": "window",
@@ -583,24 +557,6 @@
         ]
       },
       "costClass": "perceive-image"
-    },
-    {
-      "name": "detect_app",
-      "description": "Resolve a URL or window title to clawdcursor's canonical app key. Returns `{ appKey: \"gmail\" }` for \"mail.google.com\" / \"Gmail - Inbox\", `{ appKey: null }` when no rule matches. Pure function; same lookup the autonomous pipeline uses internally.",
-      "category": "orchestration",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "urlOrTitle": {
-            "type": "string",
-            "description": "URL like \"mail.google.com\" or title like \"Gmail - Inbox\""
-          }
-        },
-        "required": [
-          "urlOrTitle"
-        ]
-      },
-      "costClass": "inspect"
     },
     {
       "name": "detect_webview_apps",
@@ -745,25 +701,6 @@
       "costClass": "inspect"
     },
     {
-      "name": "get_app_guide",
-      "description": "Return the app-knowledge guide for an app: keyboard shortcuts, workflow patterns, layout cues, tips, and the formatted prompt fragment the autonomous pipeline would inject into its LLM system prompt. External brains (editor hosts, OpenClaw, any HTTP-MCP client) call this to get the same app expertise the autonomous loop gets for free. Pass either `app` (canonical key like \"gmail\", \"youtube\") or `urlOrTitle` (the URL or window title the tool will resolve via detectApp). Returns `appKey: null` and an empty promptFragment when neither resolves.",
-      "category": "orchestration",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "app": {
-            "type": "string",
-            "description": "Canonical app key (e.g. \"gmail\", \"youtube\", \"outlook\")"
-          },
-          "urlOrTitle": {
-            "type": "string",
-            "description": "URL or window title to resolve into an app key"
-          }
-        }
-      },
-      "costClass": "perceive-text"
-    },
-    {
       "name": "get_element_state",
       "description": "Get state flags of a named element (focused/enabled/disabled/selected/busy/offscreen/expandable/expanded).",
       "category": "perception",
@@ -811,20 +748,20 @@
     },
     {
       "name": "get_system_prompt",
-      "description": "Return the canonical agent system prompt for a given strategy mode (blind / hybrid / vision). Use this to mirror clawdcursor's behavioral rules in your own agent loop — coordinate syntax, key combo syntax, web-service policy (never type \"browser\" into search bars), protocol escape hatches (mailto:/https:/file:/...), stagnation recovery, termination rules (done/give_up/cannot_read), untrusted-screen-content discipline. Reflects the prompt at the current installed clawdcursor version — pull this rather than hardcoding rules so they stay in sync with upstream changes.",
+      "description": "Return the canonical agent system prompt. Use this to mirror clawdcursor's behavioral rules in your own agent loop — coordinate syntax, key combo syntax, web-service policy (never type \"browser\" into search bars), protocol escape hatches (mailto:/https:/file:/...), stagnation recovery, termination rules (done/give_up/cannot_read), untrusted-screen-content discipline. Reflects the prompt at the current installed clawdcursor version — pull this rather than hardcoding rules so they stay in sync with upstream changes.",
       "category": "orchestration",
       "parameters": {
         "type": "object",
         "properties": {
           "mode": {
             "type": "string",
-            "description": "Agent mode: \"blind\" (a11y only), \"hybrid\" (a11y + on-demand screenshots), or \"vision\" (screenshot per turn)",
+            "description": "Agent mode hint for the system prompt (blind / hybrid / vision). Defaults to \"hybrid\".",
             "enum": [
               "blind",
               "hybrid",
               "vision"
             ],
-            "default": "blind"
+            "default": "hybrid"
           }
         }
       },
