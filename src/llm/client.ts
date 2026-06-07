@@ -732,6 +732,22 @@ export interface DirectToolUseOptions {
   toolChoice?: 'auto' | 'any' | 'none' | { name: string };
   maxTokens?: number;
   timeoutMs?: number;
+  /** External abort (user stop) — combined with the per-call timeout. */
+  signal?: AbortSignal;
+}
+
+/**
+ * Combine the per-call timeout with an external user-abort signal.
+ * AbortSignal.any needs Node 20.3+; on older 20.x fall back to the timeout
+ * alone (the agent loop still notices the abort at its next checkpoint).
+ */
+function combineSignals(timeoutMs?: number, external?: AbortSignal): AbortSignal | undefined {
+  const timeout = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
+  if (timeout && external) {
+    const any = (AbortSignal as { any?: (signals: AbortSignal[]) => AbortSignal }).any;
+    return any ? any.call(AbortSignal, [timeout, external]) : timeout;
+  }
+  return external ?? timeout;
 }
 
 /**
@@ -810,7 +826,8 @@ async function callAnthropicTools(
     headers: { 'Content-Type': 'application/json', ...p.authHeaders },
     body: JSON.stringify(body),
   };
-  if (p.timeoutMs) fetchOpts.signal = AbortSignal.timeout(p.timeoutMs);
+  const anthropicSignal = combineSignals(p.timeoutMs, p.signal);
+  if (anthropicSignal) fetchOpts.signal = anthropicSignal;
 
   const response = await fetch(`${p.baseUrl}/messages`, fetchOpts);
   if (!response.ok) {
@@ -947,7 +964,8 @@ async function callOpenAITools(
     headers: { 'Content-Type': 'application/json', ...p.authHeaders },
     body: JSON.stringify(body),
   };
-  if (p.timeoutMs) fetchOpts.signal = AbortSignal.timeout(p.timeoutMs);
+  const openaiSignal = combineSignals(p.timeoutMs, p.signal);
+  if (openaiSignal) fetchOpts.signal = openaiSignal;
 
   const response = await fetch(`${p.baseUrl}/chat/completions`, fetchOpts);
   if (!response.ok) {

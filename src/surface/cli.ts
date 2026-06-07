@@ -384,7 +384,10 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   // ── HTTP utility surface (/, /health, /stop) + MCP transport at /mcp ──
   const app = createUtilityServer({
     host: config.server.host,
-    onStop: () => {
+    onAbort: () => {
+      agent?.abort();
+    },
+    onStop: async () => {
       try {
         // Lazy require — only attempt when agent existed (scheduler bound).
         if (agent) {
@@ -392,6 +395,12 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
           const { stopScheduler } = require('../tools/scheduler');
           stopScheduler();
         }
+      } catch { /* non-fatal */ }
+      // Abort the in-flight task and let the loop settle so the user sees
+      // the "aborted by user" acknowledgment instead of a silent hard kill.
+      try {
+        agent?.abort();
+        await agent?.waitForIdle(2000);
       } catch { /* non-fatal */ }
       agent?.disconnect();
     },
@@ -477,6 +486,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
     console.log(`\nSurviving HTTP routes:`);
     console.log(`  GET  /         — Dashboard (calls /mcp via JSON-RPC)`);
     console.log(`  GET  /health   — Readiness probe (no auth)`);
+    console.log(`  POST /abort    — Abort the in-flight task (auth, localhost only)`);
     console.log(`  POST /stop     — Graceful shutdown (auth, localhost only)`);
     console.log(`\nMCP endpoint (the only protocol):`);
     console.log(`  POST /mcp      — JSON-RPC tools/call & tools/list (auth) — ${compactSurface ? 'compact' : 'granular'} surface, ${mcpToolCount} tools`);

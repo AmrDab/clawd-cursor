@@ -18,6 +18,13 @@ export interface AgentInput {
   /** Cooperative cancel — polled every turn. */
   isAborted?: () => boolean;
   /**
+   * Hard cancel — aborts the in-flight LLM fetch immediately. Without it,
+   * an abort only takes effect at the next isAborted() checkpoint, i.e.
+   * after the current (up to 45s) LLM call returns. Wired by Agent.abort()
+   * so `clawdcursor stop` gets an acknowledgment instead of a hard kill.
+   */
+  abortSignal?: AbortSignal;
+  /**
    * The window this subtask should run in (resolved by the caller — the
    * browser for a web subtask, a named open app, etc.). Injected as a
    * "WORKING WINDOW" anchor telling the agent to refocus it instead of

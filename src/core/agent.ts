@@ -44,6 +44,10 @@ export class Agent {
     stepsTotal: 0,
   };
   private aborted = false;
+  /** Cancels the in-flight LLM fetch on abort(). Fresh per executeTask(). */
+  private abortCtl: AbortController | null = null;
+  /** The in-flight task promise — lets /stop wait for the abort to settle. */
+  private currentRun: Promise<TaskResult> | null = null;
   private taskExecutionLocked = false;
 
   constructor(config: ClawdConfig, resolvedConfig?: ResolvedConfig) {
@@ -92,6 +96,7 @@ export class Agent {
     this.taskExecutionLocked = true;
 
     this.aborted = false;
+    this.abortCtl = new AbortController();
     const startTime = Date.now();
 
     // Wrap the entire task with a global wall-clock timeout.
@@ -109,11 +114,28 @@ export class Agent {
     });
 
     try {
-      return await Promise.race([this._executeTask(task, startTime), timeoutPromise]);
+      this.currentRun = this._executeTask(task, startTime);
+      return await Promise.race([this.currentRun, timeoutPromise]);
     } finally {
       if (timeoutHandle !== null) clearTimeout(timeoutHandle);
       this.taskExecutionLocked = false;
+      this.currentRun = null;
     }
+  }
+
+  /**
+   * Wait until the in-flight task settles (or the timeout elapses). Used by
+   * the /stop path so an abort can print its "aborted by user"
+   * acknowledgment before the process exits — previously stop was a hard
+   * kill 500ms after the HTTP response, mid-turn, with zero output.
+   */
+  async waitForIdle(timeoutMs: number): Promise<void> {
+    const run = this.currentRun;
+    if (!run) return;
+    await Promise.race([
+      run.then(() => undefined, () => undefined),
+      new Promise<void>(resolve => setTimeout(resolve, timeoutMs)),
+    ]);
   }
 
   /**
@@ -172,6 +194,7 @@ export class Agent {
       {
         task,
         isAborted: () => this.aborted,
+        abortSignal: this.abortCtl?.signal,
       },
       {
         adapter,
@@ -213,6 +236,10 @@ export class Agent {
 
   abort(): void {
     this.aborted = true;
+    // Cancel the in-flight LLM fetch too — the cooperative flag alone only
+    // takes effect at the next loop checkpoint, i.e. after the current
+    // (up to 45s) LLM call returns.
+    this.abortCtl?.abort();
     this.state = { status: 'idle', stepsCompleted: 0, stepsTotal: 0 };
   }
 

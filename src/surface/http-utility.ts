@@ -206,6 +206,12 @@ export function getServerLogBuffer(): LogEntry[] {
 export interface UtilityServerOptions {
   /** Called when /stop is invoked (graceful shutdown). */
   onStop: () => void | Promise<void>;
+  /**
+   * Called when /abort is invoked (and first on /stop): abort the in-flight
+   * agent task WITHOUT shutting the daemon down. Optional — a tools-only
+   * daemon has no agent to abort.
+   */
+  onAbort?: () => void;
   /** Optional host — used only for the dashboard CORS warning. */
   host?: string;
 }
@@ -268,6 +274,22 @@ export function createUtilityServer(options: UtilityServerOptions): express.Expr
     res.json({ status: 'ok', version: VERSION });
   });
 
+  // POST /abort — Bearer-gated, localhost-only: abort the in-flight agent
+  // task WITHOUT shutting the daemon down. Restored route: the legacy REST
+  // surface (src/server.ts) had it, v0.9 PR7.4 deleted it with the rest of
+  // REST — but `clawdcursor stop` still calls /abort first, so stop became
+  // a hard kill that never let the agent acknowledge ("aborted by user").
+  app.post('/abort', requireAuth, (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress || '';
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    if (!isLocal) {
+      return res.status(403).json({ error: 'Abort is only allowed from localhost' });
+    }
+    console.log(`\n${e('⏹', '--')} Abort requested — stopping the in-flight task...`);
+    try { options.onAbort?.(); } catch { /* non-fatal */ }
+    res.json({ aborted: true });
+  });
+
   // POST /stop — Bearer-gated, localhost-only graceful shutdown.
   app.post('/stop', requireAuth, (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || '';
@@ -280,10 +302,16 @@ export function createUtilityServer(options: UtilityServerOptions): express.Expr
     res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
     res.end(body, () => {
       console.log(`\n${e('👋', '--')} Shutting down (stop command received)...`);
-      try { Promise.resolve(options.onStop()).catch(() => {}); } catch { /* ok */ }
-      setTimeout(() => process.exit(0), 500);
+      // Abort the in-flight agent task FIRST so the loop can settle and
+      // print its "aborted by user" acknowledgment, then give onStop a
+      // bounded grace window before exiting. Previously this exited a flat
+      // 500ms after the response — a hard kill mid-turn with no output.
+      try { options.onAbort?.(); } catch { /* non-fatal */ }
+      const grace = Promise.resolve().then(() => options.onStop()).catch(() => {});
+      const cap = new Promise<void>(resolve => setTimeout(resolve, 2500));
+      void Promise.race([grace, cap]).then(() => process.exit(0));
     });
-    setTimeout(() => process.exit(1), 3000);
+    setTimeout(() => process.exit(1), 6000); // hard-kill safety net
   });
 
   return app;
