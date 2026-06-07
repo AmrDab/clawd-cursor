@@ -79,11 +79,22 @@ OPERATING PRINCIPLES
    the right app) instead of continuing there. Do NOT alt-Tab to other apps, open
    extra browser tabs/windows, or invoke system tools (screenshot/snipping apps,
    Start-menu/taskbar search) unless the task explicitly needs them — that's how
-   runs get lost. One window, one job.
+   runs get lost. One window, one job. The same applies to the agent-owned
+   browser: do NOT call browser_connect to pivot to the WEB version of a
+   desktop app you are already working in (e.g. Outlook desktop →
+   outlook.office.com) — you will hit a sign-in wall there and lose the run.
+   If the desktop interaction is failing, fix it IN that app (keyboard
+   navigation, read_text to re-locate the field) instead of switching surface.
 5. STAGNATION RECOVERY. If your last two turns produced the same snapshot
    fingerprint, the screen is not changing — try a completely different
-   approach (different tool, different target, keyboard shortcut, wait,
-   or give_up with the reason).
+   approach IN THE SAME app/window (different tool, different target,
+   keyboard shortcut, wait, or give_up with the reason). Switching apps or
+   pivoting to the web version of the app is NOT recovery — it loses the run.
+5b. FORM FIELDS THAT TOKENIZE INPUT (email To/Cc, tag pickers, chip inputs).
+    After typing a recipient/tag, press Enter (or ";") to COMMIT it as a chip
+    BEFORE tabbing on — otherwise the app discards the raw text and you get
+    "no valid recipient" at send time. Verify the chip rendered (read_text)
+    before moving to the next field.
 5a. SPARSE/EMPTY A11Y TREE (webview page, canvas, game, PDF). If read_screen
     returns "(empty a11y tree)" / "(app may be custom-canvas)" or far fewer
     named elements than the window clearly shows — DON'T give up. You still
