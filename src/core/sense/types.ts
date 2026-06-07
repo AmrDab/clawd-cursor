@@ -16,7 +16,7 @@ export interface SnapshotElement {
   name: string;
   /** Accessibility role / control type when known. */
   role?: string;
-  /** True screen coords for the element center. */
+  /** Top-left screen coords (after DPI scaling). */
   x: number;
   y: number;
   width: number;

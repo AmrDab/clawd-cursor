@@ -1,21 +1,10 @@
 import type { UIElement, Source, Role } from './ui-map-types';
+import { iou } from './ui-map-geom';
 
 const AGREEMENT_BONUS = 0.15;
 const OVERLAP_MIN = 0.5;        // IoU threshold to treat two boxes as the same element
 const ROLE_PRIORITY: Role[] = ['button', 'input', 'link', 'checkbox', 'tab',
   'listitem', 'list', 'image', 'text', 'unknown'];
-
-function iou(a: UIElement['bounds'], b: UIElement['bounds']): number {
-  const [ax, ay, aw, ah] = a;
-  const [bx, by, bw, bh] = b;
-  const x1 = Math.max(ax, bx);
-  const y1 = Math.max(ay, by);
-  const x2 = Math.min(ax + aw, bx + bw);
-  const y2 = Math.min(ay + ah, by + bh);
-  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-  const uni = aw * ah + bw * bh - inter;
-  return uni <= 0 ? 0 : inter / uni;
-}
 
 function betterRole(a: Role, b: Role): Role {
   return ROLE_PRIORITY.indexOf(a) <= ROLE_PRIORITY.indexOf(b) ? a : b;

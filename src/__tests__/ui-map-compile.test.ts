@@ -96,6 +96,20 @@ describe('compileUIMap — lazy escalation', () => {
     const map = await compileUIMap(deps(), {}); // a11y "Send" button is clickable
     expect(map.anchors.primary_action_candidate?.normalized_text).toBe('send');
   });
+
+  it('fuses overlapping a11y + OCR elements end-to-end (sources merged, confidence raised)', async () => {
+    const d = deps({
+      ocr: vi.fn(async () => ({
+        elements: [{ text: 'Send', x: 11, y: 21, width: 38, height: 11, confidence: 0.95, line: 0 }],
+        fullText: 'Send', durationMs: 1,
+      })),
+    });
+    const map = await compileUIMap(d, { target_text: 'nonexistent' }); // miss → OCR fires
+    const send = map.elements.find(e => e.normalized_text === 'send');
+    expect(send).toBeDefined();
+    expect(send!.sources.slice().sort()).toEqual(['a11y', 'ocr']);
+    expect(send!.confidence).toBeGreaterThan(0.85); // a11y base 0.85 + agreement bonus
+  });
 });
 
 describe('defaultCompileDeps', () => {

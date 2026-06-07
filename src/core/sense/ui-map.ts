@@ -7,11 +7,12 @@
 import type { PlatformAdapter, ScreenshotResult } from '../../platform/types';
 import type { Snapshot } from './types';
 import type { OcrResult } from '../../platform/ocr-engine';
-import type { UIMap, UIElement, Source, CompileHints } from './ui-map-types';
+import type { UIMap, UIElement, Bounds, Source, CompileHints } from './ui-map-types';
 import { a11yToUI, ocrToUI } from './ui-map-elements';
 import { fuse } from './ui-map-fuse';
 import { computeAnchors } from './ui-map-anchors';
 import { normalizeRole, normText } from './ui-map-normalize';
+import { iou } from './ui-map-geom';
 import { captureSnapshot } from './snapshot';
 import { OcrEngine } from '../../platform/ocr-engine';
 
@@ -75,15 +76,34 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
   elements = elements.map((e, i) => ({ ...e, id: `el_${i}` }));
 
   // Mark the focused element so the focused anchor resolves. The platform's
-  // focused element is matched into the fused map by normalized name + role.
+  // focused element carries name, role AND bounds — match it into the fused map
+  // by name+role, disambiguating ties (and empty-name canvas/editor surfaces)
+  // via nearest bounds (spec §5: role + normalized_text + nearest bounds).
   const focused = await deps.getFocusedElement().catch(() => null);
   if (focused) {
     const fname = normText(focused.name);
     const frole = normalizeRole(focused.controlType);
-    if (fname !== '') {
-      const hit = elements.find(e => e.normalized_text === fname && e.role === frole);
-      if (hit) hit.state = { ...hit.state, focused: true };
+    const fb = focused.bounds;
+    const fbounds: Bounds | null =
+      fb && fb.width > 0 && fb.height > 0 ? [fb.x, fb.y, fb.width, fb.height] : null;
+    const named = fname !== ''
+      ? elements.filter(e => e.normalized_text === fname && e.role === frole)
+      : [];
+    const bestByIou = (els: UIElement[], b: Bounds): UIElement | undefined =>
+      els.length === 0 ? undefined
+        : els.reduce((best, e) => (iou(e.bounds, b) > iou(best.bounds, b) ? e : best), els[0]);
+    let hit: UIElement | undefined;
+    if (named.length === 1) {
+      hit = named[0];
+    } else if (named.length > 1) {
+      hit = fbounds ? bestByIou(named, fbounds) : named[0];
+    } else if (fbounds) {
+      // No name match (or empty name) — fall back to the nearest overlapping
+      // element, but only accept a real overlap to avoid false positives.
+      const cand = bestByIou(elements, fbounds);
+      if (cand && iou(cand.bounds, fbounds) > 0) hit = cand;
     }
+    if (hit) hit.state = { ...hit.state, focused: true };
   }
 
   const screen = await deps.getScreenSize();
