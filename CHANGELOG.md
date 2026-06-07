@@ -2,6 +2,26 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.0.4] - 2026-06-07 — fix Windows minimize/resize (#153)
+
+- **`window minimize` (and `window resize`) silently did nothing on Windows.**
+  Root cause: the PowerShell those commands run is built as a single concatenated
+  line and executed via `powershell.exe -Command <string>`, but it opened the
+  `Add-Type -MemberDefinition` block with a **here-string** (`@"…"@`). A here-string
+  header must be the last token on its line — on a single line PowerShell raises
+  *"No characters are allowed after a here-string header before the end of the line"*
+  and the **entire script fails to parse**, so the call produced no output and
+  returned `false`. Reported for UWP apps (Calculator/Settings) but it affected
+  every window. Switched to a single-quoted `-MemberDefinition '…'` (C# double-quotes
+  are literal inside it). Fixed in `setWindowState` (minimize/maximize/restore/close)
+  and `setWindowBounds` (resize); a static guard test prevents the here-string from
+  returning.
+- Minimize now also drives the transition through the UIA `WindowPattern`
+  (`SetWindowVisualState`) with a title-first window lookup, the supported
+  cross-process path for UWP / ApplicationFrameHost-hosted windows whose Win32
+  `ShowWindow(SW_MINIMIZE)` no-ops; falls back to `ShowWindowAsync` for plain Win32.
+  Verified live on Calculator: minimize / restore / maximize / restore all succeed.
+
 ## [1.0.3] - 2026-06-07 — fix macOS install/update loop (#155)
 
 - **macOS updates were blocked after the first install.** `native/build.sh` writes

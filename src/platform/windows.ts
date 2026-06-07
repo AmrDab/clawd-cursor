@@ -377,10 +377,12 @@ export class WindowsAdapter implements PlatformAdapter {
         // WM_CLOSE — polite close request. App may prompt, we return true
         // when the message was posted, not when the window actually closed.
         const ps =
-          'Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition @"' +
-          '[DllImport(\\"user32.dll\\")] public static extern System.IntPtr GetForegroundWindow();' +
-          '[DllImport(\\"user32.dll\\")] public static extern bool PostMessage(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, System.IntPtr lParam);' +
-          '"@ -PassThru | Out-Null;' +
+          // Single-quoted -MemberDefinition (not a here-string) — a here-string header
+          // is illegal in a single-line `-Command` and fails to parse (see #153).
+          "Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition '" +
+          '[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();' +
+          '[DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr hWnd, uint Msg, System.IntPtr wParam, System.IntPtr lParam);' +
+          "' -PassThru | Out-Null;" +
           `$h = ${target};` +
           'if ($h -ne [System.IntPtr]::Zero) { [Win32.NativeMethods]::PostMessage($h, 0x0010, [System.IntPtr]::Zero, [System.IntPtr]::Zero) | Out-Null; "ok" } else { "no-window" }';
         const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', ps], { timeout: PS_TIMEOUT_MS });
@@ -388,13 +390,56 @@ export class WindowsAdapter implements PlatformAdapter {
       }
 
       if (showCmd !== null) {
+        // UWP windows hosted by ApplicationFrameHost ignore a cross-process
+        // Win32 ShowWindow(SW_MINIMIZE) — it silently no-ops (#153: minimize
+        // failed for Calculator/Settings while maximize/restore worked). Drive
+        // the transition through the UIA WindowPattern (the supported
+        // cross-process way, and what we already use for restore), which works
+        // for UWP *and* Win32. Fall back to ShowWindowAsync (plus SW_FORCEMINIMIZE
+        // for the minimize case) only if the pattern isn't available.
+        const visualState = state === 'maximize' ? 'Maximized'
+          : state === 'minimize' ? 'Minimized'
+          : 'Normal';
+        const titleQ = this.psQuote(query?.title ?? '');
+        const forceMin = state === 'minimize'
+          ? ' [Win32.NativeMethods]::ShowWindowAsync($nwh, 11) | Out-Null;'
+          : '';
         const ps =
-          'Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition @"' +
-          '[DllImport(\\"user32.dll\\")] public static extern System.IntPtr GetForegroundWindow();' +
-          '[DllImport(\\"user32.dll\\")] public static extern bool ShowWindowAsync(System.IntPtr hWnd, int nCmdShow);' +
-          '"@ -PassThru | Out-Null;' +
+          // NB: a here-string header (@"...) is illegal in a single-line `-Command`
+          // ("No characters are allowed after a here-string header before the end of
+          // the line") — it fails to PARSE, so the whole script silently produced no
+          // output and minimize returned false (#153). Use a PS single-quoted
+          // -MemberDefinition instead: the C# double-quotes are literal inside it, and
+          // Node handles the wire-escaping of those quotes for us.
+          'Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes | Out-Null;' +
+          "Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition '" +
+          '[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();' +
+          '[DllImport("user32.dll")] public static extern bool ShowWindowAsync(System.IntPtr hWnd, int nCmdShow);' +
+          "' -PassThru | Out-Null;" +
+          `$title = ${titleQ};` +
           `$h = ${target};` +
-          `if ($h -ne [System.IntPtr]::Zero) { [Win32.NativeMethods]::ShowWindowAsync($h, ${showCmd}) | Out-Null; "ok" } else { "no-window" }`;
+          '$el = $null;' +
+          // Strategy A — find the top-level window by title via UIA. This is the
+          // ONLY reliable handle for UWP / ApplicationFrameHost apps, whose
+          // visible window is owned by ApplicationFrameHost (so pid→MainWindowHandle
+          // is 0/wrong) and whose cross-process ShowWindow(SW_MINIMIZE) no-ops (#153).
+          'if ($title -ne "") {' +
+          '  $root = [System.Windows.Automation.AutomationElement]::RootElement;' +
+          '  $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window);' +
+          '  foreach ($w in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $cond)) {' +
+          '    $n = $w.Current.Name; if ($n -and $n.ToLower().Contains($title.ToLower())) { $el = $w; break }' +
+          '  }' +
+          '}' +
+          // Strategy B — the caller-resolved handle. Strategy C — foreground.
+          'if ($el -eq $null -and $h -ne [System.IntPtr]::Zero) { try { $el = [System.Windows.Automation.AutomationElement]::FromHandle($h) } catch {} }' +
+          'if ($el -eq $null) { $fg = [Win32.NativeMethods]::GetForegroundWindow(); if ($fg -ne [System.IntPtr]::Zero) { try { $el = [System.Windows.Automation.AutomationElement]::FromHandle($fg) } catch {} } }' +
+          'if ($el -eq $null) { "no-window" } else {' +
+          '  $ok = $false;' +
+          `  try { $wp = $el.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern); $wp.SetWindowVisualState([System.Windows.Automation.WindowVisualState]::${visualState}); $ok = $true } catch { $ok = $false }` +
+          '  if (-not $ok) { $nwh = [System.IntPtr]$el.Current.NativeWindowHandle; if ($nwh -ne [System.IntPtr]::Zero) {' +
+          `    [Win32.NativeMethods]::ShowWindowAsync($nwh, ${showCmd}) | Out-Null;${forceMin}` +
+          '    $ok = $true } }' +
+          '  if ($ok) { "ok" } else { "no-window" } }';
         const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', ps], { timeout: PS_TIMEOUT_MS });
         return stdout.trim() === 'ok';
       }
@@ -426,11 +471,13 @@ export class WindowsAdapter implements PlatformAdapter {
       const h = bounds.height ?? -1;
       // When a dim is -1, we read the current rect and preserve it.
       const ps =
-        'Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition @"' +
-        '[DllImport(\\"user32.dll\\")] public static extern System.IntPtr GetForegroundWindow();' +
-        '[DllImport(\\"user32.dll\\")] public static extern bool GetWindowRect(System.IntPtr hWnd, out System.Drawing.Rectangle rect);' +
-        '[DllImport(\\"user32.dll\\")] public static extern bool SetWindowPos(System.IntPtr hWnd, System.IntPtr hWndAfter, int X, int Y, int cx, int cy, uint uFlags);' +
-        '"@ -ReferencedAssemblies System.Drawing -PassThru | Out-Null;' +
+        // Single-quoted -MemberDefinition (not a here-string) — a here-string header
+        // is illegal in a single-line `-Command` and fails to parse (see #153).
+        "Add-Type -Name NativeMethods -Namespace Win32 -MemberDefinition '" +
+        '[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();' +
+        '[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr hWnd, out System.Drawing.Rectangle rect);' +
+        '[DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr hWnd, System.IntPtr hWndAfter, int X, int Y, int cx, int cy, uint uFlags);' +
+        "' -ReferencedAssemblies System.Drawing -PassThru | Out-Null;" +
         `$h = ${handleExpr};` +
         'if ($h -eq [System.IntPtr]::Zero) { "no-window"; exit }' +
         '$r = New-Object System.Drawing.Rectangle;' +
