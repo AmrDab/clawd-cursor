@@ -291,7 +291,7 @@
     .dot.r { background: #ff5f57; } .dot.y { background: #ffbd2e; } .dot.g { background: #28c840; }
     .code-hd span { margin-left: 10px; color: var(--text3); font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
     pre { padding: 18px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.7; }
-    .c-comment { color: #3f3f50; }
+    .c-comment { color: #3f3f50; -webkit-user-select: none; user-select: none; }
     .c-string { color: var(--accent2); }
     .c-cmd { color: var(--blue); }
     .c-flag { color: var(--purple); }
@@ -321,7 +321,7 @@
     .inst-tab.active { background: var(--accent2); color: #06281a; }
     .inst-os-tab { border-color: var(--border2); color: var(--text2); }
     .inst-os-tab.active { background: var(--red); border-color: var(--red); color: #fff; }
-    .c-prompt { color: var(--red); font-weight: 700; }
+    .c-prompt { color: var(--red); font-weight: 700; -webkit-user-select: none; user-select: none; }
     .copy-btn {
       position: absolute; top: 48px; right: 14px; z-index: 2;
       width: 30px; height: 28px; background: var(--surface); color: var(--text3);
@@ -724,7 +724,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
       </div>
       <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy command" title="Copy command">&#x2398;</button>
       <pre><code><span class="c-comment" id="inst-comment"></span>
-<span class="c-prompt">$</span> <span id="inst-cmd"></span></code></pre>
+<span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
     </div>
 
     <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). On macOS also run <code style="font-size:0.95em">clawdcursor grant</code> for the native accessibility helper. The one-liner installs Node if needed and links the global shim. After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>.</p>
