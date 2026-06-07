@@ -20,6 +20,7 @@ describe('renderUIMap', () => {
     expect(out).toContain('"Send"');
     expect(out).toContain('0.96');
     expect(out).toContain('a11y,ocr');
+    expect(out).toContain('@1,2 3x4');
   });
 
   it('ranks actionable/high-confidence elements before plain text, and truncates with a count', () => {

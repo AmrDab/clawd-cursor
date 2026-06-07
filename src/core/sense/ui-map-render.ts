@@ -16,7 +16,7 @@ function line(e: UIElement): string {
   const [x, y, w, h] = e.bounds;
   const conf = e.confidence.toFixed(2);
   const flagStr = flags.length ? ` {${flags.join(',')}}` : '';
-  return `${e.id} [${e.role}] "${e.text ?? ''}" (${conf} ${e.sources.join(',')}) @${x},${y} ${w}x${h}${flagStr}`;
+  return `${e.id} [${e.role}] "${e.text ?? e.normalized_text ?? ''}" (${conf} ${e.sources.join(',')}) @${x},${y} ${w}x${h}${flagStr}`;
 }
 
 export function renderUIMap(map: UIMap, opts: { max?: number } = {}): string {

@@ -76,6 +76,7 @@ describe('compileUIMap — lazy escalation', () => {
     expect(map.compiled_at).toBe('1234');
     expect(map.active_app).toBe('notepad');
     expect(map.window_bounds).toEqual([0, 0, 800, 600]);
+    expect(map.truncation).toEqual({ total_elements: 1, returned_elements: 1 });
   });
 
   it('marks the focused element and sets the focused anchor from getFocusedElement', async () => {
