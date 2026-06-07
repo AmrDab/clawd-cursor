@@ -23,6 +23,7 @@
  * branching here.
  */
 
+import { createHash } from 'node:crypto';
 import type { ScreenshotResult } from '../../platform/types';
 import { FingerprintHistory } from '../sense/fingerprint';
 import { captureSnapshot } from '../sense/snapshot';
@@ -122,6 +123,13 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
   // Set up perception state.
   const fph = new FingerprintHistory(8);
   const screenshotsCaptured = { n: 0 };
+  // Pixel-level change evidence. The a11y fingerprint is structurally blind
+  // to sparse-a11y apps (new Outlook / `olk`, web & canvas UIs) — it can sit
+  // flat for 30+ turns while the screen demonstrably advances. Screenshot
+  // bytes are ground truth: when the model captures one and it differs from
+  // the previous capture, the screen moved, whatever the fingerprint says.
+  let lastShotDigest: string | null = null;
+  let lastPixelMoveTurn = 0;
 
   // Cache screen size once — used for scroll center coordinates.
   let screen: AgentToolContext['screen'];
@@ -246,10 +254,20 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
               maxTokens: llmConfig.maxTokens ?? 1024,
               timeoutMs: 45_000,
               toolChoice: 'auto',
+              signal: input.abortSignal,
             });
             llmCalls += 1;
             break;
           } catch (err) {
+            // User abort (stop command) cancels the in-flight fetch via
+            // input.abortSignal — exit cleanly as 'aborted', never as
+            // llm_error, and never retry. The timeout signal throws
+            // 'TimeoutError', a user abort throws 'AbortError', so the two
+            // are distinguishable.
+            if (isAborted() || input.abortSignal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+              log.info('agent.aborted', { turn, during: 'llm_call' });
+              return finish('aborted', 'aborted by user', steps, llmCalls, screenshotsCaptured.n, startedAt);
+            }
             const msg = err instanceof Error ? err.message : String(err);
             const transient = /\b(timeout|timed out|429|rate.?limit|overload|529|50[0-4]|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|network|fetch failed)\b/i.test(msg);
             if (attempt < LLM_MAX_ATTEMPTS && transient) {
@@ -693,7 +711,21 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       // killed the Outlook send-email run mid-plan: the agent had called
       // build_uri to construct a mailto URI and was one turn away from
       // dispatching it via open_uri when the stagnation hard-abort fired.
-      const stagnant = fph.isStagnant(STAGNATION_WINDOW);
+      // Pixel evidence overrides the a11y fingerprint. Live run 2026-06-06:
+      // an Outlook compose in `olk` (sparse, near-static a11y tree) warned
+      // "stagnation" on EVERY turn 7–37 while the screen demonstrably
+      // advanced — and the firm nudge ("switch to a FUNDAMENTALLY different
+      // method") drove the model to abandon the desktop app for a browser.
+      // Any screenshot whose bytes differ from the previous capture proves
+      // the screen moved; treat that as fresh progress for a full window.
+      for (const tr of toolResults) {
+        if (!tr.screenshot?.buffer?.length) continue;
+        const digest = createHash('sha1').update(tr.screenshot.buffer).digest('hex');
+        if (lastShotDigest !== null && digest !== lastShotDigest) lastPixelMoveTurn = turn;
+        lastShotDigest = digest;
+      }
+      const recentPixelMove = lastPixelMoveTurn > 0 && turn - lastPixelMoveTurn < STAGNATION_WINDOW;
+      const stagnant = fph.isStagnant(STAGNATION_WINDOW) && !recentPixelMove;
       // In the hybrid loop the agent perceives via both a11y and screenshots.
       // The a11y fingerprint can stay constant while the screen advances (canvas,
       // browser WebView). Only count stagnation when the agent tried a screen-
@@ -718,7 +750,13 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       // above; genuine flailing is capped by max_turns. So here we only
       // ESCALATE the nudge — and steer toward the methods that work when the
       // a11y tree is blind: keyboard-only navigation and focus verification.
-      if (stagnant) {
+      // Warn only on turns where the agent actually TRIED to change the
+      // screen. Pure observation/compute turns (screenshot, read_text,
+      // list_windows) legitimately leave the fingerprint flat — re-injecting
+      // the warning there just spams the prompt with a persistent "you're
+      // stuck" signal (it rode along on every screenshot()-only turn in the
+      // live Outlook run).
+      if (stagnant && anyScreenChangingTool) {
         const firm = consecutiveStagnantTurns >= STAGNATION_HARD_LIMIT;
         log.warn(EVENTS.AGENT_STAGNATION, {
           turn,
@@ -730,7 +768,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         nextBlocks.push({
           type: 'text',
           text: firm
-            ? `\n⚠ STAGNATION (${consecutiveStagnantTurns} turns, no accessibility change). The screen may still be advancing — this app likely has a sparse a11y tree (new Outlook, web/canvas UIs), so trust a fresh screenshot/OCR over the a11y view. STOP repeating the last action. Switch to a FUNDAMENTALLY different method now: prefer keyboard-only flow (e.g. open a fresh compose, then the recipient field is focused — type it, Tab to the next field, type, Tab again, type the body), call focus_window first to confirm the right window is active, or give_up with a concrete reason if truly blocked.`
+            ? `\n⚠ STAGNATION (${consecutiveStagnantTurns} turns, no accessibility change). The screen may still be advancing — this app likely has a sparse a11y tree (new Outlook, web/canvas UIs), so trust a fresh screenshot/OCR over the a11y view. STOP repeating the last action. Switch to a FUNDAMENTALLY different method now: prefer keyboard-only flow (e.g. open a fresh compose, then the recipient field is focused — type it, Tab to the next field, type, Tab again, type the body), call focus_window first to confirm the right window is active, or give_up with a concrete reason if truly blocked. Stay in the CURRENT app/window — do NOT pivot to a browser or a different app to work around it.`
             : `\n⚠ STAGNATION (${consecutiveStagnantTurns}/${STAGNATION_HARD_LIMIT}): the last ${STAGNATION_WINDOW} actions did not change the accessibility tree. Try a DIFFERENT approach (keyboard shortcut, Tab between fields, different target, focus_window to check the active window) — or, if the screen really is changing, verify with a screenshot. give_up if you're truly stuck.`,
         });
         // Re-arm after a firm nudge so it recurs in waves (not every turn) and a

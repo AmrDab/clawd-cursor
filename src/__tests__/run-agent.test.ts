@@ -245,6 +245,119 @@ describe('runAgent — stagnation is a nudge, not an abort', () => {
   });
 });
 
+describe('runAgent — stagnation respects pixel evidence + observation turns (live Outlook regression 2026-06-06)', () => {
+  beforeEach(() => {
+    llmTurnQueue.length = 0;
+    capturedLlmCalls.length = 0;
+  });
+
+  /** All text blocks from user turns, across every captured LLM call. */
+  const collectUserText = (): string[] =>
+    capturedLlmCalls.flatMap((c: any) => ((c?.messages ?? []) as any[])
+      .filter(m => m.role === 'user')
+      .flatMap(m => (Array.isArray(m.content) ? m.content : []))
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text as string));
+
+  it('changing screenshots disarm the a11y-stagnation warning (sparse-a11y apps like new Outlook)', async () => {
+    // Live run 2026-06-06: new Outlook (`olk`) has a near-static sparse a11y
+    // tree, so the fingerprint sat flat for 30 turns while the compose window
+    // demonstrably advanced — "⚠ stagnation" was injected EVERY turn 7–37 and
+    // its firm nudge ("switch to a FUNDAMENTALLY different method") drove the
+    // model to abandon the desktop app for a browser. When the model captures
+    // screenshots, their bytes are ground truth: any difference must override
+    // the stale a11y fingerprint.
+    const adapter = makeAdapter();
+    let shotN = 0;
+    (adapter.screenshot as any).mockImplementation(async (): Promise<ScreenshotResult> => ({
+      buffer: Buffer.from([1, 2, 3, shotN++]), // unique pixels every capture
+      width: 1920, height: 1080, scaleFactor: 1,
+    }));
+    // Screenshot-first so pixel evidence exists by the time the fingerprint
+    // window fills (the comparison needs two captures before it can prove
+    // movement — exactly like the live run, where the model screenshot-ed
+    // every other turn).
+    for (const k of ['F1', 'F2', 'F3', 'F4', 'F5', 'F6']) {
+      llmTurnQueue.push(turnCall('screenshot'));
+      llmTurnQueue.push(turnCall('key', { key: k }));
+    }
+    llmTurnQueue.push(turnCall('done', { evidence: 'sequence finished' }));
+
+    const result = await runAgent(
+      { task: 'progressing in a sparse-a11y app', maxTurns: 30 },
+      { adapter, llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    expect(collectUserText().filter(t => t.includes('STAGNATION'))).toEqual([]);
+  });
+
+  it('pure-observation turns do not re-inject the stagnation warning', async () => {
+    // Static adapter, no pixel evidence: the warning legitimately fires on
+    // screen-changing turns — but an observation/compute turn (list_windows,
+    // screenshot, read_text) must not re-spam it. In the live run the warning
+    // rode along on every screenshot()-only turn too.
+    llmTurnQueue.push(turnCall('key', { key: 'F1' }));
+    llmTurnQueue.push(turnCall('key', { key: 'F2' }));
+    llmTurnQueue.push(turnCall('key', { key: 'F3' })); // stagnant by now → warn expected
+    llmTurnQueue.push(turnCall('list_windows'));        // observation turn → must NOT warn
+    llmTurnQueue.push(turnCall('done', { evidence: 'window list shows the expected state' }));
+
+    const result = await runAgent(
+      { task: 'static screen', maxTurns: 10 },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    // The warning fired at least once on the screen-changing turns…
+    expect(collectUserText().some(t => t.includes('STAGNATION'))).toBe(true);
+    // …but the payload built after the list_windows turn carries no fresh one.
+    const lastCall = capturedLlmCalls[capturedLlmCalls.length - 1];
+    const lastUser = [...lastCall.messages].reverse().find((m: any) => m.role === 'user') as any;
+    const lastText = (lastUser.content as any[])
+      .filter(b => b.type === 'text').map(b => b.text).join('\n');
+    expect(lastText).not.toContain('STAGNATION');
+  });
+});
+
+describe('runAgent — user abort (stop command) must be acknowledged', () => {
+  beforeEach(() => {
+    llmTurnQueue.length = 0;
+    capturedLlmCalls.length = 0;
+  });
+
+  it('an AbortError thrown mid-LLM-call exits with "aborted", not llm_error, and is not retried', async () => {
+    // Live run 2026-06-06: `clawdcursor stop` hard-killed the daemon mid-turn
+    // 47 with zero acknowledgment. With /abort restored, Agent.abort() cancels
+    // the in-flight fetch — the loop must classify that as a clean user abort.
+    llmTurnQueue.push(turnCall('read_screen'));
+    const abortErr = new Error('This operation was aborted');
+    abortErr.name = 'AbortError';
+    llmTurnQueue.push(abortErr as any);
+
+    const result = await runAgent(
+      { task: 'abort mid-flight', maxTurns: 10 },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('aborted');
+    expect(result.text).toContain('aborted by user');
+    expect(capturedLlmCalls.length).toBe(2); // the aborted call is NOT retried
+  });
+
+  it('threads input.abortSignal through to the LLM call so abort cancels the fetch', async () => {
+    const ctl = new AbortController();
+    llmTurnQueue.push(turnCall('done', { evidence: 'done' }));
+
+    await runAgent(
+      { task: 'signal plumbing', maxTurns: 5, abortSignal: ctl.signal },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+
+    expect(capturedLlmCalls[0].signal).toBe(ctl.signal);
+  });
+});
+
 describe('runAgent — vision/canvas guards must not misfire (live-test regression 2026-05-28)', () => {
   beforeEach(() => {
     llmTurnQueue.length = 0;
