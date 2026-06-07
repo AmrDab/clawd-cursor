@@ -31,4 +31,23 @@ describe('fuse', () => {
     const b = mk({ id: 'b', bounds: [2, 2, 96, 16], sources: ['ocr'], normalized_text: 'cancel' });
     expect(fuse([a, b])).toHaveLength(2);
   });
+
+  it('confidence is idempotent for 3 corroborating sources (base + 2·bonus, not compounded)', () => {
+    const a = mk({ id: 'a', bounds: [10, 10, 40, 12], sources: ['a11y'],
+      normalized_text: 'send', confidence: 0.5, role: 'button' });
+    const o = mk({ id: 'o', bounds: [11, 11, 38, 11], sources: ['ocr'],
+      normalized_text: 'send', confidence: 0.5, role: 'text' });
+    const v = mk({ id: 'v', bounds: [10, 10, 40, 12], sources: ['vision'],
+      normalized_text: 'send', confidence: 0.5, role: 'text' });
+    const out = fuse([a, o, v]);
+    expect(out).toHaveLength(1);
+    expect(out[0].sources.sort()).toEqual(['a11y', 'ocr', 'vision']);
+    expect(out[0].confidence).toBeCloseTo(0.8, 5); // 0.5 base + 0.15*2, NOT compounded 0.95
+  });
+
+  it('does NOT fuse two elements that both lack normalized_text', () => {
+    const a = mk({ id: 'a', bounds: [0, 0, 50, 20], sources: ['ocr'], normalized_text: undefined });
+    const b = mk({ id: 'b', bounds: [1, 1, 48, 18], sources: ['ocr'], normalized_text: undefined });
+    expect(fuse([a, b])).toHaveLength(2);
+  });
 });
