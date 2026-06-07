@@ -10,6 +10,8 @@ import type { OcrResult } from '../../platform/ocr-engine';
 import type { UIMap, UIElement, Source, CompileHints } from './ui-map-types';
 import { a11yToUI, ocrToUI } from './ui-map-elements';
 import { fuse } from './ui-map-fuse';
+import { computeAnchors } from './ui-map-anchors';
+import { normalizeRole, normText } from './ui-map-normalize';
 
 const SPARSE_A11Y_MAX = 0;          // ≤ this many named a11y elements ⇒ "sparse"
 const LOW_CONFIDENCE = 0.5;         // below this on a needed element ⇒ vision-worthy
@@ -23,6 +25,8 @@ export interface CompileDeps {
   vision: () => Promise<ScreenshotResult>;
   getScreenSize: PlatformAdapter['getScreenSize'];
   getFocusedElement: PlatformAdapter['getFocusedElement'];
+  /** Previous turn's anchors, for cross-turn continuity (optional). */
+  prevAnchors?: UIMap['anchors'];
   /** Caller-passed clock + id (pure: no Date.now in this module). */
   now: number;
   snapshotId: string;
@@ -68,6 +72,18 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
   // Re-id ids contiguously after fusion so el_NN is dense within this snapshot.
   elements = elements.map((e, i) => ({ ...e, id: `el_${i}` }));
 
+  // Mark the focused element so the focused anchor resolves. The platform's
+  // focused element is matched into the fused map by normalized name + role.
+  const focused = await deps.getFocusedElement().catch(() => null);
+  if (focused) {
+    const fname = normText(focused.name);
+    const frole = normalizeRole(focused.controlType);
+    if (fname !== '') {
+      const hit = elements.find(e => e.normalized_text === fname && e.role === frole);
+      if (hit) hit.state = { ...hit.state, focused: true };
+    }
+  }
+
   const screen = await deps.getScreenSize();
   const aw = snap.activeWindow;
   return {
@@ -82,6 +98,6 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
     compiled_at: String(deps.now),
     sources_used: sourcesUsed,
     elements,
-    anchors: {},                   // filled in Task 6
+    anchors: computeAnchors(elements, deps.prevAnchors),
   };
 }

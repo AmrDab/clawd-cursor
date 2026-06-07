@@ -77,4 +77,20 @@ describe('compileUIMap — lazy escalation', () => {
     expect(map.active_app).toBe('notepad');
     expect(map.window_bounds).toEqual([0, 0, 800, 600]);
   });
+
+  it('marks the focused element and sets the focused anchor from getFocusedElement', async () => {
+    const d = deps({
+      getFocusedElement: vi.fn(async () => ({ name: 'Send', controlType: 'Button',
+        bounds: { x: 10, y: 20, width: 40, height: 12 } } as any)),
+    });
+    const map = await compileUIMap(d, {});
+    expect(map.anchors.focused?.normalized_text).toBe('send');
+    const focusedEl = map.elements.find(e => e.id === map.anchors.focused?.id);
+    expect(focusedEl?.state?.focused).toBe(true);
+  });
+
+  it('sets primary_action_candidate when a primary-verb clickable element exists', async () => {
+    const map = await compileUIMap(deps(), {}); // a11y "Send" button is clickable
+    expect(map.anchors.primary_action_candidate?.normalized_text).toBe('send');
+  });
 });
