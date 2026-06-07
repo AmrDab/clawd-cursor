@@ -2,6 +2,17 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.0.3] - 2026-06-07 — fix macOS install/update loop (#155)
+
+- **macOS updates were blocked after the first install.** `native/build.sh` writes
+  the helper into the git tree (`native/ClawdCursor.app/`, `native/.build/`), but
+  those weren't gitignored — so `install.sh`'s clean-tree guard saw a "dirty" tree
+  and refused every subsequent update. Now gitignored, and the generated
+  `native/ClawdCursor.app/Contents/Info.plist` (which made git descend into the
+  `.app` and surface the untracked binaries) is untracked — `build.sh` regenerates
+  it. The `.app` is built on-device and was never in the npm package.
+- `clawdcursor uninstall` now also removes the native build artifacts.
+
 ## [1.0.2] - 2026-06-07 — resilient uninstall
 
 - **`clawdcursor uninstall` no longer crashes on Windows when a file is locked.**

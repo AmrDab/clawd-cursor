@@ -1131,6 +1131,9 @@ program
 
     // 6. Remove dist folder
     safeRemove(path.join(clawdRoot, 'dist'), 'dist/');
+    // macOS native helper build output — regenerable, not tracked (#155).
+    safeRemove(path.join(clawdRoot, 'native', '.build'), 'native/.build/');
+    safeRemove(path.join(clawdRoot, 'native', 'ClawdCursor.app'), 'native/ClawdCursor.app/');
 
     // 7. Unlink global npm command
     try {
