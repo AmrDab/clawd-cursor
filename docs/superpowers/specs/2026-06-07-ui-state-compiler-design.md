@@ -176,8 +176,12 @@ Sources are consulted cheapest-first, and only as far as needed:
 - **Always** (free/cheap): window/process/display metadata + a11y tree +
   cursor/keyboard state. DOM is included when a CDP browser is already
   connected (cheap, structured).
-- **OCR**: pulled only when a11y is empty/sparse (below a named-element
-  threshold), **or** a requested `target_text` is absent from the a11y tree.
+- **OCR**: pulled only when the a11y tree is **empty** (zero named elements —
+  the spine-fallback case, e.g. a WebView/canvas compose surface), **or** a
+  requested `target_text` is absent from the a11y tree. (Implementation:
+  `SPARSE_A11Y_MAX = 0`. A non-empty-but-thin a11y tree relies on the
+  `target_text` path or `max_cost: "vision_ok"` rather than a raw count
+  threshold — the most cost-conservative reading of "sparse".)
 - **Vision**: pulled **only** when both a11y and OCR are empty/sparse, **or**
   confidence on a needed element is below threshold / sources disagree.
 
