@@ -232,6 +232,33 @@ describe('Smart Tools', () => {
       }
     });
 
+    it('a stray single-char OCR token must NOT claim a multi-char target (live regression: "OK" clicked "O" at 0.45)', async () => {
+      // Live Outlook run 2026-06-06: a discard-draft dialog was open and the
+      // agent called smart_click(target="OK"). OCR saw a stray "O" near the
+      // taskbar; the substring rule scored it min(1,2)/max(1,2)*0.9 = 0.45,
+      // which cleared the 0.40 floor — and the click landed at (164,749),
+      // nowhere near the dialog. A 1-char token is OCR noise and must never
+      // claim a multi-char target.
+      const { OcrEngine } = await import('../platform/ocr-engine');
+      const origRecognize = (OcrEngine.prototype as any).recognizeScreen;
+      (OcrEngine.prototype as any).recognizeScreen = async () => ({
+        elements: [
+          { text: 'O', x: 160, y: 745, width: 8, height: 12, line: 99, confidence: 0.9 },
+        ],
+        fullText: 'O',
+        durationMs: 100,
+      });
+      try {
+        mockInvokeElement.mockResolvedValue({ success: false });
+        const ctx = createCtx();
+        const result = await smartClick.handler({ target: 'OK' }, ctx);
+        expect(result.isError).toBe(true);
+        expect(mockMouseClick).not.toHaveBeenCalled();
+      } finally {
+        (OcrEngine.prototype as any).recognizeScreen = origRecognize;
+      }
+    });
+
     // ── Issue #101: structured failure payloads ──
 
     it('successful click still returns plain human-readable text (not JSON)', async () => {
