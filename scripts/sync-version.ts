@@ -103,6 +103,9 @@ const TARGETS: SyncTarget[] = [
     pattern: /(\bVERSION=v)\d+\.\d+\.\d+(\b)/g,
     replacement: `$1${VERSION}$2`,
     desc: 'index.html bash install-pin example',
+    // Optional for the same reason as the PowerShell example above: the
+    // npm-first install section may render only one pin example (or neither).
+    optional: true,
   },
 
   // Installer scripts — header comments that document the example pin.
