@@ -225,8 +225,8 @@ export async function checkAssertions(assertions: Assertion[], deps: AssertionDe
   const outcomes: AssertionOutcome[] = [];
   for (let i = 0; i < assertions.length; i++) {
     const a = assertions[i];
-    let ok = false;
-    let detail = '';
+    let ok: boolean;
+    let detail: string;
     try {
       ({ ok, detail } = await checkOne(a, deps));
     } catch (err) {
