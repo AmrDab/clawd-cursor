@@ -327,6 +327,7 @@
       width: 30px; height: 28px; background: var(--surface); color: var(--text3);
       border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
       font-size: 0.95rem; line-height: 1; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
     }
     .copy-btn:hover { color: var(--text); border-color: var(--border2); }
 
@@ -722,7 +723,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
           <button class="inst-os-tab active" data-o="win" onclick="pickOS('win')">Windows</button>
         </div>
       </div>
-      <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy command" title="Copy command">&#x2398;</button>
+      <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy command" title="Copy command"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
       <pre><code><span class="c-comment" id="inst-comment"></span>
 <span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
     </div>
@@ -905,7 +906,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
   function copyInstall(btn) {
     const txt = document.getElementById('inst-cmd').textContent;
     navigator.clipboard.writeText(txt).then(() => {
-      const orig = btn.innerHTML; btn.textContent = '✓';
+      const orig = btn.innerHTML; btn.innerHTML = '<span style="color:var(--accent);font-weight:700">✓</span>';
       setTimeout(() => { btn.innerHTML = orig; }, 1200);
     }).catch(() => {});
   }
