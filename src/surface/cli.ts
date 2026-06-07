@@ -1009,6 +1009,29 @@ program
     const clawdRoot = getPackageRoot();
     const homeDir = os.homedir();
     let removed = 0;
+    const failed: string[] = [];
+
+    // Resilient remove: never let one locked / permission-denied path abort the
+    // whole uninstall. On Windows a file handle (a running daemon, the logger's
+    // current log file, AV/indexer) can briefly hold a path open → EPERM/EBUSY.
+    // rmSync's maxRetries rides out the transient lock; the try/catch downgrades
+    // a hard failure to a warning + manual-cleanup hint and CONTINUES to the next
+    // step (the old code threw here, crashing as an unhandledRejection and
+    // leaving the install half-removed).
+    const safeRemove = (target: string, label: string): void => {
+      try {
+        if (!fs.existsSync(target)) return;
+        const stat = fs.lstatSync(target);
+        if (stat.isSymbolicLink() || stat.isFile()) fs.unlinkSync(target);
+        else fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        console.log(`   ${e('🗑️', '[DEL]')}  Removed ${label}`);
+        removed++;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code || (err as Error).message;
+        failed.push(`${target} (${code})`);
+        console.log(`   ${e('⚠️', '[WARN]')}  Could not remove ${label} (${code}) — close any running clawdcursor, then delete manually: ${target}`);
+      }
+    };
 
     // 0. Stop any running server first (before deleting token)
     try {
@@ -1052,36 +1075,15 @@ program
       path.join(clawdRoot, '.clawdcursor-favorites.json'),
       path.join(clawdRoot, '.env'),
     ];
-    for (const f of configFiles) {
-      if (fs.existsSync(f)) {
-        fs.unlinkSync(f);
-        console.log(`   ${e('🗑️', '[DEL]')}  Removed ${path.basename(f)}`);
-        removed++;
-      }
-    }
+    for (const f of configFiles) safeRemove(f, path.basename(f));
 
     // 2. Remove ~/.clawdcursor data directory (token, consent, task logs, pid)
-    const dataDir = path.join(homeDir, '.clawdcursor');
-    if (fs.existsSync(dataDir)) {
-      fs.rmSync(dataDir, { recursive: true, force: true });
-      console.log(`   ${e('🗑️', '[DEL]')}  Removed ${dataDir}`);
-      removed++;
-    }
+    safeRemove(path.join(homeDir, '.clawdcursor'), path.join(homeDir, '.clawdcursor'));
     // Also remove legacy data directory
-    const legacyDataDir = path.join(homeDir, '.clawd-cursor');
-    if (fs.existsSync(legacyDataDir)) {
-      fs.rmSync(legacyDataDir, { recursive: true, force: true });
-      console.log(`   ${e('🗑️', '[DEL]')}  Removed legacy ${legacyDataDir}`);
-      removed++;
-    }
+    safeRemove(path.join(homeDir, '.clawd-cursor'), `legacy ${path.join(homeDir, '.clawd-cursor')}`);
 
     // 3. Remove debug folder
-    const debugDir = path.join(clawdRoot, 'debug');
-    if (fs.existsSync(debugDir)) {
-      fs.rmSync(debugDir, { recursive: true, force: true });
-      console.log(`   ${e('🗑️', '[DEL]')}  Removed debug/`);
-      removed++;
-    }
+    safeRemove(path.join(clawdRoot, 'debug'), 'debug/');
 
     // 4. Remove external skill registrations (OpenClaw, Codex, etc.)
     const skillPaths = [
@@ -1090,18 +1092,7 @@ program
       path.join(homeDir, '.openclaw', 'skills', 'clawdcursor'),
       path.join(homeDir, '.codex', 'skills', 'clawdcursor'),
     ];
-    for (const sp of skillPaths) {
-      if (fs.existsSync(sp)) {
-        const stat = fs.lstatSync(sp);
-        if (stat.isSymbolicLink()) {
-          fs.unlinkSync(sp);
-        } else {
-          fs.rmSync(sp, { recursive: true, force: true });
-        }
-        console.log(`   ${e('🗑️', '[DEL]')}  Removed skill registration: ${sp}`);
-        removed++;
-      }
-    }
+    for (const sp of skillPaths) safeRemove(sp, `skill registration: ${sp}`);
 
     // 5. Remove MCP server entries from known config files
     const mcpConfigs = [
@@ -1139,12 +1130,7 @@ program
     }
 
     // 6. Remove dist folder
-    const distDir = path.join(clawdRoot, 'dist');
-    if (fs.existsSync(distDir)) {
-      fs.rmSync(distDir, { recursive: true, force: true });
-      console.log(`   ${e('🗑️', '[DEL]')}  Removed dist/`);
-      removed++;
-    }
+    safeRemove(path.join(clawdRoot, 'dist'), 'dist/');
 
     // 7. Unlink global npm command
     try {
@@ -1154,11 +1140,16 @@ program
       removed++;
     } catch { /* may not be linked globally */ }
 
-    if (removed === 0) {
+    if (removed === 0 && failed.length === 0) {
       console.log('   Nothing to clean up.');
     }
 
-    console.log(`\n${e('🐾', '>')} Fully uninstalled. To remove the source code, delete:`);
+    if (failed.length > 0) {
+      console.log(`\n${e('⚠️', '[WARN]')}  ${failed.length} item(s) could not be removed (a running process likely held a file open). Close any clawdcursor process, then delete these manually:`);
+      for (const f of failed) console.log(`   ${f}`);
+    }
+
+    console.log(`\n${e('🐾', '>')} ${failed.length > 0 ? 'Uninstall finished with warnings' : 'Fully uninstalled'}. To remove the source code, delete:`);
     console.log(`   ${clawdRoot}\n`);
   });
 

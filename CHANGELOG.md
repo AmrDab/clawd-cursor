@@ -2,6 +2,16 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.0.2] - 2026-06-07 — resilient uninstall
+
+- **`clawdcursor uninstall` no longer crashes on Windows when a file is locked.**
+  A still-held handle on `~/.clawdcursor` (a running daemon, or the process's own
+  log file) raised `EPERM`, which escaped as an `unhandledRejection` and aborted
+  the uninstall half-done (config removed, global link + data dir left behind).
+  Each removal step now retries transient locks (`rmSync` maxRetries) and, on a
+  hard failure, warns + continues + lists the leftovers to delete manually —
+  instead of crashing the whole command.
+
 ## [1.0.1] - 2026-06-06 — first npm publish + code-scanning cleanup
 
 - First v1.x release published to the npm registry (`npm i -g clawdcursor`).
