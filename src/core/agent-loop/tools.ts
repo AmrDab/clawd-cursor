@@ -25,6 +25,7 @@ import { imageScale, scaleCoord } from './coord-scale';
 import { ensureTargetForeground } from './focus-guard';
 import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
+import type { InvokeAction } from '../../platform/types';
 import { OcrEngine, type OcrElement } from '../../platform/ocr-engine';
 import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
 import { parseAssertions, checkAssertions, renderReport } from '../verify/assertions';
@@ -184,13 +185,34 @@ export function buildUnifiedTools(): UnifiedTool[] {
           ? rawAction as PermittedAction
           : 'click';
         const value = typeof args.value === 'string' ? args.value : undefined;
-        const res = await ctx.platform.invokeElement({ name, controlType, processId, action, value });
+
+        // OS-AGNOSTIC ACTIVATION CASCADE. "click" is the generic "activate this
+        // element" intent — but a named target can be a Button (InvokePattern),
+        // a checkbox (TogglePattern), or a ListItem / combo-item
+        // (SelectionItemPattern), and the agent operating BLIND can't see which.
+        // Live regression 2026-06-07: invoke "Cool blue" (a ListItem) failed
+        // because only SelectionItemPattern fit, forcing a coord-click fallback
+        // that needs a screenshot — the exact token cost clawdcursor avoids. So
+        // for the activate intent we try the activation verbs in order until one
+        // takes. EXPLICIT verbs (expand/collapse/get-value/set-value/focus) stay
+        // strict — the agent that asked to expand never silently gets a select.
+        // Pure adapter-string retries → works on every OS with zero per-OS code,
+        // and only the failing path pays the extra round-trips.
+        const ladder: InvokeAction[] = action === 'click' ? ['click', 'select', 'toggle'] : [action];
+        let res = await ctx.platform.invokeElement({ name, controlType, processId, action: ladder[0], value });
+        let used: InvokeAction = ladder[0];
+        for (let i = 1; i < ladder.length && !res.success; i++) {
+          used = ladder[i];
+          res = await ctx.platform.invokeElement({ name, controlType, processId, action: used, value });
+        }
         await sleep(150);
         return {
           success: res.success,
           text: res.success
-            ? (res.data && 'value' in (res.data as object) ? `Invoked "${name}" (${action}) → value: "${(res.data as any).value}"` : `Invoked "${name}" via a11y.`)
-            : `a11y invoke "${name}" missed — element not found.`,
+            ? (res.data && 'value' in (res.data as object)
+                ? `Invoked "${name}" (${used}) → value: "${(res.data as any).value}"`
+                : `Invoked "${name}" via a11y${used !== 'click' ? ` (${used})` : ''}.`)
+            : `a11y invoke "${name}" missed — element not found or not actionable.`,
           targetLabel: name,
         };
       },

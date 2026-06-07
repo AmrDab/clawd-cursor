@@ -583,6 +583,13 @@ function Cmd-InvokeElement {
 
     switch ($action) {
         "click" {
+            # "click" is the generic ACTIVATE intent. A named target can be a
+            # Button (InvokePattern), a checkbox (TogglePattern), or a ListItem /
+            # combo-item (SelectionItemPattern) — and a blind agent can't see
+            # which. Cascade through the activation patterns in ONE bridge call so
+            # the agent never has to retry verbs or fall back to a coord-click
+            # (which needs a screenshot). Live regression 2026-06-07: invoke
+            # "Cool blue" (a ListItem) failed here because only SelectionItem fit.
             try {
                 $p = $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
                 $p.Invoke()
@@ -593,9 +600,15 @@ function Cmd-InvokeElement {
                     $p.Toggle()
                     return @{ success=$true; action="click"; method="TogglePattern" }
                 } catch {
-                    $rect = $element.Current.BoundingRectangle
-                    return @{ success=$false; action="click"; error="No invoke/toggle pattern";
-                        clickPoint=@{x=[int]($rect.X+$rect.Width/2);y=[int]($rect.Y+$rect.Height/2)} }
+                    try {
+                        $p = $element.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+                        $p.Select()
+                        return @{ success=$true; action="click"; method="SelectionItemPattern" }
+                    } catch {
+                        $rect = $element.Current.BoundingRectangle
+                        return @{ success=$false; action="click"; error="No invoke/toggle/select pattern";
+                            clickPoint=@{x=[int]($rect.X+$rect.Width/2);y=[int]($rect.Y+$rect.Height/2)} }
+                    }
                 }
             }
         }

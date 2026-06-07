@@ -406,7 +406,17 @@ export function getA11yDepthTools(): ToolDefinition[] {
         if (parents.length === 0) {
           return { text: `a11y_list_children: parent "${parentName}" not found.`, isError: true };
         }
-        const parent = parents[0];
+        // findElements can return loose/substring matches ordered by tree
+        // position, so [0] is often NOT the element the caller named (live
+        // 2026-06-07: list_children("Choose your background color") resolved to
+        // the "Back" button at [0] → zero children). Prefer an exact name match,
+        // then the largest-area match (a container, the likely parent), before
+        // falling back to [0]. OS-agnostic — operates on the returned elements.
+        const wantName = String(parentName).trim().toLowerCase();
+        const area = (e: typeof parents[number]) => e.bounds.width * e.bounds.height;
+        const parent =
+          parents.find(p => (p.name ?? '').trim().toLowerCase() === wantName)
+          ?? [...parents].sort((a, b) => area(b) - area(a))[0];
         if (parent.bounds.width <= 0 || parent.bounds.height <= 0) {
           return { text: `a11y_list_children: parent "${parentName}" has zero bounds.`, isError: true };
         }
