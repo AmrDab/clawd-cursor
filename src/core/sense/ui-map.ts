@@ -12,6 +12,8 @@ import { a11yToUI, ocrToUI } from './ui-map-elements';
 import { fuse } from './ui-map-fuse';
 import { computeAnchors } from './ui-map-anchors';
 import { normalizeRole, normText } from './ui-map-normalize';
+import { captureSnapshot } from './snapshot';
+import { OcrEngine } from '../../platform/ocr-engine';
 
 const SPARSE_A11Y_MAX = 0;          // ≤ this many named a11y elements ⇒ "sparse"
 const LOW_CONFIDENCE = 0.5;         // below this on a needed element ⇒ vision-worthy
@@ -100,5 +102,23 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
     elements,
     anchors: computeAnchors(elements, deps.prevAnchors),
     truncation: { total_elements: elements.length, returned_elements: elements.length },
+  };
+}
+
+let _ocr: OcrEngine | null = null;
+function ocrEngine(): OcrEngine { return (_ocr ??= new OcrEngine()); }
+
+/** Production deps wired to a real adapter. now/snapshotId are caller-passed
+ *  (the agent loop owns the clock + the obs_N counter). */
+export function defaultCompileDeps(
+  adapter: PlatformAdapter, now: number, snapshotId: string, prevAnchors?: UIMap['anchors'],
+): CompileDeps {
+  return {
+    captureSnapshot: () => captureSnapshot(adapter),
+    ocr: () => ocrEngine().recognizeScreen(),
+    vision: () => adapter.screenshot({ maxWidth: 1280 }),
+    getScreenSize: () => adapter.getScreenSize(),
+    getFocusedElement: () => adapter.getFocusedElement(),
+    now, snapshotId, prevAnchors,
   };
 }

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { compileUIMap, type CompileDeps } from '../core/sense/ui-map';
+import { defaultCompileDeps } from '../core/sense/ui-map';
 import type { Snapshot } from '../core/sense/types';
 import type { OcrResult } from '../platform/ocr-engine';
+import type { PlatformAdapter } from '../platform/types';
 
 function snap(elements: Snapshot['elements']): Snapshot {
   return { platform: 'windows',
@@ -93,5 +95,21 @@ describe('compileUIMap — lazy escalation', () => {
   it('sets primary_action_candidate when a primary-verb clickable element exists', async () => {
     const map = await compileUIMap(deps(), {}); // a11y "Send" button is clickable
     expect(map.anchors.primary_action_candidate?.normalized_text).toBe('send');
+  });
+});
+
+describe('defaultCompileDeps', () => {
+  it('builds deps wired to the adapter without throwing', () => {
+    const adapter = {
+      getScreenSize: async () => ({ logicalWidth: 1, logicalHeight: 1,
+        physicalWidth: 1, physicalHeight: 1, dpiRatio: 1 }),
+      getFocusedElement: async () => null,
+      screenshot: async () => ({ buffer: Buffer.alloc(0), width: 1, height: 1, scaleFactor: 1 }),
+    } as unknown as PlatformAdapter;
+    const d = defaultCompileDeps(adapter, 5, 'obs_9');
+    expect(d.now).toBe(5);
+    expect(d.snapshotId).toBe('obs_9');
+    expect(typeof d.captureSnapshot).toBe('function');
+    expect(typeof d.ocr).toBe('function');
   });
 });
