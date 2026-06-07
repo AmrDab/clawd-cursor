@@ -99,5 +99,6 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
     sources_used: sourcesUsed,
     elements,
     anchors: computeAnchors(elements, deps.prevAnchors),
+    truncation: { total_elements: elements.length, returned_elements: elements.length },
   };
 }
