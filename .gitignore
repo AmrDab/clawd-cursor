@@ -23,3 +23,5 @@ test-runs/
 observe/
 TEST-FINDINGS.md
 docs/PHASE-A-DESIGN.md
+qa-drive.js
+*.scratch.*
