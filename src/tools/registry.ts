@@ -299,6 +299,7 @@ const A11Y_SYSB_NAMES = new Set([
   'a11y_select',
   'get_element_state',
   'wait_for_element',
+  'verify',
   // NOTE: `read_text` (System B) is intentionally NOT projected. Its lean
   // `@x,y "text"` output is built for the in-context LLM. The MCP surface keeps
   // System A's `ocr_read_screen`, whose structured JSON (elements[] + bounds +
@@ -318,6 +319,7 @@ const A11Y_MCP_NAMES = new Set([
   'a11y_select',
   'get_element_state',
   'wait_for_element',
+  'verify',
   // `ocr_read_screen` stays on System A (structured OCR output) — see above.
 ]);
 

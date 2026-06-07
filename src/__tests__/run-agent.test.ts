@@ -320,6 +320,87 @@ describe('runAgent — stagnation respects pixel evidence + observation turns (l
   });
 });
 
+describe('runAgent — done(assertions) is a harness-executed completion gate', () => {
+  beforeEach(() => {
+    llmTurnQueue.length = 0;
+    capturedLlmCalls.length = 0;
+  });
+
+  it('rejects done when an assertion fails, accepts a later done whose assertions pass', async () => {
+    // Turn 1: done with a FALSE proof (element does not exist) → the harness
+    // must reject it and the loop continues. Turn 2: done with TRUE proofs
+    // (the stub adapter's window list contains "Notepad") → exit done.
+    llmTurnQueue.push(turnCall('done', {
+      evidence: 'recipient chip is visible in the To field',
+      assertions: [{ type: 'element_exists', name: 'NonexistentChip' }],
+    }));
+    llmTurnQueue.push(turnCall('done', {
+      evidence: 'Notepad window is open as required',
+      assertions: [
+        { type: 'window_title_contains', value: 'Notepad' },
+        { type: 'app_running', name: 'notepad' },
+      ],
+    }));
+
+    const adapter = makeAdapter();
+    (adapter.findElements as any).mockResolvedValue([]); // NonexistentChip → not found
+
+    const result = await runAgent(
+      { task: 'verify-gated completion', maxTurns: 10 },
+      { adapter, llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    expect(result.success).toBe(true);
+    // First done was rejected by the harness, not accepted:
+    expect(result.steps[0].result.success).toBe(false);
+    expect(result.steps[0].result.text).toContain('done rejected');
+    // Second done carries the verified report:
+    expect(result.steps[1].result.text).toContain('VERIFIED');
+  });
+
+  it('rejects malformed assertions with a parse error instead of completing', async () => {
+    llmTurnQueue.push(turnCall('done', {
+      evidence: 'task finished with concrete evidence',
+      assertions: [{ type: 'pixels_look_right', value: 'x' }],
+    }));
+    llmTurnQueue.push(turnCall('give_up', { reason: 'cannot prove completion' }));
+
+    const result = await runAgent(
+      { task: 'bad assertions', maxTurns: 10 },
+      { adapter: makeAdapter(), llm: LLM_CONFIG },
+    );
+
+    expect(result.steps[0].result.success).toBe(false);
+    expect(result.steps[0].result.text).toContain('done rejected');
+  });
+
+  it('the standalone verify tool reports per-assertion ✓/✗ without ending the run', async () => {
+    llmTurnQueue.push(turnCall('verify', {
+      assertions: [
+        { type: 'window_title_contains', value: 'Notepad' },
+        { type: 'clipboard_contains', value: 'not on the clipboard' },
+      ],
+    }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'verified what was checkable' }));
+
+    const adapter = makeAdapter();
+    (adapter as any).readClipboard = vi.fn(async () => 'something else');
+
+    const result = await runAgent(
+      { task: 'use the verify tool', maxTurns: 10 },
+      { adapter, llm: LLM_CONFIG },
+    );
+
+    expect(result.exit).toBe('done');
+    const verifyStep = result.steps[0];
+    expect(verifyStep.toolName).toBe('verify');
+    expect(verifyStep.result.success).toBe(false); // one assertion failed
+    expect(verifyStep.result.text).toContain('✓');
+    expect(verifyStep.result.text).toContain('✗');
+  });
+});
+
 describe('runAgent — user abort (stop command) must be acknowledged', () => {
   beforeEach(() => {
     llmTurnQueue.length = 0;

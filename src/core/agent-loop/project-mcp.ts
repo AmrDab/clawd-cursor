@@ -35,7 +35,7 @@ import { TOOL_META } from './tool-meta';
  * Convert a UnifiedTool JSON-Schema inputSchema into the
  * Record<string, ParameterDef> shape that ToolDefinition.parameters expects.
  *
- * Supported JSON Schema property types: "string" | "number" | "boolean".
+ * Supported JSON Schema property types: "string" | "number" | "boolean" | "array".
  * Properties missing a supported type default to "string" with a note.
  * The `required` array in the schema is used to set ParameterDef.required.
  * `enum` is preserved when all values are strings.
@@ -63,8 +63,8 @@ export function jsonSchemaToParamDefs(
     const prop = raw as Record<string, unknown>;
     const rawType = typeof prop.type === 'string' ? prop.type : 'string';
     // Narrow to ParameterDef's allowed types; fall back to 'string'.
-    const type: 'string' | 'number' | 'boolean' =
-      rawType === 'number' || rawType === 'boolean' ? rawType : 'string';
+    const type: 'string' | 'number' | 'boolean' | 'array' =
+      rawType === 'number' || rawType === 'boolean' || rawType === 'array' ? rawType : 'string';
     // Prefer System B's own description; fall back to harvested System A description.
     const ownDescription = typeof prop.description === 'string' ? prop.description : '';
     const description = ownDescription || paramDescriptions?.[key] || '';
@@ -73,6 +73,11 @@ export function jsonSchemaToParamDefs(
       description,
       required: required.has(key),
     };
+    // Preserve the element schema for array params (ParameterDef.items),
+    // e.g. verify's `assertions: {type:'array', items:{type:'object'}}`.
+    if (type === 'array' && prop.items && typeof prop.items === 'object') {
+      def.items = prop.items as Record<string, unknown>;
+    }
     // Preserve enum when all values are strings (ParameterDef only supports string enum).
     if (Array.isArray(prop.enum)) {
       const strEnum = (prop.enum as unknown[]).filter(v => typeof v === 'string') as string[];

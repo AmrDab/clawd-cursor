@@ -1941,6 +1941,27 @@
       "costClass": "act"
     },
     {
+      "name": "verify",
+      "description": "Deterministically check CURRENT state against machine-checkable assertions — the harness executes them, no guessing. Types: window_title_contains{value}, app_running{name}, element_exists{name}, element_value_contains{name,value}, clipboard_contains{value}, file_exists{path}, file_contains{path,value}, ocr_contains{value}. Cheaper and more reliable than a screenshot — use after a critical step or before done().",
+      "category": "perception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "assertions": {
+            "type": "array",
+            "description": "Up to 8 assertions, each {type, ...fields} per the types listed in the tool description.",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "assertions"
+        ]
+      },
+      "costClass": "inspect"
+    },
+    {
       "name": "wait",
       "description": "Wait for a specified duration. Useful after animations or page loads.",
       "category": "orchestration",

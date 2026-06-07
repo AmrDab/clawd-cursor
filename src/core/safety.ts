@@ -261,6 +261,7 @@ const TOOL_TIER: Record<string, Tier> = {
   'a11y_select': 'input',
   'a11y_get_element': 'read',
   'a11y_get_value': 'read',
+  'verify': 'read',   // harness-executed assertions — read primitives only
   'get_element_state': 'read',
   'a11y_list_children': 'read',
   // v0.8.2 — Electron/WebView2 bridge tools

@@ -27,6 +27,7 @@ import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
 import { OcrEngine, type OcrElement } from '../../platform/ocr-engine';
 import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
+import { parseAssertions, checkAssertions, renderReport } from '../verify/assertions';
 
 /** Lazy OCR singleton for the agent-loop perception tools (read_text, smart_click).
  *  Mirrors the pattern in src/tools/smart.ts. Construction never throws; the real
@@ -369,6 +370,36 @@ export function buildUnifiedTools(): UnifiedTool[] {
         if (!res.success) return { success: false, text: `"${name}" has no readable value.` };
         const value = (res.data as any)?.value ?? '';
         return { success: true, text: `"${name}" = "${truncate(String(value), 120)}"` };
+      },
+    },
+
+    {
+      name: 'verify',
+      description: 'Deterministically check CURRENT state against machine-checkable assertions — the harness executes them, no guessing. Types: window_title_contains{value}, app_running{name}, element_exists{name}, element_value_contains{name,value}, clipboard_contains{value}, file_exists{path}, file_contains{path,value}, ocr_contains{value}. Cheaper and more reliable than a screenshot — use after a critical step or before done().',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          assertions: {
+            type: 'array',
+            description: 'Up to 8 assertions, each {type, ...fields} per the types listed in the tool description.',
+            items: { type: 'object' },
+          },
+        },
+        required: ['assertions'],
+        additionalProperties: false,
+      },
+      changesScreen: false,
+      async execute(args, ctx) {
+        const parsed = parseAssertions(args.assertions);
+        if ('error' in parsed) return { success: false, text: `verify rejected: ${parsed.error}` };
+        const report = await checkAssertions(parsed.assertions, {
+          adapter: ctx.platform,
+          ocrText: async () => (await getAgentOcr().recognizeScreen()).fullText ?? '',
+        });
+        return {
+          success: report.ok,
+          text: `${report.ok ? 'VERIFIED' : `FAILED ${report.failed}/${report.outcomes.length}`}:\n${renderReport(report)}`,
+        };
       },
     },
 
@@ -1470,16 +1501,23 @@ export function buildUnifiedTools(): UnifiedTool[] {
     // ─── TERMINAL ACTIONS ──────────────────────────────────────
     {
       name: 'done',
-      description: 'Declare the task complete. Provide SPECIFIC screen evidence — a window title, a value visible in the document, a status bar message. Do NOT use hedging words ("should", "might", "probably", "I think", "I believe") — that means you are guessing. If you can\'t see concrete evidence, take a screenshot or read_screen first.',
+      description: 'Declare the task complete. Provide SPECIFIC screen evidence — a window title, a value visible in the document, a status bar message. Do NOT use hedging words ("should", "might", "probably", "I think", "I believe") — that means you are guessing. STRONGLY PREFERRED: also pass `assertions` (same types as the verify tool) — the harness re-checks them against the live screen and rejects done if any fail. If you can\'t see concrete evidence, take a screenshot or read_screen first.',
       inputSchema: {
         type: 'object',
-        properties: { evidence: { type: 'string' } },
+        properties: {
+          evidence: { type: 'string' },
+          assertions: {
+            type: 'array',
+            description: 'Optional machine-checkable proofs (verify-tool types). The harness executes them; done is rejected if any fail.',
+            items: { type: 'object' },
+          },
+        },
         required: ['evidence'],
         additionalProperties: false,
       },
       changesScreen: false,
       terminal: true,
-      async execute(args) {
+      async execute(args, ctx) {
         const evidence = String(args.evidence ?? '').trim();
 
         // Guard 1: evidence must be present and non-trivial. An empty string
@@ -1507,6 +1545,36 @@ export function buildUnifiedTools(): UnifiedTool[] {
             success: false,
             text: `done rejected: evidence contains hedging language ("should", "might", "probably", "I think", "I believe", "appears to", "seems to", "if successful"…). That means you are GUESSING, not observing. Take a screenshot or call read_screen, then describe what you actually see — concrete strings, not predictions.`,
             isError: true,
+          };
+        }
+
+        // Guard 3 (the strong one): harness-executed assertions. The model's
+        // prose is a CLAIM; these checks are PROOF — run against live ground
+        // truth (UIA values, window list, clipboard, fs, OCR). A model that
+        // hallucinates a result (live Outlook run 2026-06-06: "verified" a
+        // recipient that was never committed) gets caught HERE, at done-time,
+        // instead of the task silently failing after the run ends.
+        if (args.assertions !== undefined) {
+          const parsed = parseAssertions(args.assertions);
+          if ('error' in parsed) {
+            return { success: false, text: `done rejected: ${parsed.error}`, isError: true };
+          }
+          const report = await checkAssertions(parsed.assertions, {
+            adapter: ctx.platform,
+            ocrText: async () => (await getAgentOcr().recognizeScreen()).fullText ?? '',
+          });
+          if (!report.ok) {
+            return {
+              success: false,
+              isError: true,
+              text: `done rejected: ${report.failed} of ${report.outcomes.length} assertion(s) FAILED — the live screen does not back your claim:\n${renderReport(report)}\nFix the failing condition (the detail shows the actual state), or give_up with the reason.`,
+            };
+          }
+          return {
+            success: true,
+            text: `done: ${evidence}\nVERIFIED:\n${renderReport(report)}`,
+            stop: true,
+            terminalExit: 'done',
           };
         }
 

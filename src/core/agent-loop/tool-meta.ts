@@ -221,6 +221,15 @@ export const TOOL_META: Record<string, ToolMeta> = {
     },
   },
 
+  verify: {
+    category: 'perception',
+    safetyTier: 0,
+    costClass: 'inspect',
+    paramDescriptions: {
+      assertions: 'Array of machine-checkable assertions, each {type, ...fields}',
+    },
+  },
+
   get_element_state: {
     category: 'perception',
     compactGroup: 'accessibility',
