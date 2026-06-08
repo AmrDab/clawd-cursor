@@ -78,8 +78,11 @@ ctx.uiMaps.put(map, now);                        // map.snapshot_id === id
 
 - `MAX_HELD = 2` (current + one prior, for diagnostics; only the current is
   resolvable).
-- `TTL_MS = 30_000` — a held map older than this resolves as `'expired'` even if
-  it is the latest. Tunable constant.
+- `TTL_MS = 5_000` — a held map older than this resolves as `'expired'` even if
+  it is the latest. GUI state changes fast, so action refs must expire quickly
+  (a 30s window would be fine for diagnostics but risky for dispatch); 5s is the
+  strict default, tunable. "Current-only + invalidate-on-change" guards
+  causality; the short TTL guards wall-clock drift the agent can't observe.
 - **Strict rejection:** `resolve` returns `ok:false` for: a `snapshot_id` not
   held / evicted (`'unknown'`); a `snapshot_id` that isn't the current one or
   was invalidated by a screen-changing action (`'stale'`); a map past TTL
@@ -148,16 +151,29 @@ Both tools gain two **optional** params: `element_id` and `snapshot_id`.
      `expired` → `"snapshot expired — call compile_ui again"`. **No action runs.**
   2. Look up `element_id` in `r.map.elements`. Not found → reject
      `"element <id> not in snapshot <id>"`.
-  3. **Dispatch by resolved identity** (preserves disambiguation):
+  3. **Capability + confidence gate (both dispatch paths).** Reject before any
+     action if the resolved element fails the intent:
+     - `confidence < REF_MIN_CONFIDENCE` (`0.5`) → `"element <id> confidence too
+       low to act on — recompile / re-find"`.
+     - click intent and not `actionable` (or `state.enabled === false`) →
+       `"element <id> is not actionable (disabled?)"`.
+     - fill intent and not `editable` → `"element <id> is not editable"`.
+  4. **Dispatch by resolved identity** (preserves disambiguation):
      - If the element has a non-empty `normalized_text` that is **unique** in the
        map → dispatch the existing a11y path by that name (invoke-cascade for
        click; set-value for fill) — keeps the reliable blind-route a11y path.
      - Otherwise (duplicate name, or empty name) → dispatch by the element's
-       **bounds**: click = scaled coordinate click at the bounds center (reusing
-       the existing focus-guard + scale-factor path); fill = coordinate focus at
-       center then type the value. Bounds are trustworthy because the map is
-       current, non-invalidated, and in-TTL.
-  4. On success, return the normal tool result, tagged with the resolved id
+       **bounds**. Before the coordinate action, run the bounds pre-dispatch
+       guards (in addition to step 3): (a) the **active window still matches** the
+       map's window (live `getActiveWindow()` — `processId`/title equals
+       `map.process_id`/`window_title`); (b) the element's **bounds lie within the
+       active window's bounds**. If either fails → reject `"window changed or
+       element off the active window — call compile_ui again"` and do NOT click.
+       Only then: click = scaled coordinate click at the bounds center (existing
+       focus-guard + scale-factor path); fill = coordinate focus at center then
+       type. These guards make the "bounds are trustworthy" claim explicit rather
+       than assumed — current + in-TTL is necessary but not sufficient.
+  5. On success, return the normal tool result, tagged with the resolved id
      (e.g. `… (via el_21)`).
 
 This reuses the hardened invoke-cascade / set-value paths; the only new logic is
@@ -191,9 +207,16 @@ Mocked-adapter / mocked-holder harness, matching the existing suite.
 - Duplicate name → dispatches by bounds (coordinate), not by ambiguous name.
 - Stale snapshot (after a screen-changing action / `invalidate`) → **rejected,
   no dispatch** (assert the platform action mock was NOT called).
-- Expired (TTL) snapshot → rejected.
+- Expired (TTL — element compiled >5s ago) snapshot → rejected.
 - Only one of the two params → error, no dispatch.
 - Neither param → by-name path unchanged (existing tests still pass).
+- **Capability/confidence gate:** click on a non-actionable/disabled element →
+  rejected; fill on a non-editable element → rejected; element with
+  `confidence < 0.5` → rejected. No dispatch in any case.
+- **Bounds pre-dispatch guards:** when falling back to coordinate dispatch
+  (duplicate/empty name), if the active window no longer matches the map's
+  window, or the element's bounds fall outside the active window → rejected, no
+  coordinate click (assert the mouse mock was NOT called).
 
 **Loop integration (run-agent harness):**
 - A turn's perception text is the `renderUIMap` output with an `obs_N` id.
