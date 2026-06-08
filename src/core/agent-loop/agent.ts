@@ -28,6 +28,8 @@ import type { ScreenshotResult } from '../../platform/types';
 import { FingerprintHistory } from '../sense/fingerprint';
 import { captureSnapshot } from '../sense/snapshot';
 import { UIMapHolder } from '../sense/ui-map-holder';
+import { reactiveCheck } from '../sense/reactive-check';
+import { OcrEngine } from '../../platform/ocr-engine';
 import { compileUIMap } from '../sense/ui-map';
 import { renderUIMap } from '../sense/ui-map-render';
 import type { UIMap } from '../sense/ui-map-types';
@@ -95,6 +97,10 @@ const MAX_HISTORY_SCREENSHOTS = 2;
  * better chance.
  */
 const NO_TOOL_CALL_LIMIT = 3;
+
+// Lazy OCR singleton for reactiveCheck — mirrors tools.ts getAgentOcr pattern.
+let _reactiveOcr: OcrEngine | null = null;
+function reactiveOcr(): OcrEngine { return (_reactiveOcr ??= new OcrEngine()); }
 
 export interface AgentDeps {
   adapter: import('../../platform/types').PlatformAdapter;
@@ -631,6 +637,22 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
 
         const fingerprintChanged = postSnapshot ? fph.getHistory().slice(-1)[0] !== postSnapshot.fingerprint : false;
         if (postSnapshot) fph.push(postSnapshot.fingerprint);
+
+        // Layer C: reactive step discipline — verify the agent-stated `expect`
+        // (HARD → DEVIATION) or apply the tolerant soft net when omitted. Reuses
+        // the verify engine + the fingerprintChanged signal already computed.
+        const reactive = await reactiveCheck({
+          expect: (call.args as Record<string, unknown>).expect,
+          toolText: result.text,
+          toolSuccess: result.success,
+          changesScreen: tool.changesScreen,
+          observedChange: fingerprintChanged,
+          adapter: deps.adapter,
+          ocrText: async () => (await reactiveOcr().recognizeScreen()).fullText ?? '',
+        }).catch(() => null);
+        if (reactive) {
+          result = { ...result, success: reactive.success, text: reactive.text };
+        }
 
         steps.push({
           turn,

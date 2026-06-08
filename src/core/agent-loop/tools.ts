@@ -183,6 +183,15 @@ export function buildUnifiedTools(): UnifiedTool[] {
           value: { type: 'string', description: 'Value for set-value action' },
           element_id: { type: 'string', description: 'Target a compiled element from compile_ui (requires snapshot_id)' },
           snapshot_id: { type: 'string', description: 'The compile_ui snapshot the element_id came from (requires element_id)' },
+          expect: {
+            type: 'array',
+            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
+            items: {
+              type: 'object',
+              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
+              required: ['type'],
+            },
+          },
         },
         // `name` OR `automationId` must be supplied; neither is required at
         // the JSON-schema level — the execute() body guards the total absence.
@@ -279,6 +288,15 @@ export function buildUnifiedTools(): UnifiedTool[] {
           processId: { type: 'number' },
           element_id: { type: 'string', description: 'Target a compiled element from compile_ui (requires snapshot_id)' },
           snapshot_id: { type: 'string', description: 'The compile_ui snapshot the element_id came from (requires element_id)' },
+          expect: {
+            type: 'array',
+            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
+            items: {
+              type: 'object',
+              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
+              required: ['type'],
+            },
+          },
         },
         required: ['value'],
         additionalProperties: false,
@@ -653,7 +671,18 @@ export function buildUnifiedTools(): UnifiedTool[] {
       description: 'Type text into the currently focused input. Prefer set_field_value when a field has an a11y name.',
       inputSchema: {
         type: 'object',
-        properties: { text: { type: 'string' } },
+        properties: {
+          text: { type: 'string' },
+          expect: {
+            type: 'array',
+            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
+            items: {
+              type: 'object',
+              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
+              required: ['type'],
+            },
+          },
+        },
         required: ['text'],
         additionalProperties: false,
       },
@@ -694,6 +723,15 @@ export function buildUnifiedTools(): UnifiedTool[] {
           // `key_press.key` and the compound surface alias).
           combo: { type: 'string', description: 'Key/combo to press (e.g. "Return", "mod+s"). Space-separate for a sequence.' },
           key: { type: 'string', description: 'Alias for combo — accepted for MCP/compound backward-compatibility.' },
+          expect: {
+            type: 'array',
+            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
+            items: {
+              type: 'object',
+              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
+              required: ['type'],
+            },
+          },
         },
         // Neither is required at the JSON-Schema level so the validator passes
         // when only one is provided; the execute() guard catches a total absence.

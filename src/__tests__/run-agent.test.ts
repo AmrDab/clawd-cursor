@@ -649,3 +649,35 @@ describe('runAgent — finder snapshot survives a non-screen-changing next turn 
     if (id) expect(holder.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
   });
 });
+
+describe('runAgent — Layer C reactive step discipline', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+
+  it('a failing expect on an action yields a DEVIATION (success:false) fed back to the agent', async () => {
+    llmTurnQueue.push(turnCall('key', { key: 'a', expect: [{ type: 'app_running', name: 'photoshop' }] })); // not running
+    llmTurnQueue.push(turnCall('done', { evidence: 'adapted after the deviation occurred' }));
+    const result = await runAgent({ task: 'react', maxTurns: 6 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
+    const step = result.steps[0];
+    expect(step.result.success).toBe(false);
+    expect(step.result.text).toContain('DEVIATION');
+    const user2 = [...capturedLlmCalls[1].messages].reverse().find((m: any) => m.role === 'user');
+    const txt = (user2.content as any[]).map((b: any) => (typeof b === 'string' ? b : (b.text ?? (Array.isArray(b.content) ? b.content.map((c: any) => c.text).join(' ') : '')))).join('\n');
+    expect(txt).toContain('DEVIATION');
+  });
+
+  it('a passing expect proceeds with a verified note', async () => {
+    llmTurnQueue.push(turnCall('key', { key: 'a', expect: [{ type: 'app_running', name: 'notepad' }] }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'verified and continued' }));
+    const result = await runAgent({ task: 'react', maxTurns: 6 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
+    expect(result.steps[0].result.success).toBe(true);
+    expect(result.steps[0].result.text).toMatch(/verified/i);
+  });
+
+  it('a consequential action with no expect and no observable change gets a soft note', async () => {
+    llmTurnQueue.push(turnCall('key', { key: 'a' }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'continued after the soft note' }));
+    const result = await runAgent({ task: 'react', maxTurns: 6 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
+    expect(result.steps[0].result.text).toContain('no observable change');
+    expect(result.steps[0].result.success).toBe(true);
+  });
+});

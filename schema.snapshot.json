@@ -940,6 +940,31 @@
           "snapshot_id": {
             "type": "string",
             "description": "The compile_ui snapshot the element_id came from (requires element_id)"
+          },
+          "expect": {
+            "type": "array",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "window_title_contains",
+                    "app_running",
+                    "element_exists",
+                    "element_value_contains",
+                    "clipboard_contains",
+                    "file_exists",
+                    "file_contains",
+                    "ocr_contains"
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
           }
         }
       },
@@ -977,6 +1002,31 @@
           "key": {
             "type": "string",
             "description": "Alias for combo — accepted for MCP/compound backward-compatibility."
+          },
+          "expect": {
+            "type": "array",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "window_title_contains",
+                    "app_running",
+                    "element_exists",
+                    "element_value_contains",
+                    "clipboard_contains",
+                    "file_exists",
+                    "file_contains",
+                    "ocr_contains"
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
           }
         }
       },
@@ -1783,6 +1833,31 @@
           "snapshot_id": {
             "type": "string",
             "description": "The compile_ui snapshot the element_id came from (requires element_id)"
+          },
+          "expect": {
+            "type": "array",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "window_title_contains",
+                    "app_running",
+                    "element_exists",
+                    "element_value_contains",
+                    "clipboard_contains",
+                    "file_exists",
+                    "file_contains",
+                    "ocr_contains"
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
           }
         },
         "required": [
@@ -2024,6 +2099,31 @@
           "text": {
             "type": "string",
             "description": "The text to type"
+          },
+          "expect": {
+            "type": "array",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "window_title_contains",
+                    "app_running",
+                    "element_exists",
+                    "element_value_contains",
+                    "clipboard_contains",
+                    "file_exists",
+                    "file_contains",
+                    "ocr_contains"
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
           }
         },
         "required": [
