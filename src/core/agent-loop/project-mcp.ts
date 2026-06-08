@@ -150,6 +150,7 @@ export async function toolContextToAgent(ctx: ToolContext): Promise<AgentToolCon
     cdp: ctx.cdp ?? null,
     targetWindow: undefined,
     activeApp: undefined,
+    uiMaps: ctx.uiMaps,
   };
 }
 

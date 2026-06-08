@@ -62,6 +62,8 @@ export interface ToolContext {
    * captured (e.g. stdio MCP).
    */
   getLogBuffer?: () => Array<{ timestamp: number; level: string; message: string }>;
+  /** Session-scoped UIMap cache for safe el_NN element refs (Part 2). */
+  uiMaps?: import('../core/sense/ui-map-holder').UIMapHolder;
   /** Image-space → logical (mouse) coords. mouseCoord = imageCoord * factor */
   getMouseScaleFactor: () => number;
   /** Image-space → physical pixel coords (for screenshot region crop) */
