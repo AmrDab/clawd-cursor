@@ -179,11 +179,23 @@ export function buildUnifiedTools(): UnifiedTool[] {
           const plan = resolveRef(refIds, ctx.uiMaps, Date.now(), 'click', aw);
           if (!plan.ok) return { success: false, text: `invoke_element ref rejected: ${plan.error}`, isError: true };
           if (plan.via === 'name') {
-            const res = await ctx.platform.invokeElement({ name: plan.name, action: 'click' });
-            return { success: res.success, text: res.success ? `Invoked "${plan.name}" via a11y (via ${plan.element.id}).` : `a11y invoke of ${plan.element.id} missed.`, targetLabel: plan.name };
+            // Mirror the by-name activation CASCADE: click → select → toggle.
+            // A ref to a ListItem / combo-item / checkbox may not support
+            // InvokePattern, so we try the three activation verbs in order and
+            // stop at the first success — identical logic to the by-name path above.
+            const refLadder: InvokeAction[] = ['click', 'select', 'toggle'];
+            let refRes = await ctx.platform.invokeElement({ name: plan.name, action: refLadder[0] });
+            let refUsed: InvokeAction = refLadder[0];
+            for (let i = 1; i < refLadder.length && !refRes.success; i++) {
+              refUsed = refLadder[i];
+              refRes = await ctx.platform.invokeElement({ name: plan.name, action: refUsed });
+            }
+            await sleep(150);
+            return { success: refRes.success, text: refRes.success ? `Invoked "${plan.name}" via a11y${refUsed !== 'click' ? ` (${refUsed})` : ''} (via ${plan.element.id}).` : `a11y invoke of ${plan.element.id} missed.`, targetLabel: plan.name };
           }
           const [bx, by, bw, bh] = plan.bounds;
           await ctx.platform.mouseClick(Math.round(bx + bw / 2), Math.round(by + bh / 2));
+          await sleep(150);
           return { success: true, text: `Clicked ${plan.element.id} at its bounds center.`, targetLabel: plan.element.id };
         }
         // `automationId` is accepted for MCP backward-compat but the PlatformAdapter
@@ -264,11 +276,13 @@ export function buildUnifiedTools(): UnifiedTool[] {
           if (!plan.ok) return { success: false, text: `set_field_value ref rejected: ${plan.error}`, isError: true };
           if (plan.via === 'name') {
             const res = await ctx.platform.invokeElement({ name: plan.name, action: 'set-value', value: fillValue });
+            await sleep(150);
             return { success: res.success, text: res.success ? `Set "${plan.name}" = ${fillValue.length} chars (via ${plan.element.id}).` : `Set of ${plan.element.id} failed.`, targetLabel: plan.name };
           }
           const [bx, by, bw, bh] = plan.bounds;
           await ctx.platform.mouseClick(Math.round(bx + bw / 2), Math.round(by + bh / 2));
           await ctx.platform.typeText(fillValue);
+          await sleep(150);
           return { success: true, text: `Filled ${plan.element.id} via bounds + type (${fillValue.length} chars).`, targetLabel: plan.element.id };
         }
         const name = String(args.name ?? '');
