@@ -16,3 +16,18 @@ describe('buildSystemPrompt — substrate is the default', () => {
     expect(p).toMatch(/UI map|el_NN|element id/i);
   });
 });
+
+describe('buildSystemPrompt — chip flow, numbering, browser pivot', () => {
+  const p = buildSystemPrompt();
+  it('has no duplicate rule "5b" label', () => {
+    const count = (p.match(/^\s*5b\./gm) || []).length;
+    expect(count).toBeLessThanOrEqual(1);
+  });
+  it('chip rule gives the finder+expect worked example', () => {
+    expect(p).toMatch(/tokeniz|chip/i);
+    expect(p).toMatch(/key\([\s\S]*Return[\s\S]*expect|expect[\s\S]*element_exists/);
+  });
+  it('forbids re-hosting a native app in the browser', () => {
+    expect(p).toMatch(/web version|browser version|re-?host/i);
+  });
+});
