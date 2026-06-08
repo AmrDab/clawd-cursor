@@ -66,4 +66,11 @@ export class UIMapHolder {
   currentId(): string | undefined {
     return this.held[this.held.length - 1]?.map.snapshot_id;
   }
+
+  /** The latest held map (for rendering/inspection), or undefined. Unlike
+   *  resolve(), this ignores TTL/invalidation — callers that need a resolvable
+   *  map use resolve()/currentIfCost(). */
+  current(): UIMap | undefined {
+    return this.held[this.held.length - 1]?.map;
+  }
 }

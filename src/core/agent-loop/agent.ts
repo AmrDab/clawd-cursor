@@ -702,11 +702,29 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           // the changesScreen invalidation from the prior action turn.
           if (terminal === null) {
             try {
-              const ui = await storeUIMap(holder, snap, deps.adapter, prevAnchors);
-              prevAnchors = ui.anchors;
+              // Only mint a FRESH perception map when the screen actually changed
+              // (or there is no fresh current map). Otherwise reuse the current
+              // map — e.g. a finder/compile_ui established one this turn — so its
+              // snapshot_id stays current and el_NN refs resolve on the NEXT turn
+              // (the realistic find-this-turn / act-next-turn flow). Reusing also
+              // avoids a redundant recompile when nothing changed.
+              const curId = holder.currentId();
+              const currentFresh = curId !== undefined && holder.resolve(curId, Date.now()).ok === true;
+              let uiId: string;
+              let uiRender: string;
+              if (anyScreenChangingTool || !currentFresh) {
+                const ui = await storeUIMap(holder, snap, deps.adapter, prevAnchors);
+                prevAnchors = ui.anchors;
+                uiId = ui.id;
+                uiRender = ui.render;
+              } else {
+                const cur = holder.current()!;          // currentFresh implies it exists
+                uiId = cur.snapshot_id;
+                uiRender = renderUIMap(cur);
+              }
               nextBlocks.push({
                 type: 'text',
-                text: `\nCOMPILED UI (act on an element via invoke_element/set_field_value with {element_id, snapshot_id="${ui.id}"}):\n${ui.render}`,
+                text: `\nCOMPILED UI (act on an element via invoke_element/set_field_value with {element_id, snapshot_id="${uiId}"}):\n${uiRender}`,
               });
             } catch {
               // UIMap compilation failure is non-fatal — the agent still has the a11y snapshot.

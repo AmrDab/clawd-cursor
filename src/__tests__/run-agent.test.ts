@@ -615,3 +615,37 @@ describe('runAgent — UIMap holder integration (Part 2)', () => {
     if (id) expect(holder.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
   });
 });
+
+describe('runAgent — finder snapshot survives a non-screen-changing next turn (cross-turn find->act)', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+
+  it('a compiled snapshot stays current+resolvable across a non-screen-changing turn', async () => {
+    // Turn 1: compile_ui (changesScreen:false) — puts obs_N directly into the
+    //   holder, then §6b sees currentFresh=true → reuses obs_N (no clobber).
+    // Turn 2: read_screen (changesScreen:false) — §6b still sees currentFresh=true
+    //   → reuses again. The snapshot established by compile_ui stays current.
+    // Pre-fix §6b would always call storeUIMap → mint obs_N+1 → obs_N becomes
+    // stale → the act turn (N+1) would reject {snapshot_id: obs_N} as 'stale'.
+    const holder = new UIMapHolder();
+    llmTurnQueue.push(turnCall('compile_ui'));                 // turn 1: changesScreen:false, puts into holder
+    llmTurnQueue.push(turnCall('read_screen'));                // turn 2: read-only, must NOT clobber the map
+    llmTurnQueue.push(turnCall('done', { evidence: 'the compiled snapshot remained current across the read turn' }));
+    await runAgent({ task: 'cross-turn', maxTurns: 6 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
+    const id = holder.currentId();
+    expect(id).toBeTruthy();
+    // The map established early is still the CURRENT one and resolves (not clobbered each turn).
+    if (id) expect(holder.resolve(id, Date.now()).ok).toBe(true);
+  });
+
+  it('a screen-changing tool DOES refresh + invalidate (post-action refs are stale)', async () => {
+    // A changesScreen:true tool must still mint a fresh map in §6b AND then
+    // invalidate it, so any el_NN refs from that turn are immediately stale
+    // (the action may have already mutated the UI).
+    const holder = new UIMapHolder();
+    llmTurnQueue.push(turnCall('key', { key: 'a' }));          // changesScreen:true
+    llmTurnQueue.push(turnCall('done', { evidence: 'typed a key' }));
+    await runAgent({ task: 'change', maxTurns: 4 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
+    const id = holder.currentId();
+    if (id) expect(holder.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
+  });
+});
