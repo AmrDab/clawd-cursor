@@ -77,6 +77,7 @@ export const COST_CLASS_BY_TOOL: Readonly<Record<string, ToolCostClass>> = {
   smart_type: 'perceive-text', smart_click: 'perceive-text',
   cdp_page_context: 'perceive-text', cdp_read_text: 'perceive-text',
   get_system_prompt: 'perceive-text',
+  compile_ui: 'perceive-text',
 
   // ── perceive-image ── screenshots with image bytes. ≤50K tok incl. base64.
   desktop_screenshot: 'perceive-image', desktop_screenshot_region: 'perceive-image',

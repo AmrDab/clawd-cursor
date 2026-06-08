@@ -29,6 +29,8 @@ import type { InvokeAction } from '../../platform/types';
 import { OcrEngine, type OcrElement } from '../../platform/ocr-engine';
 import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
 import { parseAssertions, checkAssertions, renderReport } from '../verify/assertions';
+import { compileUIMap, defaultCompileDeps } from '../sense/ui-map';
+import { renderUIMap } from '../sense/ui-map-render';
 
 /** Lazy OCR singleton for the agent-loop perception tools (read_text, smart_click).
  *  Mirrors the pattern in src/tools/smart.ts. Construction never throws; the real
@@ -1375,6 +1377,36 @@ export function buildUnifiedTools(): UnifiedTool[] {
         return { success: true, text: `OCR (${result.elements.length} words, ${result.durationMs}ms):\n${lines.join('\n')}` };
       },
     },
+
+    {
+      name: 'compile_ui',
+      description: 'Compile the current screen into one fused UI map (a11y + OCR + lazy vision) of elements with stable ids, roles, confidence and sources. Returns a ranked element list with a snapshot id; act on a specific element via invoke_element/set_field_value with {element_id, snapshot_id}. Cheap by default (window+a11y); pass max_cost to allow OCR/vision.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          purpose: { type: 'string', enum: ['general', 'find_text', 'act'], description: 'What the compile is for' },
+          target_text: { type: 'string', description: 'If set and absent from a11y, pull OCR to find it' },
+          max_cost: { type: 'string', enum: ['cheap', 'ocr_ok', 'vision_ok'], description: 'Hard ceiling on perception cost (default ocr_ok)' },
+        },
+        additionalProperties: false,
+      },
+      changesScreen: false,
+      async execute(args, ctx) {
+        const holder = ctx.uiMaps;
+        if (!holder) return { success: false, text: 'compile_ui: no UIMap holder on this context.' };
+        const now = Date.now();
+        const id = holder.nextId();
+        const hints = {
+          purpose: typeof args.purpose === 'string' ? args.purpose as 'general' | 'find_text' | 'act' : undefined,
+          target_text: typeof args.target_text === 'string' ? args.target_text : undefined,
+          max_cost: typeof args.max_cost === 'string' ? args.max_cost as 'cheap' | 'ocr_ok' | 'vision_ok' : undefined,
+        };
+        const map = await compileUIMap(defaultCompileDeps(ctx.platform, now, id), hints);
+        holder.put(map, now);
+        return { success: true, text: renderUIMap(map) };
+      },
+    },
+
     {
       name: 'smart_click',
       description: 'OCR-locate visible text on screen and click its center. Use when the a11y tree is empty and invoke_element fails (webview/canvas). Pass the exact visible text (e.g. "Search", a video title, "Sign in").',

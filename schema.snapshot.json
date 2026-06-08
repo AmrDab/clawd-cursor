@@ -514,6 +514,39 @@
       "costClass": "act"
     },
     {
+      "name": "compile_ui",
+      "description": "Compile the current screen into one fused UI map (a11y + OCR + lazy vision) of elements with stable ids, roles, confidence and sources. Returns a ranked element list with a snapshot id; act on a specific element via invoke_element/set_field_value with {element_id, snapshot_id}. Cheap by default (window+a11y); pass max_cost to allow OCR/vision.",
+      "category": "perception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "description": "What the compile is for",
+            "enum": [
+              "general",
+              "find_text",
+              "act"
+            ]
+          },
+          "target_text": {
+            "type": "string",
+            "description": "If set and absent from a11y, pull OCR to find it"
+          },
+          "max_cost": {
+            "type": "string",
+            "description": "Hard ceiling on perception cost (default ocr_ok)",
+            "enum": [
+              "cheap",
+              "ocr_ok",
+              "vision_ok"
+            ]
+          }
+        }
+      },
+      "costClass": "perceive-text"
+    },
+    {
       "name": "delegate_to_agent",
       "description": "Hand a whole task to clawdcursor's built-in thin agent loop, which drives the toolbox with the model configured via `clawdcursor doctor` (perceive → act → iterate until done). For an expensive frontier model this is the delegation lever: hand grunt work to a cheaper configured model that takes the wheel. Requires `clawdcursor agent` running WITH a model configured; in tools-only / --no-llm mode there is no model to drive it.",
       "category": "orchestration",

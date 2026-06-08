@@ -230,6 +230,17 @@ export const TOOL_META: Record<string, ToolMeta> = {
     },
   },
 
+  compile_ui: {
+    category: 'perception',
+    safetyTier: 0,
+    costClass: 'perceive-text',
+    paramDescriptions: {
+      purpose: 'What the compile is for',
+      target_text: 'Text to find (may pull OCR)',
+      max_cost: 'Perception cost ceiling',
+    },
+  },
+
   get_element_state: {
     category: 'perception',
     compactGroup: 'accessibility',
