@@ -705,9 +705,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         nextBlocks.push({ type: 'tool_result', tool_use_id: tr.id, content, is_error: tr.isError });
       }
 
-      // 6b. If any tool changed the screen, append a fresh snapshot for
-      //     the next turn. This is the "per-turn refresh" the old
-      //     vision-agent lacked.
+      // 6b. If any tool changed the screen, append a fresh COMPILED UI map
+      //     (el_NN) for the next turn — the single per-turn perception (the
+      //     legacy a11y-snapshot render was unified away into this map).
       const anyChanged = toolResults.some(r => !!r.screenshot) || steps[steps.length - 1]?.fingerprintChanged;
       if (anyChanged || toolResults.length > 0) {
         try {
