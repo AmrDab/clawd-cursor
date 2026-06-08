@@ -681,3 +681,38 @@ describe('runAgent — Layer C reactive step discipline', () => {
     expect(result.steps[0].result.success).toBe(true);
   });
 });
+
+describe('runAgent — unified el_NN perception', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+
+  function firstUserText() {
+    const u = capturedLlmCalls[0].messages.find((m: any) => m.role === 'user');
+    return (u.content as any[]).map((b: any) => (typeof b === 'string' ? b : b.text ?? '')).join('\n');
+  }
+  function turnUserText(i: number) {
+    // Pick the i-th user message (0-indexed) from call i's message history.
+    // The history array is a shared reference — messages added AFTER the LLM
+    // call appear in subsequent entries. User[i] is the one that was the
+    // active context at the time of call i (user[0] = initial, user[1] = after
+    // turn-1 tools, etc.).
+    const users = (capturedLlmCalls[i]?.messages ?? []).filter((m: any) => m.role === 'user');
+    const u = users[i];
+    if (!u) return '';
+    return (u.content as any[]).map((b: any) => (typeof b === 'string' ? b : b.text ?? '')).join('\n');
+  }
+
+  it('turn 1 perception is the compiled UI map (el_NN), not the legacy snapshot', async () => {
+    llmTurnQueue.push(turnCall('done', { evidence: 'nothing to do' }));
+    await runAgent({ task: 't', maxTurns: 3 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
+    expect(firstUserText()).toContain('COMPILED UI');
+    expect(firstUserText()).not.toContain('ACCESSIBILITY SNAPSHOT');
+  });
+
+  it('subsequent turns show the UI map and NOT the legacy "FRESH ACCESSIBILITY SNAPSHOT"', async () => {
+    llmTurnQueue.push(turnCall('key', { key: 'a' }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'key was pressed successfully' }));
+    await runAgent({ task: 't', maxTurns: 4 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
+    expect(turnUserText(1)).toContain('COMPILED UI');
+    expect(turnUserText(1)).not.toContain('FRESH ACCESSIBILITY SNAPSHOT');
+  });
+});

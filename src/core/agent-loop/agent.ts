@@ -191,18 +191,29 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
    */
   let consecutiveNoToolCallTurns = 0;
 
-  // Turn-1 perception — always an a11y snapshot. In vision mode, also a
-  // screenshot. The blind mode gets text-only snapshot.
+  // Cross-turn anchor continuity for compileUIMap. Hoisted above the turn-1
+  // block so storeUIMap can be called there and update prevAnchors.
+  let prevAnchors: UIMap['anchors'] | undefined = undefined;
+
+  // Turn-1 perception — compiled UIMap (el_NN) so the agent acts on the same
+  // vocabulary from its very first decision and el_NN refs resolve immediately.
+  // Falls back to a plain a11y snapshot text if compilation fails.
   try {
     const firstSnapshot = await captureSnapshot(deps.adapter);
     activeApp = firstSnapshot.activeWindow?.processName;
     fph.push(firstSnapshot.fingerprint);
 
-    const snapshotText = renderSnapshot(firstSnapshot, {
-      screenWidth: screen.physicalWidth,
-      screenHeight: screen.physicalHeight,
-      focusProcessId: firstSnapshot.activeWindow?.processId,
-    });
+    // Turn-1 perception = the compiled UI map (el_NN), so the agent acts on the
+    // same vocabulary from its very first decision. storeUIMap stores it in the
+    // holder, so turn-1 el_NN refs resolve.
+    let firstUiRender: string;
+    try {
+      const ui0 = await storeUIMap(holder, firstSnapshot, deps.adapter, prevAnchors);
+      prevAnchors = ui0.anchors;
+      firstUiRender = ui0.render;
+    } catch {
+      firstUiRender = renderSnapshot(firstSnapshot, { screenWidth: screen.physicalWidth, screenHeight: screen.physicalHeight, focusProcessId: firstSnapshot.activeWindow?.processId });
+    }
 
     // DPI/scale header — tells the model how screenshot pixels map to tool coords.
     const imgScaleNum = screen.physicalWidth > LLM_TARGET_WIDTH
@@ -224,7 +235,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     const initialBlocks: LLMUserBlock[] = [
       {
         type: 'text',
-        text: `${windowAnchor}TASK: ${input.task}${dpiNote}\n\nACCESSIBILITY SNAPSHOT:\n${wrapUntrustedScreenContent(snapshotText)}\n\nPICK ONE TOOL CALL.`,
+        text: `${windowAnchor}TASK: ${input.task}${dpiNote}\n\nCOMPILED UI (act on an element via invoke_element/set_field_value with {element_id, snapshot_id}):\n${wrapUntrustedScreenContent(firstUiRender)}\n\nPICK ONE TOOL CALL.`,
       },
     ];
     if (input.targetWindow) log.info('agent.window_anchor', { window: input.targetWindow.title, process: input.targetWindow.processName });
@@ -235,9 +246,6 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     log.warn('agent.perception.initial.failed', { error: msg });
     return earlyExit('cannot_read', `initial perception failed: ${msg}`, startedAt);
   }
-
-  // Cross-turn anchor continuity for compileUIMap (Part 2).
-  let prevAnchors: UIMap['anchors'] | undefined = undefined;
 
   // ─── Main turn loop ─────────────────────────────────────────
   const outerSpan = beginSpan();
@@ -705,15 +713,6 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         try {
           const snap = await captureSnapshot(deps.adapter);
           activeApp = snap.activeWindow?.processName ?? activeApp;
-          const snapText = renderSnapshot(snap, {
-            screenWidth: screen.physicalWidth,
-            screenHeight: screen.physicalHeight,
-            focusProcessId: snap.activeWindow?.processId,
-          });
-          nextBlocks.push({
-            type: 'text',
-            text: `\nFRESH ACCESSIBILITY SNAPSHOT:\n${wrapUntrustedScreenContent(snapText)}`,
-          });
           nextBlocks.push({
             type: 'text',
             text: `\nRECENT ACTIONS:\n${renderHistory(steps, 6)}`,
