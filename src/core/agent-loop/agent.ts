@@ -28,7 +28,6 @@ import type { ScreenshotResult } from '../../platform/types';
 import { FingerprintHistory } from '../sense/fingerprint';
 import { captureSnapshot } from '../sense/snapshot';
 import { UIMapHolder } from '../sense/ui-map-holder';
-import { resolveRef } from '../sense/ui-map-resolve';
 import { reactiveCheck } from '../sense/reactive-check';
 import { OcrEngine } from '../../platform/ocr-engine';
 import { compileUIMap } from '../sense/ui-map';
@@ -424,17 +423,19 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         let targetLabel = typeof call.args.name === 'string' ? call.args.name
           : typeof call.args.target === 'string' ? call.args.target
           : undefined;
-        // el_NN ref clicks carry no name/target — resolve the ref to its element
-        // name so the safety gate sees a real label (correct label-pattern rule +
-        // intent-match bypass) instead of the blunt "no target label" confirm.
-        // No safety weakening: the same gate runs, just with more information.
-        if (!targetLabel && call.name === 'invoke_element' && typeof call.args.element_id === 'string') {
-          const plan = resolveRef(
-            { element_id: call.args.element_id, snapshot_id: typeof call.args.snapshot_id === 'string' ? call.args.snapshot_id : undefined },
-            holder, Date.now(), 'click', null,
-          );
-          if (plan.ok && plan.via === 'name') targetLabel = plan.name;
-          else if (plan.ok && plan.via === 'bounds') targetLabel = plan.element.text ?? plan.element.normalized_text ?? undefined;
+        // el_NN ref clicks carry no name/target — look the element's name up from
+        // the holder's CURRENT map so the safety gate sees a real label (correct
+        // label-pattern rule + intent-match bypass) instead of the blunt "no target
+        // label" confirm. No safety weakening: same gate, more info; a stale/unknown
+        // snapshot → no label → blunt confirm still fires (safe default). The action
+        // path's own resolveRef still applies the full window guard at execute time.
+        if (!targetLabel && call.name === 'invoke_element'
+            && typeof call.args.element_id === 'string' && typeof call.args.snapshot_id === 'string') {
+          const res = holder.resolve(call.args.snapshot_id, Date.now());
+          if (res.ok) {
+            const el = res.map.elements.find(e => e.id === call.args.element_id);
+            if (el) targetLabel = el.text ?? el.normalized_text ?? undefined;
+          }
         }
 
         // 5a. Safety gate — single chokepoint. Pass through the user's task

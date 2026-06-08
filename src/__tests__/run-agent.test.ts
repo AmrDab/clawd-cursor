@@ -766,3 +766,61 @@ describe('runAgent — confirm-tier is actionable (headless dead-end fix)', () =
     expect(allToolResultTexts.toLowerCase()).toMatch(/name the target|find_action_button|invoke_element\(name/);
   });
 });
+
+describe('runAgent — el_NN ref label resolution in safety pre-pass (Task-3 fix)', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+
+  it('resolves a benign el_NN ref label from the holder map and allows it through (not confirm-blocked)', async () => {
+    // WHY THIS TEST IS MEANINGFUL:
+    //   Before the fix, the label-resolution block called resolveRef(..., null).
+    //   resolveRef returns {ok:false} IMMEDIATELY when activeWindow=null (line 55 of
+    //   ui-map-resolve.ts), so targetLabel was NEVER set. In a sensitive app ('olk'),
+    //   invoke_element with no targetLabel → confirm block ("Sensitive app + no label").
+    //   With the fix, the label is looked up directly from holder.resolve() and the
+    //   element's text field, so "Reply" IS resolved → not in CONFIRM_LABEL_PATTERNS →
+    //   ALLOWED. Reverting the fix makes this test RED (invoke_element becomes blocked).
+    //
+    // SETUP:
+    //   - Adapter is 'olk' (sensitive app) so the sensitive-app + no-label confirm fires
+    //     without the fix.
+    //   - getUiTree returns ONE element: name="Reply", controlType="button".
+    //     compileUIMap (called by storeUIMap in initial perception) converts it to
+    //     el_0 with text="Reply". The snapshot is stored as obs_1.
+    //   - Turn 1: model calls invoke_element({element_id:'el_0', snapshot_id:'obs_1'}).
+    //     The safety pre-pass must resolve targetLabel="Reply" from the holder.
+    //     "Reply" does NOT match any CONFIRM_LABEL_PATTERNS → allow.
+    //   - Turn 2: model calls done() to finish the run.
+    //   - Assert: invoke_element step was ALLOWED (no safety_confirm text).
+    //     Without the fix: safety_confirm fires → step.result.text contains 'safety_confirm'.
+
+    const adapter = makeAdapter({ activeProcessName: 'olk' });
+    // Override getUiTree to return a single "Reply" button so the holder's
+    // obs_1 map has el_0 with text="Reply".
+    (adapter.getUiTree as any).mockResolvedValue([
+      { name: 'Reply', controlType: 'button', bounds: { x: 10, y: 10, width: 80, height: 30 }, enabled: true },
+    ]);
+
+    const holder = new UIMapHolder();
+
+    // Turn 1: invoke_element via el_NN ref — snapshot_id='obs_1', element_id='el_0'
+    // (obs_1 = first nextId() call in storeUIMap during initial perception; el_0 = only element)
+    llmTurnQueue.push(turnCall('invoke_element', { element_id: 'el_0', snapshot_id: 'obs_1' }));
+    // Turn 2: done
+    llmTurnQueue.push(turnCall('done', { evidence: 'reply button was activated' }));
+
+    const result = await runAgent(
+      { task: 'click reply in the email', maxTurns: 5 },
+      { adapter, llm: LLM_CONFIG, uiMaps: holder },
+    );
+
+    // The invoke_element step must NOT be confirm-blocked.
+    // If the label is unresolved (old dead-code path), the sensitive-app rule fires:
+    //   "Sensitive app (olk) + invoke_element with no target label" → safety_confirm.
+    // With the fix, label="Reply" is found → not destructive → allowed through.
+    const invokeStep = result.steps.find(s => s.toolName === 'invoke_element');
+    expect(invokeStep).toBeTruthy();
+    expect(invokeStep!.result.text).not.toContain('safety_confirm');
+    // The run must reach done(), not stall on a confirm block.
+    expect(result.exit).toBe('done');
+  });
+});
