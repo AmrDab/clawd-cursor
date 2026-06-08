@@ -1451,7 +1451,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           max_cost: typeof args.max_cost === 'string' ? args.max_cost as 'cheap' | 'ocr_ok' | 'vision_ok' : undefined,
         };
         const map = await compileUIMap(defaultCompileDeps(ctx.platform, now, id), hints);
-        holder.put(map, now);
+        holder.put(map, now, hints.max_cost ?? 'ocr_ok');
         return { success: true, text: renderUIMap(map) };
       },
     },

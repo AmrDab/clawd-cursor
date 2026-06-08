@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { UIMapHolder, TTL_MS, MAX_HELD } from '../core/sense/ui-map-holder';
+import { UIMapHolder, TTL_MS, MAX_HELD, COST_RANK } from '../core/sense/ui-map-holder';
 import type { UIMap } from '../core/sense/ui-map-types';
 
 const mapWith = (id: string): UIMap => ({
@@ -57,5 +57,39 @@ describe('UIMapHolder', () => {
     const id = h.nextId(); h.put(mapWith(id), 0);
     h.invalidate();
     expect(h.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
+  });
+});
+
+describe('UIMapHolder — currentIfCost (cost-aware reuse)', () => {
+  it('reuses a fresh current map compiled at >= requested cost', () => {
+    const h = new UIMapHolder();
+    const id = h.nextId();
+    h.put(mapWith(id), 1000, 'ocr_ok');
+    expect(h.currentIfCost('ocr_ok', 1000)?.snapshot_id).toBe(id); // equal cost ok
+    expect(h.currentIfCost('cheap', 1000)?.snapshot_id).toBe(id);  // higher-than-requested ok
+  });
+
+  it('refuses a cheaper-than-requested map (compile fresh)', () => {
+    const h = new UIMapHolder();
+    const id = h.nextId();
+    h.put(mapWith(id), 1000, 'cheap');
+    expect(h.currentIfCost('ocr_ok', 1000)).toBeNull(); // cheap < ocr_ok
+  });
+
+  it('refuses a stale/expired/invalidated map', () => {
+    const h = new UIMapHolder();
+    const id = h.nextId();
+    h.put(mapWith(id), 1000, 'ocr_ok');
+    expect(h.currentIfCost('ocr_ok', 1000 + TTL_MS + 1)).toBeNull(); // expired
+    h.invalidate();
+    expect(h.currentIfCost('ocr_ok', 1000)).toBeNull();             // invalidated
+  });
+
+  it('treats an unrecorded (undefined) cost as not satisfying an ocr_ok request', () => {
+    const h = new UIMapHolder();
+    const id = h.nextId();
+    h.put(mapWith(id), 1000);                 // legacy 2-arg put, no cost recorded
+    expect(h.currentIfCost('ocr_ok', 1000)).toBeNull();
+    expect(COST_RANK.cheap).toBeLessThan(COST_RANK.ocr_ok);
   });
 });

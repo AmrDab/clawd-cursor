@@ -864,7 +864,7 @@ async function storeUIMap(
     prevAnchors,
     now, snapshotId: id,
   }, { max_cost: 'cheap' });                                              // cheap = window+a11y only
-  holder.put(map, now);
+  holder.put(map, now, 'cheap');
   return { render: renderUIMap(map), anchors: map.anchors, id };
 }
 
