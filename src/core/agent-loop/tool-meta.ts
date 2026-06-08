@@ -241,6 +241,26 @@ export const TOOL_META: Record<string, ToolMeta> = {
     },
   },
 
+  find_action_button: {
+    category: 'perception',
+    safetyTier: 0,
+    costClass: 'perceive-text',
+    paramDescriptions: {
+      intent: 'What you want to do (submit/cancel/search/login/...)',
+      max_cost: 'Perception cost ceiling (default ocr_ok)',
+    },
+  },
+
+  find_input_field: {
+    category: 'perception',
+    safetyTier: 0,
+    costClass: 'perceive-text',
+    paramDescriptions: {
+      purpose: 'What the field is for (recipient/subject/body/search/...)',
+      max_cost: 'Perception cost ceiling (default ocr_ok)',
+    },
+  },
+
   get_element_state: {
     category: 'perception',
     compactGroup: 'accessibility',

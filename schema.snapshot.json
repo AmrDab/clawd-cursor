@@ -668,6 +668,33 @@
       "costClass": "act"
     },
     {
+      "name": "find_action_button",
+      "description": "Semantically locate the best clickable element for an intent (e.g. \"submit\", \"cancel\", \"search\") over the compiled UI. Returns JSON {status:\"ok\"|\"ambiguous\"|\"none\", snapshot_id, best?, candidates}. On \"ok\", act with invoke_element({element_id: best.element_id, snapshot_id}). Deterministic synonym + text + confidence match.",
+      "category": "perception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "intent": {
+            "type": "string",
+            "description": "What you want to do (submit/cancel/search/login/...)"
+          },
+          "max_cost": {
+            "type": "string",
+            "description": "Perception cost ceiling (default ocr_ok)",
+            "enum": [
+              "cheap",
+              "ocr_ok",
+              "vision_ok"
+            ]
+          }
+        },
+        "required": [
+          "intent"
+        ]
+      },
+      "costClass": "perceive-text"
+    },
+    {
       "name": "find_element",
       "description": "Search for UI elements by name, control type, or automation ID within a process. Returns matching elements with bounds. For browser windows with CDP attached, falls back to a DOM query when UIA returns empty so canvas / SPA content is reachable too (results are flagged with a \"via CDP DOM\" header and use viewport-relative coords).",
       "category": "window",
@@ -693,6 +720,33 @@
         }
       },
       "costClass": "inspect"
+    },
+    {
+      "name": "find_input_field",
+      "description": "Semantically locate the best editable field for a purpose (e.g. \"recipient\", \"subject\", \"body\", \"search\") over the compiled UI, including label-less fields via their adjacent label. Returns JSON {status, snapshot_id, best?, candidates}. On \"ok\", fill with set_field_value({element_id: best.element_id, snapshot_id, value}). Deterministic.",
+      "category": "perception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "description": "What the field is for (recipient/subject/body/search/...)"
+          },
+          "max_cost": {
+            "type": "string",
+            "description": "Perception cost ceiling (default ocr_ok)",
+            "enum": [
+              "cheap",
+              "ocr_ok",
+              "vision_ok"
+            ]
+          }
+        },
+        "required": [
+          "purpose"
+        ]
+      },
+      "costClass": "perceive-text"
     },
     {
       "name": "focus_element",

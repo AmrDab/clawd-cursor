@@ -32,6 +32,7 @@ import { parseAssertions, checkAssertions, renderReport } from '../verify/assert
 import { compileUIMap, defaultCompileDeps } from '../sense/ui-map';
 import { renderUIMap } from '../sense/ui-map-render';
 import { resolveRef } from '../sense/ui-map-resolve';
+import { findActionButton, findInputField } from '../sense/ui-map-find';
 
 /** Lazy OCR singleton for the agent-loop perception tools (read_text, smart_click).
  *  Mirrors the pattern in src/tools/smart.ts. Construction never throws; the real
@@ -101,6 +102,23 @@ const HEDGING_PATTERN = new RegExp(
  * present regardless of mode/capability — the agent must always have
  * an exit door.
  */
+
+/** Reuse a cost-compatible current UIMap from the holder, or compile a fresh one.
+ *  Date.now() is called at the tool-invocation boundary (correct: snapshot is fresh).
+ *  Returns null when there is no holder on this context (non-UIMap-aware call sites). */
+async function finderMap(ctx: AgentToolContext, rawMaxCost: unknown) {
+  const holder = ctx.uiMaps;
+  if (!holder) return null;
+  const requested = (rawMaxCost === 'cheap' || rawMaxCost === 'ocr_ok' || rawMaxCost === 'vision_ok') ? rawMaxCost : 'ocr_ok';
+  const now = Date.now();
+  const reuse = holder.currentIfCost(requested, now);
+  if (reuse) return reuse;
+  const id = holder.nextId();
+  const map = await compileUIMap(defaultCompileDeps(ctx.platform, now, id), { max_cost: requested });
+  holder.put(map, now, requested);
+  return map;
+}
+
 export function buildUnifiedTools(): UnifiedTool[] {
   const tools: UnifiedTool[] = [
     // ─── PERCEPTION ─────────────────────────────────────────────
@@ -1453,6 +1471,38 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const map = await compileUIMap(defaultCompileDeps(ctx.platform, now, id), hints);
         holder.put(map, now, hints.max_cost ?? 'ocr_ok');
         return { success: true, text: renderUIMap(map) };
+      },
+    },
+
+    {
+      name: 'find_action_button',
+      description: 'Semantically locate the best clickable element for an intent (e.g. "submit", "cancel", "search") over the compiled UI. Returns JSON {status:"ok"|"ambiguous"|"none", snapshot_id, best?, candidates}. On "ok", act with invoke_element({element_id: best.element_id, snapshot_id}). Deterministic synonym + text + confidence match.',
+      inputSchema: { type: 'object', properties: {
+        intent: { type: 'string', description: 'What you want to do (submit/cancel/search/login/...)' },
+        max_cost: { type: 'string', enum: ['cheap', 'ocr_ok', 'vision_ok'], description: 'Perception cost ceiling (default ocr_ok)' },
+      }, required: ['intent'], additionalProperties: false },
+      changesScreen: false,
+      async execute(args, ctx) {
+        const map = await finderMap(ctx, args.max_cost);
+        if (!map) return { success: false, text: 'find_action_button: no UIMap holder on this context.' };
+        const r = findActionButton(map.elements, map.snapshot_id, String(args.intent ?? ''));
+        return { success: r.status === 'ok', text: JSON.stringify(r) };
+      },
+    },
+
+    {
+      name: 'find_input_field',
+      description: 'Semantically locate the best editable field for a purpose (e.g. "recipient", "subject", "body", "search") over the compiled UI, including label-less fields via their adjacent label. Returns JSON {status, snapshot_id, best?, candidates}. On "ok", fill with set_field_value({element_id: best.element_id, snapshot_id, value}). Deterministic.',
+      inputSchema: { type: 'object', properties: {
+        purpose: { type: 'string', description: 'What the field is for (recipient/subject/body/search/...)' },
+        max_cost: { type: 'string', enum: ['cheap', 'ocr_ok', 'vision_ok'], description: 'Perception cost ceiling (default ocr_ok)' },
+      }, required: ['purpose'], additionalProperties: false },
+      changesScreen: false,
+      async execute(args, ctx) {
+        const map = await finderMap(ctx, args.max_cost);
+        if (!map) return { success: false, text: 'find_input_field: no UIMap holder on this context.' };
+        const r = findInputField(map.elements, map.snapshot_id, String(args.purpose ?? ''));
+        return { success: r.status === 'ok', text: JSON.stringify(r) };
       },
     },
 
