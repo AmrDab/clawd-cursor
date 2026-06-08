@@ -83,7 +83,7 @@
     "playwright": "^1.60.0",
     "sharp": "^0.34.5",
     "ws": "^8.21.0",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
