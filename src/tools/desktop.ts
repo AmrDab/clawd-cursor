@@ -128,6 +128,7 @@ export function getDesktopTools(): ToolDefinition[] {
         const rx = Math.round(x * sf), ry = Math.round(y * sf);
         await ctx.desktop.mouseClick(rx, ry);
         ctx.a11y.invalidateCache();
+        ctx.uiMaps?.invalidate();
         return { text: `Clicked at (${x}, ${y}) → logical (${rx}, ${ry})` };
       },
     },
@@ -147,6 +148,7 @@ export function getDesktopTools(): ToolDefinition[] {
         const sf = ctx.getMouseScaleFactor();
         await ctx.desktop.mouseDoubleClick(Math.round(x * sf), Math.round(y * sf));
         ctx.a11y.invalidateCache();
+        ctx.uiMaps?.invalidate();
         return { text: `Double-clicked at (${x}, ${y})` };
       },
     },
@@ -166,6 +168,7 @@ export function getDesktopTools(): ToolDefinition[] {
         const sf = ctx.getMouseScaleFactor();
         await ctx.desktop.mouseRightClick(Math.round(x * sf), Math.round(y * sf));
         ctx.a11y.invalidateCache();
+        ctx.uiMaps?.invalidate();
         return { text: `Right-clicked at (${x}, ${y})` };
       },
     },
@@ -238,6 +241,7 @@ export function getDesktopTools(): ToolDefinition[] {
           Math.round(ex * sf), Math.round(ey * sf),
         );
         ctx.a11y.invalidateCache();
+        ctx.uiMaps?.invalidate();
         return { text: `Dragged (${sx},${sy}) → (${ex},${ey})` };
       },
     },
@@ -282,6 +286,7 @@ export function getDesktopTools(): ToolDefinition[] {
         }
 
         ctx.a11y.invalidateCache();
+        ctx.uiMaps?.invalidate();
         return { text: `Typed ${text.length} chars into ${activeInfo}` };
       },
     },
@@ -317,6 +322,7 @@ export function getDesktopTools(): ToolDefinition[] {
           await ctx.desktop.keyPress(combo);
         }
         ctx.a11y.invalidateCache();
+        ctx.uiMaps?.invalidate();
         return { text: `Key pressed: ${key} in ${activeInfo}` };
       },
     },

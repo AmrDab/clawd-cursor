@@ -1429,7 +1429,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
 
     {
       name: 'compile_ui',
-      description: 'Compile the current screen into one fused UI map (a11y + OCR + lazy vision) of elements with stable ids, roles, confidence and sources. Returns a ranked element list with a snapshot id; act on a specific element via invoke_element/set_field_value with {element_id, snapshot_id}. Cheap by default (window+a11y); pass max_cost to allow OCR/vision.',
+      description: 'Compile the current screen into one fused UI map (a11y + OCR + lazy vision) of elements with stable ids, roles, confidence and sources. Returns a ranked element list with a snapshot id; act on a specific element via invoke_element/set_field_value with {element_id, snapshot_id}. a11y-first; pulls OCR only when a11y is sparse or target_text is missing; pass max_cost:\'cheap\' to forbid OCR, or \'vision_ok\' to allow screenshots.',
       inputSchema: {
         type: 'object',
         properties: {

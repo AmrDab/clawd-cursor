@@ -50,13 +50,20 @@ export function resolveRef(
   if (intent === 'click' && (!element.actionable || element.state?.enabled === false)) return { ok: false, error: `element ${element.id} is not actionable (disabled?)` };
   if (intent === 'fill' && !element.editable) return { ok: false, error: `element ${element.id} is not editable` };
 
+  // The map's window must STILL be the active window — for BOTH dispatch paths
+  // (a unique name is no safer than bounds if the window changed under us).
+  if (!activeWindow) return { ok: false, error: 'cannot verify active window — call compile_ui again' };
+  const pidKnown = map.process_id !== undefined && map.process_id !== '';
+  const sameWin = pidKnown
+    ? String(activeWindow.processId) === map.process_id   // pid is authoritative when known
+    : activeWindow.title === map.window_title;            // fall back to title only when pid unknown
+  if (!sameWin) return { ok: false, error: 'window changed since compile — call compile_ui again' };
+
+  // Prefer the reliable a11y path when the name is unique; else disambiguate by bounds.
   const name = element.normalized_text ?? '';
   const uniqueName = name !== '' && map.elements.filter(e => e.normalized_text === name).length === 1;
   if (uniqueName) return { ok: true, via: 'name', name, element };
 
-  if (!activeWindow) return { ok: false, error: 'cannot verify active window for bounds dispatch — recompile' };
-  const sameWin = String(activeWindow.processId) === map.process_id || activeWindow.title === map.window_title;
-  if (!sameWin) return { ok: false, error: 'window changed since compile — call compile_ui again' };
   if (!boundsInside(element.bounds, activeWindow.bounds)) return { ok: false, error: 'element is off the active window — call compile_ui again' };
   return { ok: true, via: 'bounds', bounds: element.bounds, element };
 }

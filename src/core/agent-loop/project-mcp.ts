@@ -223,6 +223,11 @@ export function projectToToolDefinition(t: UnifiedTool): ToolDefinition {
   ): Promise<ToolResult> => {
     const agentCtx = await toolContextToAgent(ctx);
     const result = await t.execute(params, agentCtx);
+    // Invalidate the shared UIMap holder after any screen-changing tool so
+    // that a stale compile_ui snapshot cannot be resolved on the MCP path.
+    // Runs regardless of success: a failed screen-change attempt is still
+    // enough to invalidate the previous map.
+    if (t.changesScreen) ctx.uiMaps?.invalidate();
     return unifiedToToolResult(result);
   };
 
