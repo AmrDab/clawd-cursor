@@ -27,6 +27,10 @@ import { createHash } from 'node:crypto';
 import type { ScreenshotResult } from '../../platform/types';
 import { FingerprintHistory } from '../sense/fingerprint';
 import { captureSnapshot } from '../sense/snapshot';
+import { UIMapHolder } from '../sense/ui-map-holder';
+import { compileUIMap } from '../sense/ui-map';
+import { renderUIMap } from '../sense/ui-map-render';
+import type { UIMap } from '../sense/ui-map-types';
 import { logger, EVENTS, beginSpan } from '../observability/logger';
 import { getCorrelationId } from '../observability/correlation';
 import { evaluate as safetyEvaluate, isAllowed } from '../safety';
@@ -98,6 +102,8 @@ export interface AgentDeps {
   /** Optional CDP driver for the browser_* tools (dedicated agent-owned
    *  browser). Resolved lazily by the pipeline from the daemon's driver. */
   cdp?: import('../../platform/cdp-driver').CDPDriver | null;
+  /** Optional session-scoped UIMap holder (Part 2). Created per-call if absent. */
+  uiMaps?: UIMapHolder;
 }
 
 /**
@@ -119,6 +125,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
   if (!llmConfig) {
     return earlyExit('give_up', 'No model configured. Run `clawdcursor doctor` to set AI_TEXT_MODEL.', startedAt);
   }
+
+  // Session-scoped UIMap holder (Part 2). Created per-call if not provided.
+  const holder = deps.uiMaps ?? new UIMapHolder();
 
   // Set up perception state.
   const fph = new FingerprintHistory(8);
@@ -220,6 +229,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
     log.warn('agent.perception.initial.failed', { error: msg });
     return earlyExit('cannot_read', `initial perception failed: ${msg}`, startedAt);
   }
+
+  // Cross-turn anchor continuity for compileUIMap (Part 2).
+  let prevAnchors: UIMap['anchors'] | undefined = undefined;
 
   // ─── Main turn loop ─────────────────────────────────────────
   const outerSpan = beginSpan();
@@ -579,6 +591,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           activeApp,
           targetWindow: input.targetWindow,
           cdp: deps.cdp ?? null,
+          uiMaps: holder,
         };
 
         let result: Awaited<ReturnType<UnifiedTool['execute']>>;
@@ -605,6 +618,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         let postSnapshot: Awaited<ReturnType<typeof captureSnapshot>> | null = null;
         if (tool.changesScreen) {
           anyScreenChangingTool = true;
+          // Invalidate the UIMap holder — the screen changed, existing el_NN refs
+          // are stale. The next turn's §6b storeUIMap re-puts a fresh map.
+          holder.invalidate();
           try {
             postSnapshot = await captureSnapshot(deps.adapter);
             activeApp = postSnapshot.activeWindow?.processName ?? activeApp;
@@ -680,6 +696,29 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
             type: 'text',
             text: `\nRECENT ACTIONS:\n${renderHistory(steps, 6)}`,
           });
+          // §6b UIMap (Part 2): compile + store a UIMap from the already-captured
+          // snapshot (no second a11y read). Skip on terminal turns — the loop
+          // exits right after, so a re-put would un-invalidate the holder and mask
+          // the changesScreen invalidation from the prior action turn.
+          if (terminal === null) {
+            try {
+              const ui = await storeUIMap(holder, snap, deps.adapter, prevAnchors);
+              prevAnchors = ui.anchors;
+              nextBlocks.push({
+                type: 'text',
+                text: `\nCOMPILED UI (act on an element via invoke_element/set_field_value with {element_id, snapshot_id="${ui.id}"}):\n${ui.render}`,
+              });
+            } catch {
+              // UIMap compilation failure is non-fatal — the agent still has the a11y snapshot.
+            }
+            // If an action in this turn changed the screen, invalidate AFTER storing
+            // so the next turn's storeUIMap re-puts a fresh map. This ensures that
+            // any el_NN refs from the map produced post-action are still marked stale
+            // (the action may have already mutated the UI being referenced).
+            if (anyScreenChangingTool) {
+              holder.invalidate();
+            }
+          }
         } catch {
           nextBlocks.push({
             type: 'text',
@@ -803,6 +842,31 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+/**
+ * Compile a UIMap from an already-captured snapshot and store it in the holder.
+ * REUSES the caller's snapshot — never triggers a second a11y read or real OCR/vision.
+ * Called in §6b so the agent sees el_NN ids on the NEXT turn.
+ */
+async function storeUIMap(
+  holder: UIMapHolder,
+  snap: Awaited<ReturnType<typeof captureSnapshot>>,
+  adapter: AgentDeps['adapter'],
+  prevAnchors: UIMap['anchors'] | undefined,
+): Promise<{ render: string; anchors: UIMap['anchors']; id: string }> {
+  const now = Date.now();
+  const id = holder.nextId();
+  const map = await compileUIMap({
+    captureSnapshot: async () => snap,                                    // REUSE — no second a11y read
+    ocr: async () => ({ elements: [], fullText: '', durationMs: 0 }),     // loop perception is a11y-only
+    vision: async () => { throw new Error('no vision in loop perception'); },
+    getScreenSize: () => adapter.getScreenSize(),
+    getFocusedElement: () => adapter.getFocusedElement(),
+    prevAnchors,
+    now, snapshotId: id,
+  }, { max_cost: 'cheap' });                                              // cheap = window+a11y only
+  holder.put(map, now);
+  return { render: renderUIMap(map), anchors: map.anchors, id };
+}
 
 function toUnifiedLLMTools(tools: UnifiedTool[]): LLMTool[] {
   return tools.map(t => ({

@@ -592,3 +592,26 @@ describe('runAgent — no-tool-call loop exit', () => {
     expect(result.steps.length).toBeLessThan(8);
   });
 });
+
+import { UIMapHolder } from '../core/sense/ui-map-holder';
+
+describe('runAgent — UIMap holder integration (Part 2)', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+
+  it('stores a per-turn UIMap in the provided holder with an obs_N id', async () => {
+    const holder = new UIMapHolder();
+    llmTurnQueue.push(turnCall('read_screen'));
+    llmTurnQueue.push(turnCall('done', { evidence: 'the window shows the expected content' }));
+    await runAgent({ task: 'orient', maxTurns: 5 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
+    expect(holder.currentId()).toMatch(/^obs_\d+$/);
+  });
+
+  it('invalidates the holder after a screen-changing tool', async () => {
+    const holder = new UIMapHolder();
+    llmTurnQueue.push(turnCall('key', { key: 'a' }));   // changesScreen:true
+    llmTurnQueue.push(turnCall('done', { evidence: 'typed a character into the field' }));
+    await runAgent({ task: 'type', maxTurns: 5 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
+    const id = holder.currentId();
+    if (id) expect(holder.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
+  });
+});
