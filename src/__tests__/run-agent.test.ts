@@ -67,8 +67,16 @@ const emptyShot = (): ScreenshotResult => ({
  * Same fingerprint inputs (windows + active window + focused element)
  * each call → fingerprint never changes → stagnation fires naturally
  * after STAGNATION_WINDOW turns of "no tool that changed the screen."
+ *
+ * Options (all optional, default unchanged):
+ *   activeProcessName — reported by getActiveWindow (and matching listWindows
+ *     entry). Default: 'notepad'. Pass 'olk' to exercise the sensitive-app
+ *     safety path. All existing tests call makeAdapter() with no args and
+ *     get 'notepad' — behaviour is UNCHANGED for them.
  */
-function makeAdapter(): PlatformAdapter {
+function makeAdapter(opts: { activeProcessName?: string } = {}): PlatformAdapter {
+  const procName = opts.activeProcessName ?? 'notepad';
+  const title = procName === 'notepad' ? 'Untitled - Notepad' : `${procName} window`;
   return {
     platform: 'win32',
     init: vi.fn(async () => {}),
@@ -83,10 +91,10 @@ function makeAdapter(): PlatformAdapter {
     screenshot: vi.fn(async () => emptyShot()),
     screenshotRegion: vi.fn(async () => emptyShot()),
     listWindows: vi.fn(async (): Promise<WindowInfo[]> => [
-      { processId: 100, processName: 'notepad', title: 'Untitled - Notepad', bounds: { x: 0, y: 0, width: 800, height: 600 }, isMinimized: false },
+      { processId: 100, processName: procName, title, bounds: { x: 0, y: 0, width: 800, height: 600 }, isMinimized: false },
     ]),
     getActiveWindow: vi.fn(async () => ({
-      processId: 100, processName: 'notepad', title: 'Untitled - Notepad',
+      processId: 100, processName: procName, title,
       bounds: { x: 0, y: 0, width: 800, height: 600 }, isMinimized: false,
     })),
     focusWindow: vi.fn(async () => true),
@@ -714,5 +722,47 @@ describe('runAgent — unified el_NN perception', () => {
     await runAgent({ task: 't', maxTurns: 4 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
     expect(turnUserText(1)).toContain('COMPILED UI');
     expect(turnUserText(1)).not.toContain('FRESH ACCESSIBILITY SNAPSHOT');
+  });
+});
+
+describe('runAgent — confirm-tier is actionable (headless dead-end fix)', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+
+  it('a confirm rejection tells the model how to proceed, not a bare reject', async () => {
+    // A raw coord click inside a SENSITIVE_APPS process ('olk' = new Outlook)
+    // reaches the safety gate with no targetLabel and is escalated to
+    // 'confirm'. In a headless run there is no human to confirm — so the
+    // agent would thrash forever repeating the same blocked click.
+    //
+    // After the fix the step result carries the safety_confirm tag (existing
+    // telemetry unchanged) AND the message fed back to the model includes
+    // actionable guidance: name the target via find_action_button or
+    // invoke_element(name:"...") so the next turn can succeed.
+    const adapter = makeAdapter({ activeProcessName: 'olk' }); // sensitive app
+    llmTurnQueue.push(turnCall('click', { x: 100, y: 200 })); // raw coord click in sensitive app → confirm
+    llmTurnQueue.push(turnCall('done', { evidence: 'adapted after the confirm block' }));
+    const result = await runAgent({ task: 'send an email', maxTurns: 4 }, { adapter, llm: LLM_CONFIG });
+
+    // The blocked step must be recorded with the safety_confirm text (telemetry convention).
+    const blocked = result.steps.find(s => /safety_confirm/.test(s.result.text));
+    expect(blocked).toBeTruthy();
+
+    // The tool-result message fed to the model on the NEXT turn must contain
+    // actionable guidance so the agent can recover without a human.
+    // NOTE: capturedLlmCalls stores a live reference to the history array, so
+    // by the end of the run ALL messages are present in every entry. The blocked
+    // click's tool_result was sent as the user turn immediately after turn 1's
+    // assistant block (index 2 in the history: 0=init-user, 1=turn-1-assistant,
+    // 2=turn-1-user-result). We find any user message containing a tool_result
+    // block whose inner text carries the safety_confirm decision.
+    const allMessages: any[] = capturedLlmCalls[1].messages;
+    const allToolResultTexts = allMessages
+      .filter((m: any) => m.role === 'user')
+      .flatMap((m: any) => (m.content as any[]))
+      .filter((b: any) => b.type === 'tool_result')
+      .flatMap((b: any) => Array.isArray(b.content) ? b.content : [])
+      .map((c: any) => c.text ?? '')
+      .join('\n');
+    expect(allToolResultTexts.toLowerCase()).toMatch(/name the target|find_action_button|invoke_element\(name/);
   });
 });

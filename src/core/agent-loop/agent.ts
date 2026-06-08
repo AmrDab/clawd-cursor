@@ -28,6 +28,7 @@ import type { ScreenshotResult } from '../../platform/types';
 import { FingerprintHistory } from '../sense/fingerprint';
 import { captureSnapshot } from '../sense/snapshot';
 import { UIMapHolder } from '../sense/ui-map-holder';
+import { resolveRef } from '../sense/ui-map-resolve';
 import { reactiveCheck } from '../sense/reactive-check';
 import { OcrEngine } from '../../platform/ocr-engine';
 import { compileUIMap } from '../sense/ui-map';
@@ -420,9 +421,21 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           continue;
         }
 
-        const targetLabel = typeof call.args.name === 'string' ? call.args.name
+        let targetLabel = typeof call.args.name === 'string' ? call.args.name
           : typeof call.args.target === 'string' ? call.args.target
           : undefined;
+        // el_NN ref clicks carry no name/target — resolve the ref to its element
+        // name so the safety gate sees a real label (correct label-pattern rule +
+        // intent-match bypass) instead of the blunt "no target label" confirm.
+        // No safety weakening: the same gate runs, just with more information.
+        if (!targetLabel && call.name === 'invoke_element' && typeof call.args.element_id === 'string') {
+          const plan = resolveRef(
+            { element_id: call.args.element_id, snapshot_id: typeof call.args.snapshot_id === 'string' ? call.args.snapshot_id : undefined },
+            holder, Date.now(), 'click', null,
+          );
+          if (plan.ok && plan.via === 'name') targetLabel = plan.name;
+          else if (plan.ok && plan.via === 'bounds') targetLabel = plan.element.text ?? plan.element.normalized_text ?? undefined;
+        }
 
         // 5a. Safety gate — single chokepoint. Pass through the user's task
         // text so the layer can detect intent-matched bypasses (when the user
@@ -439,7 +452,9 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         if (!isAllowed(decision)) {
           const reason = decision.decision === 'block'
             ? decision.reason
-            : `requires ${decision.decision}: ${decision.tier}`;
+            : decision.decision === 'confirm'
+              ? `${decision.reason} — headless run: no human to confirm. DO NOT retry the same click. Name the target instead: find_action_button(intent:"...") then invoke_element({element_id, snapshot_id}), or invoke_element(name:"<label>"). If the user's task explicitly asked for this action, restate that intent.`
+              : `requires ${decision.decision}: ${decision.tier}`;
           log.info('agent.tool.blocked', { turn, tool: call.name, decision: decision.decision, reason });
           toolResults.push({
             id: call.id,
@@ -450,7 +465,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
             turn,
             toolName: call.name,
             toolArgs: call.args,
-            result: { success: false, text: `safety_${decision.decision}: ${reason}` },
+            result: { success: false, text: `safety_${decision.decision}: ${'reason' in decision ? decision.reason : decision.tier}` },
             durationMs: Date.now() - turnStart,
             fingerprintChanged: false,
             thought: llmResult.text,
