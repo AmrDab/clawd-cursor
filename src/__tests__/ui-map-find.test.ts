@@ -19,8 +19,8 @@ describe('findActionButton', () => {
   });
 
   it('exact literal match outranks a synonym on comparable confidence', () => {
-    // exact 'post' = 1.0*0.8 = 0.80 ; synonym 'publish' = 0.9*0.85 = 0.765 -> exact wins
-    const r = findActionButton([btn({ id: 'el_0', normalized_text: 'post', confidence: 0.8 }), btn({ id: 'el_1', normalized_text: 'publish', confidence: 0.85 })], 'obs_1', 'post');
+    // exact 'post' = 1.0*0.9 = 0.90 ; synonym 'publish' = 0.9*0.85 = 0.765 ; gap 0.135 >= margin -> exact wins
+    const r = findActionButton([btn({ id: 'el_0', normalized_text: 'post', confidence: 0.9 }), btn({ id: 'el_1', normalized_text: 'publish', confidence: 0.85 })], 'obs_1', 'post');
     expect(r.status).toBe('ok');
     if (r.status === 'ok') expect(r.best.element_id).toBe('el_0');
   });

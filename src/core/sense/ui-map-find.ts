@@ -11,7 +11,7 @@ import type { UIElement, Role } from './ui-map-types';
 import { normText } from './ui-map-normalize';
 
 export const MATCH_THRESHOLD = 0.4;   // min score×confidence to count as a match
-export const AMBIGUITY_MARGIN = 0.03; // top-two closeness that forces 'ambiguous'
+export const AMBIGUITY_MARGIN = 0.05; // top-two closeness that forces 'ambiguous'
 export const MAX_CANDIDATES = 5;
 
 export interface FindCandidate { element_id: string; label: string; role: Role; score: number; confidence: number; }
