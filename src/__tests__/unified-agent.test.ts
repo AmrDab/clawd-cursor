@@ -72,7 +72,7 @@ describe('buildSystemPrompt', () => {
 
   it('includes coordinate space instruction (space:"image" for screenshot coords)', () => {
     const p = buildSystemPrompt();
-    expect(p).toMatch(/accessibility snapshot/i);
+    expect(p).toMatch(/compiled ui map/i);
     expect(p).toMatch(/space:"image"/i);
     expect(p).toMatch(/wrong window/i);
   });

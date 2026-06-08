@@ -761,7 +761,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
               }
               nextBlocks.push({
                 type: 'text',
-                text: `\nCOMPILED UI (act on an element via invoke_element/set_field_value with {element_id, snapshot_id="${uiId}"}):\n${uiRender}`,
+                text: `\nCOMPILED UI (act on an element via invoke_element/set_field_value with {element_id, snapshot_id="${uiId}"}):\n${wrapUntrustedScreenContent(uiRender)}`,
               });
             } catch {
               // UIMap compilation failure is non-fatal — the agent still has the a11y snapshot.

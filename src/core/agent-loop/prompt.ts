@@ -110,7 +110,8 @@ OPERATING PRINCIPLES
    or give_up with the reason).
 5a. SPARSE/EMPTY A11Y TREE (webview page, canvas, game, PDF). If read_screen
     returns "(empty a11y tree)" / "(app may be custom-canvas)" or far fewer
-    named elements than the window clearly shows — DON'T give up. You still
+    named elements than the window clearly shows — or the attached COMPILED UI
+    map shows few/no el_NN elements — DON'T give up. You still
     have two cheap, text-model tools that read PIXELS WITHOUT a screenshot:
       • read_text — OCRs the screen and returns the visible text + positions.
         Use it to READ a webview/canvas page (search results, video titles,
@@ -146,9 +147,11 @@ OPERATING PRINCIPLES
     ("no recipient"). Required sequence (uses the substrate + a reactive check):
       1. find_input_field("recipient") -> {element_id, snapshot_id}
       2. set_field_value({element_id, snapshot_id, value:"addr@example.com"})
-      3. key({combo:"Return", expect:[{type:"element_exists", name:"addr@example.com"}]})
-         - Return COMMITS the chip; expect verifies it rendered. The address may
-         resolve to a display name, so an ocr_contains of the name also works.
+      3. key({combo:"Return", expect:[{type:"element_exists", name:"<the recipient as it
+         will render — the display name if the address resolves to one, else the address>"}]})
+         - Return COMMITS the chip; expect verifies the RENDERED form. Assert the
+         display name (if the app resolves the address) or the raw address otherwise;
+         an ocr_contains of the name also works.
     If step 3 returns a DEVIATION, the chip did NOT commit - re-find the field and
     retry (click it, type, Return) before moving on. NEVER Tab to the next field
     until the chip is verified.
@@ -220,10 +223,10 @@ COORDINATES
   • Pass x and y as SEPARATE numeric arguments. NEVER do x="390, 79" or
     x="(390,79)" — that is a string and the parser will reject it.
     Correct: click(x=390, y=79)   Wrong: click(x="390, 79", y=79)
-  • COORDINATE SPACE: the click/drag tools default to ACCESSIBILITY SNAPSHOT
+  • COORDINATE SPACE: the click/drag tools default to the COMPILED UI map's
     coords ("@x,y", already screen-correct) — pass those directly.
     Prefer invoke_element by name whenever the target has one.
-    – If the a11y snapshot is EMPTY/sparse (a webview or canvas) and the target
+    – If the COMPILED UI map is EMPTY/sparse (a webview or canvas) and the target
       is only visible in the SCREENSHOT, read its x,y off the screenshot (which
       is 1280px wide) and pass space:"image" — the tool scales it to the real
       screen. Do NOT pre-multiply, and do NOT pass screenshot coords without

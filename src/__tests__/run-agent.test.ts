@@ -824,3 +824,30 @@ describe('runAgent — el_NN ref label resolution in safety pre-pass (Task-3 fix
     expect(result.exit).toBe('done');
   });
 });
+
+describe('runAgent — per-turn perception is injection-wrapped', () => {
+  beforeEach(() => { llmTurnQueue.length = 0; capturedLlmCalls.length = 0; });
+  it('the §6b COMPILED UI block is wrapped in <untrusted-screen-content>', async () => {
+    // Turn 1: a screen-changing action (key press) so §6b rebuilds a fresh UIMap.
+    // Turn 2: done. After the run the full history is:
+    //   [initial_user, turn1_assistant, turn1_nextBlocks_user(tool_result+RECENT ACTIONS+COMPILED UI),
+    //    turn2_assistant, turn2_nextBlocks_user(tool_result only — terminal)]
+    // users[] = [initial_user(0), turn1_nextBlocks_user(1), turn2_nextBlocks_user(2)]
+    // The §6b COMPILED UI block lives in users[1] (turn-1's perception block).
+    // We MUST NOT check users[0] (initial block, already wrapped, false-pass) or
+    // users[2] (terminal turn — §6b is skipped when terminal !== null).
+    llmTurnQueue.push(turnCall('key', { key: 'a' }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'done after one key press' }));
+    await runAgent({ task: 't', maxTurns: 4 }, { adapter: makeAdapter(), llm: LLM_CONFIG });
+    // capturedLlmCalls is a live ref to history — use the final full history.
+    const allMessages: any[] = capturedLlmCalls[capturedLlmCalls.length - 1].messages;
+    const users = allMessages.filter((m: any) => m.role === 'user');
+    // users[1] = the turn-1 nextBlocks user message (after key press, before done).
+    const turn1Perception = users[1];
+    expect(turn1Perception).toBeTruthy();
+    const text = (turn1Perception.content as any[])
+      .map((b: any) => (typeof b === 'string' ? b : b.text ?? '')).join('\n');
+    expect(text).toContain('COMPILED UI');
+    expect(text).toContain('<untrusted-screen-content>');
+  });
+});
