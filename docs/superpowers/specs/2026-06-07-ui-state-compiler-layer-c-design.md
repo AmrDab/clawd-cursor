@@ -66,9 +66,13 @@ prompt steer the agent toward outcome assertions, not raw-text echoes.)
 
 ### 2b. Soft check (always-on, tolerant)
 If `expect` was **not** provided and the tool is consequential
-(`changesScreen: true`): reuse the loop's existing post-action signals —
-`fingerprintChanged` (a11y) OR the pixel-digest change already tracked for
-stagnation. If **nothing observably changed**, append a soft, non-failing note:
+(`changesScreen: true`): reuse the loop's existing post-action signal —
+`fingerprintChanged` (a11y). (The pixel-digest signal is computed later in §6c
+and isn't available at the §5c wiring point, so the soft net is a11y-fingerprint
+only. Consequence: a pure-canvas action that moves pixels but not the a11y tree,
+called *without* `expect`, may get a spurious soft advisory — non-failing, low
+impact; the agent should pass `expect` for canvas/WebView actions anyway.) If
+**nothing observably changed**, append a soft, non-failing note:
 `⚠ no observable change — verify it took (pass `expect`) or try another approach.`
 Never sets `success:false` (a real chip commit *does* move the fingerprint, so
 no false warning). This is the safety net for when the agent forgets to state an
@@ -155,3 +159,12 @@ regenerated + committed.
 - ❌ no app-specific knowledge; the step sequence stays fully reasoned.
 - ❌ no change to by-name / no-`expect` behavior — `expect` is purely additive.
 - ❌ no `process.platform` branching.
+- ⚠ **KNOWN BOUNDARY (conscious, deferred):** actions run *inside* a `batch`
+  bypass §5c, so they do NOT get the reactive `expect`/soft-net check — `batch`
+  has its own *pre*-condition `{window,element}` guard, a separate, weaker
+  mechanism. This is pre-existing architecture (batch was always opaque to §5c's
+  fingerprint/stagnation logic); Layer C inherits rather than introduces it.
+  "Every consequential action is self-checking" therefore holds for one-per-turn
+  actions, not batched ones. Unifying batched sub-steps with post-condition
+  reactive checks (vs batch's pre-condition `expect`) is a deliberate follow-up,
+  out of Layer C scope.
