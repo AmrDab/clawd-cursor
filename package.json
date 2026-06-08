@@ -75,7 +75,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@nut-tree-fork/nut-js": "^4.2.0",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "croner": "^10.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
