@@ -61,7 +61,8 @@ describe('buildSystemPrompt', () => {
   it('advises a11y preference before coord click', () => {
     const p = buildSystemPrompt();
     expect(p).toMatch(/invoke_element/i);
-    expect(p).toMatch(/PREFER a11y/i);
+    // a11y/ref preference over coordinate clicks (wording unified onto el_NN refs)
+    expect(p).toMatch(/Prefer el_NN refs|PREFER invoke_element/);
   });
 
   it('includes stagnation recovery rule', () => {
