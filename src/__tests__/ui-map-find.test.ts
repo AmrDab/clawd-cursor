@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findActionButton, MATCH_THRESHOLD, AMBIGUITY_MARGIN, MAX_CANDIDATES } from '../core/sense/ui-map-find';
+import { findActionButton, findInputField, associateLabel, MATCH_THRESHOLD, AMBIGUITY_MARGIN, MAX_CANDIDATES } from '../core/sense/ui-map-find';
 import type { UIElement } from '../core/sense/ui-map-types';
 
 const btn = (over: Partial<UIElement> & Pick<UIElement, 'id' | 'normalized_text'>): UIElement => ({
@@ -41,5 +41,70 @@ describe('findActionButton', () => {
     const els = Array.from({ length: MAX_CANDIDATES + 3 }, (_, i) => btn({ id: `el_${i}`, normalized_text: 'send' }));
     const r = findActionButton(els, 'obs_1', 'send');
     expect(r.candidates.length).toBe(MAX_CANDIDATES);
+  });
+});
+
+const field = (over: Partial<UIElement> & Pick<UIElement, 'id' | 'bounds'>): UIElement => ({
+  role: 'input', normalized_text: '', text: '', confidence: 0.85, sources: ['a11y'],
+  editable: true, actionable: true, clickable: false, ...over });
+const text = (over: Partial<UIElement> & Pick<UIElement, 'id' | 'normalized_text' | 'bounds'>): UIElement => ({
+  role: 'text', text: over.normalized_text, confidence: 0.8, sources: ['a11y'], ...over });
+
+describe('findInputField', () => {
+  it('matches a field by its OWN name when present', () => {
+    const els = [field({ id: 'el_0', normalized_text: 'subject', text: 'Subject', bounds: [200, 50, 400, 24] })];
+    const r = findInputField(els, 'obs_1', 'subject');
+    expect(r.status).toBe('ok');
+    if (r.status === 'ok') expect(r.best.element_id).toBe('el_0');
+  });
+
+  it('ignores non-editable elements', () => {
+    const els = [text({ id: 'el_0', normalized_text: 'to', bounds: [10, 50, 30, 20] })];
+    expect(findInputField(els, 'obs_1', 'recipient').status).toBe('none');
+  });
+
+  it('associates a LEFT label to a label-less field (To -> recipient)', () => {
+    const els = [
+      text({ id: 'el_lbl', normalized_text: 'to', bounds: [10, 50, 30, 20] }),     // label left
+      field({ id: 'el_fld', bounds: [60, 48, 500, 24] }),                          // unnamed field to its right
+    ];
+    const r = findInputField(els, 'obs_1', 'recipient'); // recipient synonyms include 'to'
+    expect(r.status).toBe('ok');
+    if (r.status === 'ok') { expect(r.best.element_id).toBe('el_fld'); expect(r.best.label).toBe('to'); }
+  });
+
+  it('associates an ABOVE label when no left label exists', () => {
+    const els = [
+      text({ id: 'el_lbl', normalized_text: 'subject', bounds: [60, 20, 80, 18] }), // label above
+      field({ id: 'el_fld', bounds: [60, 46, 500, 24] }),
+    ];
+    const r = findInputField(els, 'obs_1', 'subject');
+    expect(r.status).toBe('ok');
+    if (r.status === 'ok') expect(r.best.element_id).toBe('el_fld');
+  });
+
+  it('uses an OCR-sourced label (WebView field)', () => {
+    const els = [
+      text({ id: 'el_lbl', normalized_text: 'to', bounds: [10, 50, 30, 20], sources: ['ocr'] }),
+      field({ id: 'el_fld', bounds: [60, 48, 500, 24], sources: ['a11y'] }),
+    ];
+    const r = findInputField(els, 'obs_1', 'recipient');
+    expect(r.status).toBe('ok');
+    if (r.status === 'ok') expect(r.best.element_id).toBe('el_fld');
+  });
+});
+
+describe('associateLabel', () => {
+  it('prefers a left label over an above label', () => {
+    const fld = field({ id: 'f', bounds: [100, 100, 200, 24] });
+    const all = [fld,
+      text({ id: 'left', normalized_text: 'leftlabel', bounds: [40, 102, 50, 20] }),
+      text({ id: 'above', normalized_text: 'abovelabel', bounds: [100, 70, 80, 18] })];
+    expect(associateLabel(fld, all)).toBe('leftlabel');
+  });
+  it('returns empty when no label is within range', () => {
+    const fld = field({ id: 'f', bounds: [100, 100, 200, 24] });
+    const far = text({ id: 't', normalized_text: 'faraway', bounds: [2000, 2000, 50, 20] });
+    expect(associateLabel(fld, [fld, far])).toBe('');
   });
 });

@@ -116,3 +116,61 @@ export function findActionButton(elements: UIElement[], snapshotId: string, inte
     e => e.clickable === true,
     e => e.normalized_text ?? '');
 }
+
+const MAX_LABEL_GAP_X = 240;  // px: a left label's right edge to the field's left edge
+const MAX_LABEL_GAP_Y = 64;   // px: an above label's bottom edge to the field's top edge
+
+const LABEL_ROLES = new Set<Role>(['text', 'link', 'unknown']);
+
+/** Find the descriptive label for an (unnamed) field by geometry: nearest text
+ *  element to the LEFT (same row) preferred, else ABOVE (same column). a11y OR
+ *  OCR sourced. Returns '' when none is within range. Pure geometry. */
+export function associateLabel(field: UIElement, all: UIElement[]): string {
+  const [fx, fy, fw, fh] = field.bounds;
+  let left: { gap: number; label: string } | null = null;
+  let above: { gap: number; label: string } | null = null;
+  for (const e of all) {
+    if (e.id === field.id || !LABEL_ROLES.has(e.role)) continue;
+    const label = e.normalized_text ?? '';
+    if (!label) continue;
+    const [ex, ey, ew, eh] = e.bounds;
+    const eRight = ex + ew;
+    const eBottom = ey + eh;
+    const eCenterY = ey + eh / 2;
+    const eCenterX = ex + ew / 2;
+    // LEFT, same row: label's vertical center within the field's y-band, right edge just left of the field.
+    const sameRow = eCenterY >= fy && eCenterY <= fy + fh;
+    if (sameRow && eRight <= fx + 4) {
+      const gap = fx - eRight;
+      if (gap >= 0 && gap <= MAX_LABEL_GAP_X && (!left || gap < left.gap)) left = { gap, label };
+    }
+    // ABOVE, same column: label horizontally overlaps the field, bottom just above the field top.
+    const sameCol = eCenterX >= fx && eCenterX <= fx + fw;
+    if (sameCol && eBottom <= fy + 4) {
+      const gap = fy - eBottom;
+      if (gap >= 0 && gap <= MAX_LABEL_GAP_Y && (!above || gap < above.gap)) above = { gap, label };
+    }
+  }
+  return (left ?? above)?.label ?? '';
+}
+
+/** Curated field-purpose → synonym sets. */
+const FIELD_SYNONYMS: Record<string, string[]> = {
+  recipient: ['to', 'recipient', 'email', 'address', 'send to'],
+  cc: ['cc', 'carbon copy'],
+  subject: ['subject', 'title', 're'],
+  body: ['body', 'message', 'content', 'compose', 'note'],
+  search: ['search', 'query', 'find', 'filter'],
+  password: ['password', 'pass', 'pwd'],
+  username: ['username', 'user', 'login', 'email'],
+  name: ['name', 'full name'],
+};
+
+export function findInputField(elements: UIElement[], snapshotId: string, purpose: string): FindResult {
+  return runFinder(elements, snapshotId, purpose, FIELD_SYNONYMS,
+    e => e.editable === true,
+    (e, all) => {
+      const own = e.normalized_text ?? '';
+      return own !== '' ? own : associateLabel(e, all);
+    });
+}
