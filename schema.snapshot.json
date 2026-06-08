@@ -878,6 +878,14 @@
           "value": {
             "type": "string",
             "description": "Value for set-value action"
+          },
+          "element_id": {
+            "type": "string",
+            "description": "Target a compiled element from compile_ui (requires snapshot_id)"
+          },
+          "snapshot_id": {
+            "type": "string",
+            "description": "The compile_ui snapshot the element_id came from (requires element_id)"
           }
         }
       },
@@ -1713,10 +1721,17 @@
           "processId": {
             "type": "number",
             "description": "Scope to a process"
+          },
+          "element_id": {
+            "type": "string",
+            "description": "Target a compiled element from compile_ui (requires snapshot_id)"
+          },
+          "snapshot_id": {
+            "type": "string",
+            "description": "The compile_ui snapshot the element_id came from (requires element_id)"
           }
         },
         "required": [
-          "name",
           "value"
         ]
       },

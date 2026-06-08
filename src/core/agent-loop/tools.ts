@@ -31,6 +31,7 @@ import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
 import { parseAssertions, checkAssertions, renderReport } from '../verify/assertions';
 import { compileUIMap, defaultCompileDeps } from '../sense/ui-map';
 import { renderUIMap } from '../sense/ui-map-render';
+import { resolveRef } from '../sense/ui-map-resolve';
 
 /** Lazy OCR singleton for the agent-loop perception tools (read_text, smart_click).
  *  Mirrors the pattern in src/tools/smart.ts. Construction never throws; the real
@@ -162,6 +163,8 @@ export function buildUnifiedTools(): UnifiedTool[] {
             description: 'Action to perform (default: "click")',
           },
           value: { type: 'string', description: 'Value for set-value action' },
+          element_id: { type: 'string', description: 'Target a compiled element from compile_ui (requires snapshot_id)' },
+          snapshot_id: { type: 'string', description: 'The compile_ui snapshot the element_id came from (requires element_id)' },
         },
         // `name` OR `automationId` must be supplied; neither is required at
         // the JSON-schema level — the execute() body guards the total absence.
@@ -169,6 +172,20 @@ export function buildUnifiedTools(): UnifiedTool[] {
       },
       changesScreen: true,
       async execute(args, ctx) {
+        const refIds = { element_id: typeof args.element_id === 'string' ? args.element_id : undefined,
+                         snapshot_id: typeof args.snapshot_id === 'string' ? args.snapshot_id : undefined };
+        if (refIds.element_id || refIds.snapshot_id) {
+          const aw = await ctx.platform.getActiveWindow().catch(() => null);
+          const plan = resolveRef(refIds, ctx.uiMaps, Date.now(), 'click', aw);
+          if (!plan.ok) return { success: false, text: `invoke_element ref rejected: ${plan.error}`, isError: true };
+          if (plan.via === 'name') {
+            const res = await ctx.platform.invokeElement({ name: plan.name, action: 'click' });
+            return { success: res.success, text: res.success ? `Invoked "${plan.name}" via a11y (via ${plan.element.id}).` : `a11y invoke of ${plan.element.id} missed.`, targetLabel: plan.name };
+          }
+          const [bx, by, bw, bh] = plan.bounds;
+          await ctx.platform.mouseClick(Math.round(bx + bw / 2), Math.round(by + bh / 2));
+          return { success: true, text: `Clicked ${plan.element.id} at its bounds center.`, targetLabel: plan.element.id };
+        }
         // `automationId` is accepted for MCP backward-compat but the PlatformAdapter
         // invokeElement interface does not expose automationId filtering — it is used
         // only as a name alias when name is absent.
@@ -230,12 +247,30 @@ export function buildUnifiedTools(): UnifiedTool[] {
           value: { type: 'string' },
           controlType: { type: 'string', description: 'Optional role filter (e.g. "Edit")' },
           processId: { type: 'number' },
+          element_id: { type: 'string', description: 'Target a compiled element from compile_ui (requires snapshot_id)' },
+          snapshot_id: { type: 'string', description: 'The compile_ui snapshot the element_id came from (requires element_id)' },
         },
-        required: ['name', 'value'],
+        required: ['value'],
         additionalProperties: false,
       },
       changesScreen: true,
       async execute(args, ctx) {
+        const refIds = { element_id: typeof args.element_id === 'string' ? args.element_id : undefined,
+                         snapshot_id: typeof args.snapshot_id === 'string' ? args.snapshot_id : undefined };
+        if (refIds.element_id || refIds.snapshot_id) {
+          const fillValue = String(args.value ?? '');
+          const aw = await ctx.platform.getActiveWindow().catch(() => null);
+          const plan = resolveRef(refIds, ctx.uiMaps, Date.now(), 'fill', aw);
+          if (!plan.ok) return { success: false, text: `set_field_value ref rejected: ${plan.error}`, isError: true };
+          if (plan.via === 'name') {
+            const res = await ctx.platform.invokeElement({ name: plan.name, action: 'set-value', value: fillValue });
+            return { success: res.success, text: res.success ? `Set "${plan.name}" = ${fillValue.length} chars (via ${plan.element.id}).` : `Set of ${plan.element.id} failed.`, targetLabel: plan.name };
+          }
+          const [bx, by, bw, bh] = plan.bounds;
+          await ctx.platform.mouseClick(Math.round(bx + bw / 2), Math.round(by + bh / 2));
+          await ctx.platform.typeText(fillValue);
+          return { success: true, text: `Filled ${plan.element.id} via bounds + type (${fillValue.length} chars).`, targetLabel: plan.element.id };
+        }
         const name = String(args.name ?? '');
         const value = String(args.value ?? '');
         const controlType = typeof args.controlType === 'string' ? args.controlType : undefined;
