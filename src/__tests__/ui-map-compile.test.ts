@@ -110,6 +110,26 @@ describe('compileUIMap — lazy escalation', () => {
     expect(send!.sources.slice().sort()).toEqual(['a11y', 'ocr']);
     expect(send!.confidence).toBeGreaterThan(0.85); // a11y base 0.85 + agreement bonus
   });
+
+  it('a throwing OCR source degrades to no OCR (does not crash compile)', async () => {
+    const d = deps({
+      captureSnapshot: vi.fn(async () => snap([])),           // empty a11y -> OCR would fire
+      ocr: vi.fn(async () => { throw new Error('OCR engine unavailable'); }),
+    });
+    const map = await compileUIMap(d, {});
+    expect(map.sources_used).toEqual(['window']);             // ocr failed -> not recorded
+    expect(map.elements).toEqual([]);
+  });
+
+  it('a throwing vision source degrades to no vision', async () => {
+    const d = deps({
+      captureSnapshot: vi.fn(async () => snap([])),
+      ocr: vi.fn(async () => ({ elements: [], fullText: '', durationMs: 1 })),
+      vision: vi.fn(async () => { throw new Error('no display'); }),
+    });
+    const map = await compileUIMap(d, { max_cost: 'vision_ok' });
+    expect(map.sources_used).not.toContain('vision');         // vision failed -> not recorded
+  });
 });
 
 describe('defaultCompileDeps', () => {

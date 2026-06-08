@@ -56,8 +56,8 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
     : true;
   const ocrAllowed = maxCost === 'ocr_ok' || maxCost === 'vision_ok';
   if (ocrAllowed && (sparse || !a11yHasTarget)) {
-    const ocrRes = await deps.ocr();
-    if (ocrRes.elements.length > 0) {
+    const ocrRes = await Promise.resolve(deps.ocr()).catch(() => null);
+    if (ocrRes && ocrRes.elements.length > 0) {
       sourcesUsed.push('ocr');
       const base = elements.length;
       elements = fuse([...elements, ...ocrRes.elements.map((oe, i) => ocrToUI(oe, `el_${base + i}`))]);
@@ -68,8 +68,8 @@ export async function compileUIMap(deps: CompileDeps, hints: CompileHints): Prom
   const visionAllowed = maxCost === 'vision_ok';
   const nothingActionable = !elements.some(e => e.actionable && e.confidence >= LOW_CONFIDENCE);
   if (visionAllowed && nothingActionable) {
-    await deps.vision();           // (vision-source fusion handled in a later task/Part 2)
-    sourcesUsed.push('vision');
+    const shot = await Promise.resolve(deps.vision()).catch(() => null);
+    if (shot) sourcesUsed.push('vision');
   }
 
   // Re-id ids contiguously after fusion so el_NN is dense within this snapshot.
