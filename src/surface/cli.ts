@@ -62,6 +62,7 @@ import * as path from 'path';
 import pc from 'picocolors';
 import { migrateFromLegacyDir, getPackageRoot } from '../paths';
 import { ensureHostAppRunning, stopHostApp } from '../platform/native-helper';
+import { UIMapHolder } from '../core/sense/ui-map-holder';
 
 dotenv.config({ quiet: true });
 
@@ -410,6 +411,12 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   // reuses the agent's already-connected NativeDesktop and AccessibilityBridge;
   // in --no-llm mode it boots a fresh ToolContext like the legacy serve cmd.
   const { getPlatform } = await import('../platform');
+
+  // One UIMapHolder per daemon session — shared by the agent loop (via runAgent
+  // deps) and the MCP surface (via toolCtx → toolContextToAgent bridge). Mirror
+  // how cdpDriver is wired: create once here, attach to the agent, pass via ctx.
+  const uiMapHolder = new UIMapHolder();
+
   let toolCtx: any;
   if (agent) {
     let platform: import('../platform/types').PlatformAdapter | undefined;
@@ -424,6 +431,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
     const { DEFAULT_CDP_PORT } = await import('../llm/browser-config');
     const cdp = (agent as any).cdpDriver ?? new CDPDriver(DEFAULT_CDP_PORT);
     if (!(agent as any).cdpDriver) (agent as any).cdpDriver = cdp;
+    if (!(agent as any).uiMapHolder) (agent as any).uiMapHolder = uiMapHolder;
 
     // Mouse-scale: agent mode used to hardcode 1, which broke every
     // vision-driven click on HiDPI. The contract for mouse_* tools is
@@ -438,6 +446,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
       desktop: agent.getDesktop(),
       a11y: (agent as any).a11y,
       cdp,
+      uiMaps: uiMapHolder,
       platform,
       agent,
       getLogBuffer: getServerLogBuffer,
@@ -458,6 +467,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
       });
     }
     toolCtx.getLogBuffer = getServerLogBuffer;
+    toolCtx.uiMaps = uiMapHolder;
   }
 
   // Mount /mcp behind the same Bearer-auth gate the legacy REST routes used.

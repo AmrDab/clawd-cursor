@@ -187,6 +187,9 @@ export class Agent {
     // Resolve CDP driver if wired externally.
     const cdp = (this as { cdpDriver?: import('../platform/cdp-driver').CDPDriver }).cdpDriver ?? null;
 
+    // Resolve UIMapHolder if wired externally (by cli.ts daemon setup).
+    const uiMaps = (this as { uiMapHolder?: import('./sense/ui-map-holder').UIMapHolder }).uiMapHolder ?? undefined;
+
     // Run the thin agent loop with the FULL toolbox.
     // The agent loop prefers a11y-first (cheapest) and only calls screenshot
     // when it genuinely needs pixels.
@@ -200,6 +203,7 @@ export class Agent {
         adapter,
         llm: { text: textConfig, vision: visionConfig },
         cdp,
+        uiMaps,
       },
     );
 
