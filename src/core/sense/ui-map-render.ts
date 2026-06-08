@@ -1,6 +1,6 @@
 import type { UIMap, UIElement } from './ui-map-types';
 
-const DEFAULT_MAX = 50;
+const DEFAULT_MAX = 120;
 
 /** Rank: actionable first, then by confidence. */
 function rankScore(e: UIElement): number {
@@ -16,7 +16,8 @@ function line(e: UIElement): string {
   const [x, y, w, h] = e.bounds;
   const conf = e.confidence.toFixed(2);
   const flagStr = flags.length ? ` {${flags.join(',')}}` : '';
-  return `${e.id} [${e.role}] "${e.text ?? e.normalized_text ?? ''}" (${conf} ${e.sources.join(',')}) @${x},${y} ${w}x${h}${flagStr}`;
+  const val = e.state?.value ? ` = "${e.state.value.length > 60 ? e.state.value.slice(0, 59) + '…' : e.state.value}"` : '';
+  return `${e.id} [${e.role}] "${e.text ?? e.normalized_text ?? ''}"${val} (${conf} ${e.sources.join(',')}) @${x},${y} ${w}x${h}${flagStr}`;
 }
 
 export function renderUIMap(map: UIMap, opts: { max?: number } = {}): string {

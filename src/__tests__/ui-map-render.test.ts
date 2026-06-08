@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { renderUIMap } from '../core/sense/ui-map-render';
 import type { UIMap, UIElement } from '../core/sense/ui-map-types';
 
+const el2 = (over: Partial<UIElement> & Pick<UIElement, 'id'>): UIElement => ({
+  role: 'input', text: 'To', bounds: [10, 20, 100, 24], confidence: 0.85, sources: ['a11y'],
+  actionable: true, editable: true, ...over });
+const mapWith = (elements: UIElement[]): UIMap => ({
+  snapshot_id: 'obs_1', platform: 'win32', active_app: 'olk', window_title: 'Mail',
+  sources_used: ['a11y'], elements, anchors: [] } as unknown as UIMap);
+
 const el = (over: Partial<UIElement> & Pick<UIElement, 'id' | 'role' | 'normalized_text'>): UIElement => ({
   text: over.normalized_text, bounds: [1, 2, 3, 4], confidence: 0.9,
   sources: ['a11y'], clickable: true, actionable: true, ...over });
@@ -31,5 +38,21 @@ describe('renderUIMap', () => {
     const out = renderUIMap(baseMap(many), { max: 40 });
     expect(out.split('\n')[0]).toContain('el_btn');  // the button ranks first
     expect(out).toMatch(/40 of 61 shown/);
+  });
+});
+
+describe('renderUIMap — value + cap', () => {
+  it('shows the current field value when present', () => {
+    const out = renderUIMap(mapWith([el2({ id: 'el_0', state: { value: 'amr@x.com' } })]));
+    expect(out).toContain('= "amr@x.com"');
+  });
+  it('omits the value clause when there is no value', () => {
+    const out = renderUIMap(mapWith([el2({ id: 'el_0' })]));
+    expect(out).not.toContain('= "');
+  });
+  it('renders up to 120 elements (raised cap)', () => {
+    const many = Array.from({ length: 130 }, (_, i) => el2({ id: `el_${i}`, confidence: 0.5 }));
+    const out = renderUIMap(mapWith(many));
+    expect(out).toContain('120 of 130 shown');
   });
 });
