@@ -31,3 +31,11 @@ describe('buildSystemPrompt — chip flow, numbering, browser pivot', () => {
     expect(p).toMatch(/web version|browser version|re-?host/i);
   });
 });
+
+describe('buildSystemPrompt — email goes through the mailto URI handler', () => {
+  const p = buildSystemPrompt();
+  it('tells the model to pre-fill email via build_uri/open_uri (mailto), not hand-drive the compose UI', () => {
+    expect(p).toMatch(/EMAIL[\s\S]*mailto/i);
+    expect(p).toMatch(/build_uri\("mailto"[\s\S]*open_uri/);
+  });
+});
