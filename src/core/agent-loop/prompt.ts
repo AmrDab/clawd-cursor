@@ -255,6 +255,10 @@ COORDINATES
       space:"image" (they would land at a fraction of the position, on the
       wrong window). If clicks keep landing on the wrong window, you are likely
       omitting space:"image".
+    On a turn where you just took a SCREENSHOT, raw click/drag/scroll coords
+    DEFAULT to image-space automatically — read them straight off the 1280px
+    picture, no space flag needed. To click an a11y @x,y SCREEN coord on such a
+    turn, pass space:"screen".
 
 INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
   When the actionable content is a canvas (targets, tiles, drag zones, paths,

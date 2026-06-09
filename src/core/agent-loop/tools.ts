@@ -579,7 +579,9 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const count = args.count === 2 ? 2 : 1;
         // SCALE: 'image' coords (read off the 1280-wide screenshot) → physical;
         // 'screen'/default (a11y coords, already physical) → pass through.
-        const space = args.space === 'image' ? 'image' : 'screen';
+        // Explicit space wins; else use ctx.coordSpaceDefault (set to 'image' on
+        // vision turns by the agent loop); fall back to 'screen'.
+        const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
         const scale = space === 'image' ? imageScale(ctx) : 1;
         const x = scaleCoord(ix, scale);
         const y = scaleCoord(iy, scale);
@@ -616,7 +618,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
         if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) {
           return { success: false, isError: true, text: `drag: startX/startY/endX/endY must be finite numbers, got ${JSON.stringify(args)}` };
         }
-        const space = args.space === 'image' ? 'image' : 'screen';
+        const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
         const scale = space === 'image' ? imageScale(ctx) : 1;
         const sx = scaleCoord(start.x, scale), sy = scaleCoord(start.y, scale);
         const ex = scaleCoord(end.x, scale), ey = scaleCoord(end.y, scale);
@@ -651,7 +653,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const amount = typeof args.amount === 'number' ? args.amount : 3;
         // Default to screen-center when x/y missing; coerce strings via the helper.
         const hasXY = args.x !== undefined || args.y !== undefined;
-        const space = args.space === 'image' ? 'image' : 'screen';
+        const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
         const scale = space === 'image' ? imageScale(ctx) : 1;
         let x = Math.floor(ctx.screen.physicalWidth / 2);
         let y = Math.floor(ctx.screen.physicalHeight / 2);

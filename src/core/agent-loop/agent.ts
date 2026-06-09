@@ -629,6 +629,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           targetWindow: input.targetWindow,
           cdp: deps.cdp ?? null,
           uiMaps: holder,
+          coordSpaceDefault: (activeLlm === deps.llm.vision) ? 'image' : 'screen',
         };
 
         let result: Awaited<ReturnType<UnifiedTool['execute']>>;
