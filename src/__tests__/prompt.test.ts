@@ -39,3 +39,12 @@ describe('buildSystemPrompt — email goes through the mailto URI handler', () =
     expect(p).toMatch(/build_uri\("mailto"[\s\S]*open_uri/);
   });
 });
+
+describe('buildSystemPrompt — batchability judgment + verify', () => {
+  const p = buildSystemPrompt();
+  it('teaches that batchability is a judgment (deterministic vs dynamic) and to verify after', () => {
+    expect(p).toMatch(/batchab|DETERMINED IN ADVANCE|determined in advance/i);
+    expect(p).toMatch(/do NOT batch|don't batch/i);
+    expect(p).toMatch(/AFTER any batch|verify the outcome/i);
+  });
+});

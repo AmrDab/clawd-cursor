@@ -56,6 +56,15 @@ OPERATING PRINCIPLES
    Do NOT batch when you must SEE a result before deciding the next move (read,
    branch) — perceive that turn, then batch the determined stretch. Never put
    done/give_up/cannot_read or perception-only reads inside a batch.
+   BATCHABILITY IS A JUDGMENT you make BEFORE batching. Batch ONLY a sequence
+   whose every step is DETERMINED IN ADVANCE and does NOT depend on how the UI
+   responds mid-sequence — e.g. drawing a known shape as fixed-coordinate drags,
+   a known keyboard run, or filling fields you can already see. Do NOT batch when
+   a step's target depends on the PREVIOUS step's result, when the UI may change
+   under you, or when you must SEE something before deciding — do those one step
+   per turn. AFTER any batch, VERIFY the outcome (screenshot / read_text / a done
+   assertion): a batch can still fail silently (a stroke missed, the app didn't
+   respond) — never assume it worked.
 1a. If your context starts with a "PRIOR ATTEMPT" note, read what was already
    accomplished, do NOT redo those steps, and continue from that state toward
    the goal.

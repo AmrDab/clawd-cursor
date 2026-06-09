@@ -1234,7 +1234,7 @@
     },
     {
       "name": "mouse_drag",
-      "description": "Drag the mouse from (startX,startY) to (endX,endY). Used for selecting text, drawing, resizing.",
+      "description": "Drag the mouse from (startX,startY) to (endX,endY) — select text, draw, resize. Coords default to a11y-snapshot/screen space. If you read the start/end off the SCREENSHOT (e.g. drawing on a canvas you can only see in the picture), pass space:\"image\" so the tool scales them — otherwise the drag lands at the wrong scale/position.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1385,7 +1385,7 @@
     },
     {
       "name": "mouse_scroll",
-      "description": "Scroll at (x,y) in a direction. Omit x,y to scroll at the screen center.",
+      "description": "Scroll at (x,y) in a direction. Omit x,y to scroll at the screen center. If you read x,y off the SCREENSHOT, pass space:\"image\".",
       "category": "mouse",
       "parameters": {
         "type": "object",

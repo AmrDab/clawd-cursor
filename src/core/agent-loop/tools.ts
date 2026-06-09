@@ -596,7 +596,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
 
     {
       name: 'drag',
-      description: 'Drag the mouse from (startX,startY) to (endX,endY). Used for selecting text, drawing, resizing.',
+      description: 'Drag the mouse from (startX,startY) to (endX,endY) — select text, draw, resize. Coords default to a11y-snapshot/screen space. If you read the start/end off the SCREENSHOT (e.g. drawing on a canvas you can only see in the picture), pass space:"image" so the tool scales them — otherwise the drag lands at the wrong scale/position.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -632,7 +632,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
 
     {
       name: 'scroll',
-      description: 'Scroll at (x,y) in a direction. Omit x,y to scroll at the screen center.',
+      description: 'Scroll at (x,y) in a direction. Omit x,y to scroll at the screen center. If you read x,y off the SCREENSHOT, pass space:"image".',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1857,7 +1857,7 @@ const COORD_SPACE_SCHEMA = {
   type: 'string',
   enum: ['screen', 'image'],
   description:
-    'Coordinate space of the x/y you pass. "screen" (default) = accessibility-snapshot coords, already correct for the real screen. "image" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use "image" ONLY when the target is not in the a11y snapshot and you read it off the picture.',
+    'Coordinate space of the x/y you pass. "screen" (default) = accessibility-snapshot coords, already correct for the real screen. "image" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use "image" ONLY when the target is not in the a11y snapshot and you read it off the picture. When you JUST took a screenshot and are clicking/dragging something you see in it, you almost always want space:"image".',
 } as const;
 
 /** One-line coordinate breadcrumb for tool-result text: makes the input space,
