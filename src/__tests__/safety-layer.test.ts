@@ -133,6 +133,20 @@ describe('SafetyLayer.evaluate', () => {
   });
 });
 
+describe('open_uri — scheme-aware tier', () => {
+  const ev = (uri: string) => evaluate({ tool: 'open_uri', args: { uri }, activeApp: 'olk', userTaskText: 'send an email' });
+  it('allows benign compose/navigate schemes', () => {
+    for (const u of ['mailto:a@b.com?subject=hi&body=x', 'tel:+15551234', 'sms:+15551234', 'webcal://h/c.ics', 'https://example.com', 'http://example.com']) {
+      expect(ev(u).decision).toBe('allow');
+    }
+  });
+  it('confirms file: (can execute) and unknown schemes', () => {
+    expect(ev('file:///C:/Windows/System32/calc.exe').decision).toBe('confirm');
+    expect(ev('weirdcustomscheme:do-something').decision).toBe('confirm');
+    expect(ev('not-a-uri').decision).toBe('confirm');
+  });
+});
+
 describe('evaluateInput (canonical safety gate)', () => {
   it('returns allow:true for a read-tier tool', () => {
     const d = evaluateInput({ toolName: 'desktop_screenshot', args: {} });

@@ -24,6 +24,24 @@ import { logger } from './observability/logger';
 import { getCorrelationId } from './observability/correlation';
 import { SENSITIVE_APPS_PATTERN as SENSITIVE_APPS } from './app-categories';
 
+/**
+ * URI schemes that only COMPOSE or NAVIGATE — they open a draft/app/page but
+ * cannot execute arbitrary code or delete data (the user still has to hit
+ * send/call). Safe to open without confirmation. `file:` is deliberately
+ * EXCLUDED (on Windows, file: can launch an executable), as is any unknown
+ * custom scheme (its handler is unvetted) — those keep the confirm gate.
+ */
+const BENIGN_URI_SCHEMES = new Set<string>([
+  'mailto', 'tel', 'sms', 'smsto', 'facetime', 'facetime-audio',
+  'webcal', 'http', 'https', 'slack', 'spotify', 'zoommtg', 'msteams',
+  'vscode', 'vscode-insiders', 'obsidian',
+]);
+
+function uriSchemeOf(uri: unknown): string {
+  const m = String(uri ?? '').trim().match(/^([a-z][a-z0-9+.-]*):/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
 export type Tier = 'read' | 'input' | 'destructive' | 'system';
 
 export type Decision =
@@ -461,6 +479,25 @@ export function evaluate(ctx: EvaluationContext): Decision {
       decision: 'confirm',
       tier: 'system',
       reason: 'cdp_evaluate runs arbitrary JS in the active page — requires user approval',
+    });
+  }
+
+  // 2b. open_uri tier is SCHEME-dependent. Benign compose/navigate schemes
+  //     (mailto/tel/sms/webcal/http/https/...) cannot execute or delete — allow.
+  //     file: (executes on Windows) and unknown custom schemes keep the confirm
+  //     gate. This unblocks the OS URI escape hatches for headless runs without
+  //     weakening the gate against executing/unknown handlers.
+  if (canonicalTool === 'open_uri') {
+    const scheme = uriSchemeOf(ctx.args.uri);
+    if (BENIGN_URI_SCHEMES.has(scheme)) {
+      return emit({ decision: 'allow', tier: 'input' });
+    }
+    return emit({
+      decision: 'confirm',
+      tier: 'destructive',
+      reason: scheme
+        ? `open_uri to "${scheme}:" — handler may execute or be destructive (e.g. file: can run a program); needs confirmation`
+        : 'open_uri with no/invalid scheme — needs confirmation',
     });
   }
 
