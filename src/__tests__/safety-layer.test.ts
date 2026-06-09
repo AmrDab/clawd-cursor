@@ -145,6 +145,18 @@ describe('open_uri — scheme-aware tier', () => {
     expect(ev('weirdcustomscheme:do-something').decision).toBe('confirm');
     expect(ev('not-a-uri').decision).toBe('confirm');
   });
+  it('confirms execution-surface / auto-action schemes (security-audit trim)', () => {
+    // vscode:// → Remote SSH/tasks/git-clone; obsidian:// → plugin/shell cmds;
+    // zoommtg/msteams → auto-join a call. NOT mere navigation → must confirm.
+    for (const u of ['vscode://file/Users/me/x.ts', 'vscode-insiders://file/x', 'obsidian://advanced-uri?commandid=x', 'zoommtg://zoom.us/join?confno=1', 'msteams://l/meetup-join/x']) {
+      expect(ev(u).decision).toBe('confirm');
+    }
+  });
+  it('applies scheme tiering through the compound system({action:"open_uri"}) surface too', () => {
+    const evc = (uri: string) => evaluate({ tool: 'system', args: { action: 'open_uri', uri }, activeApp: 'olk', userTaskText: 'send an email' });
+    expect(evc('mailto:a@b.com').decision).toBe('allow');
+    expect(evc('file:///etc/passwd').decision).toBe('confirm');
+  });
 });
 
 describe('evaluateInput (canonical safety gate)', () => {

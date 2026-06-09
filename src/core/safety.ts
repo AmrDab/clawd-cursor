@@ -26,15 +26,21 @@ import { SENSITIVE_APPS_PATTERN as SENSITIVE_APPS } from './app-categories';
 
 /**
  * URI schemes that only COMPOSE or NAVIGATE — they open a draft/app/page but
- * cannot execute arbitrary code or delete data (the user still has to hit
- * send/call). Safe to open without confirmation. `file:` is deliberately
- * EXCLUDED (on Windows, file: can launch an executable), as is any unknown
- * custom scheme (its handler is unvetted) — those keep the confirm gate.
+ * cannot execute code, delete data, or COMPLETE an irreversible action without
+ * a further user step (you still have to hit send/call). Safe to open without
+ * confirmation. Everything NOT listed keeps the confirm gate, deliberately:
+ *  • file:                  — on Windows can launch an executable.
+ *  • vscode/vscode-insiders — vscode:// is an extension/workspace execution
+ *    surface (Remote SSH, workspace tasks, git clone, ext sub-commands).
+ *  • obsidian               — obsidian://advanced-uri can run plugin/shell cmds.
+ *  • zoommtg/msteams        — auto-JOIN a meeting (mic/camera) — completes an
+ *    action; not mere navigation.
+ *  • any unknown custom scheme — handler is unvetted.
+ * (Security audit 2026-06-08 trimmed vscode/obsidian/zoommtg/msteams.)
  */
 const BENIGN_URI_SCHEMES = new Set<string>([
   'mailto', 'tel', 'sms', 'smsto', 'facetime', 'facetime-audio',
-  'webcal', 'http', 'https', 'slack', 'spotify', 'zoommtg', 'msteams',
-  'vscode', 'vscode-insiders', 'obsidian',
+  'webcal', 'http', 'https', 'slack', 'spotify',
 ]);
 
 function uriSchemeOf(uri: unknown): string {
