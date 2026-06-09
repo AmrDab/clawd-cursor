@@ -115,10 +115,17 @@ export function requireAuth(req: express.Request, res: express.Response, next: e
 
   const memoryOk = timingSafeTokenEqual(received, SERVER_TOKEN);
   let diskOk = false;
-  if (!memoryOk && process.env.CLAWD_ALLOW_DISK_TOKEN_DRIFT === '1') {
+  // /stop and /abort are localhost-only SHUTDOWN controls: accept the current
+  // on-disk token for them even without CLAWD_ALLOW_DISK_TOKEN_DRIFT. The token
+  // file is owner-only (0600) and these endpoints only stop the daemon (no data
+  // or tool access), so tolerating a drifted disk token here makes
+  // `clawdcursor stop` reliable across daemon restarts/churn WITHOUT weakening
+  // the powerful /mcp tool surface, which stays strict (in-memory token only).
+  const isShutdownEndpoint = req.path === '/stop' || req.path === '/abort';
+  if (!memoryOk && (isShutdownEndpoint || process.env.CLAWD_ALLOW_DISK_TOKEN_DRIFT === '1')) {
     const diskToken = currentDiskToken();
     if (diskToken && diskToken !== SERVER_TOKEN) {
-      if (!loggedTokenDrift) {
+      if (!loggedTokenDrift && process.env.CLAWD_ALLOW_DISK_TOKEN_DRIFT === '1') {
         loggedTokenDrift = true;
         console.warn(
           `${e('⚠', '[WARN]')} Auth token file was rewritten by another process. ` +
