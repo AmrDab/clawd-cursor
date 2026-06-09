@@ -256,6 +256,13 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       log.info(EVENTS.AGENT_TURN_START, { turn, historyTurns: history.length });
       const turnStart = Date.now();
 
+      // Route THIS turn to the vision model when a screenshot is in context —
+      // the text model (a11y-first) reads images poorly, and the configured
+      // vision model exists for exactly these turns. Text-model cost is kept
+      // for a11y turns. General: any vision-needing task.
+      const activeLlm = (deps.llm.vision && historyHasImage(history)) ? deps.llm.vision : llmConfig;
+      log.info('agent.turn_model', { turn, model: activeLlm.model, vision: activeLlm === deps.llm.vision });
+
       // 1. Call the LLM with tools. Retry TRANSIENT failures (overload, rate
       //    limit, timeout, 5xx, dropped socket) with exponential backoff — a
       //    single API blip must not throw away a long multi-step run (a live
@@ -270,14 +277,14 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           attempt += 1;
           try {
             llmResult = await callLLMWithTools({
-              baseUrl: llmConfig.baseUrl,
-              model: llmConfig.model,
-              apiKey: llmConfig.apiKey,
-              isAnthropic: llmConfig.isAnthropic,
+              baseUrl: activeLlm.baseUrl,
+              model: activeLlm.model,
+              apiKey: activeLlm.apiKey,
+              isAnthropic: activeLlm.isAnthropic,
               system: systemPrompt,
               tools: llmTools,
               messages: history,
-              maxTokens: llmConfig.maxTokens ?? 1024,
+              maxTokens: activeLlm.maxTokens ?? 1024,
               timeoutMs: 45_000,
               toolChoice: 'auto',
               signal: input.abortSignal,
@@ -896,6 +903,31 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
+
+/**
+ * True if any message in the model's context carries an image block (a
+ * screenshot). Such turns must go to the vision model, not the text model.
+ * Checks both top-level image blocks and images nested inside tool_result
+ * content arrays (the form the screenshot tool produces).
+ */
+function historyHasImage(history: LLMToolTurn[]): boolean {
+  for (const m of history) {
+    const content = (m as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const b of content as Array<Record<string, unknown>>) {
+      if (!b || typeof b !== 'object') continue;
+      // Top-level image block (direct image in a user turn).
+      if (b.type === 'image' || b.type === 'image_url') return true;
+      // Image nested inside a tool_result block (produced by the screenshot tool).
+      if (b.type === 'tool_result' && Array.isArray(b.content)) {
+        for (const c of b.content as Array<Record<string, unknown>>) {
+          if (c && typeof c === 'object' && c.type === 'image') return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Compile a UIMap from an already-captured snapshot and store it in the holder.
