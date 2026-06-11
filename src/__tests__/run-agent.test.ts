@@ -28,7 +28,11 @@ import type { ToolUseResult, LLMAssistantBlock } from '../llm/client';
 
 // Mock callLLMWithTools BEFORE importing runAgent so the loop binds to
 // the mock. Each test pushes turn-by-turn behavior into `llmTurnQueue`.
-const llmTurnQueue: ToolUseResult[] = [];
+// An entry may be a plain ToolUseResult, an Error (simulates an LLM-call
+// failure), or a FUNCTION of the call opts — used to build a turn from
+// what the model actually "sees" (e.g. act on the snapshot_id advertised
+// in the previous turn's COMPILED UI block).
+const llmTurnQueue: Array<ToolUseResult | Error | ((opts: any) => ToolUseResult)> = [];
 const capturedLlmCalls: any[] = [];
 vi.mock('../llm/client', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../llm/client')>();
@@ -40,6 +44,7 @@ vi.mock('../llm/client', async (importOriginal) => {
       // A queued Error simulates an LLM-call failure for that turn (used to
       // test transient-error retry vs fatal-error abort).
       if (next instanceof Error) throw next;
+      if (typeof next === 'function') return next(opts);
       if (!next) {
         // Defensive: a runaway test would otherwise loop forever. Returning
         // an empty turn here lets the loop's NO_TOOL_CALL_LIMIT trip
@@ -73,8 +78,10 @@ const emptyShot = (): ScreenshotResult => ({
  *     entry). Default: 'notepad'. Pass 'olk' to exercise the sensitive-app
  *     safety path. All existing tests call makeAdapter() with no args and
  *     get 'notepad' — behaviour is UNCHANGED for them.
+ *   uiTree — elements returned by getUiTree (default []). Pass a non-empty
+ *     tree so compiled UIMaps contain actionable el_NN elements.
  */
-function makeAdapter(opts: { activeProcessName?: string } = {}): PlatformAdapter {
+function makeAdapter(opts: { activeProcessName?: string; uiTree?: Array<Record<string, unknown>> } = {}): PlatformAdapter {
   const procName = opts.activeProcessName ?? 'notepad';
   const title = procName === 'notepad' ? 'Untitled - Notepad' : `${procName} window`;
   return {
@@ -104,7 +111,7 @@ function makeAdapter(opts: { activeProcessName?: string } = {}): PlatformAdapter
     closeWindow: vi.fn(async () => {}),
     resizeWindow: vi.fn(async () => {}),
     listDisplays: vi.fn(async () => [{ id: 0, primary: true, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 }]),
-    getUiTree: vi.fn(async () => []),
+    getUiTree: vi.fn(async () => opts.uiTree ?? []),
     findElements: vi.fn(async () => []),
     getFocusedElement: vi.fn(async () => null),
     invokeElement: vi.fn(async () => ({ success: true })),
@@ -614,13 +621,31 @@ describe('runAgent — UIMap holder integration (Part 2)', () => {
     expect(holder.currentId()).toMatch(/^obs_\d+$/);
   });
 
-  it('invalidates the holder after a screen-changing tool', async () => {
+  it('a screen-changing tool stales the PRE-action map and mints a fresh resolvable one', async () => {
     const holder = new UIMapHolder();
     llmTurnQueue.push(turnCall('key', { key: 'a' }));   // changesScreen:true
     llmTurnQueue.push(turnCall('done', { evidence: 'typed a character into the field' }));
     await runAgent({ task: 'type', maxTurns: 5 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
-    const id = holder.currentId();
-    if (id) expect(holder.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
+    // Turn-1 perception minted obs_1 (pre-action); the key turn invalidated it
+    // and §6b minted obs_2 from the POST-action snapshot.
+    expect(holder.currentId()).toBe('obs_2');
+    expect(holder.resolve('obs_1', Date.now())).toEqual({ ok: false, reason: 'stale' });
+    // The post-action map is the freshest truth — its refs must be actionable
+    // (audit 2026-06-10 finding A1: it used to be invalidated on arrival).
+    expect(holder.resolve('obs_2', Date.now()).ok).toBe(true);
+  });
+
+  it('a FAILED screen-changing tool with no observable change does NOT stale the current map', async () => {
+    const holder = new UIMapHolder();
+    // invoke_element with a bogus ref: changesScreen:true statically, but the
+    // ref is rejected before any input is dispatched — the screen is untouched,
+    // so the current map must stay resolvable (no re-mint churn).
+    llmTurnQueue.push(turnCall('invoke_element', { element_id: 'el_99', snapshot_id: 'obs_77' }));
+    llmTurnQueue.push(turnCall('done', { evidence: 'recovered after the rejected ref' }));
+    await runAgent({ task: 'act', maxTurns: 5 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
+    // obs_1 from turn-1 perception is still current AND still resolves.
+    expect(holder.currentId()).toBe('obs_1');
+    expect(holder.resolve('obs_1', Date.now()).ok).toBe(true);
   });
 });
 
@@ -645,16 +670,34 @@ describe('runAgent — finder snapshot survives a non-screen-changing next turn 
     if (id) expect(holder.resolve(id, Date.now()).ok).toBe(true);
   });
 
-  it('a screen-changing tool DOES refresh + invalidate (post-action refs are stale)', async () => {
-    // A changesScreen:true tool must still mint a fresh map in §6b AND then
-    // invalidate it, so any el_NN refs from that turn are immediately stale
-    // (the action may have already mutated the UI).
+  it('the advertised snapshot_id resolves at the NEXT turn\'s action time (act on the post-action map)', async () => {
+    // The regression test the audit said was missing: after a mutating turn,
+    // §6b advertises "act via {element_id, snapshot_id=obs_N}" — acting on
+    // exactly that advertisement next turn must succeed, not reject as stale.
     const holder = new UIMapHolder();
-    llmTurnQueue.push(turnCall('key', { key: 'a' }));          // changesScreen:true
-    llmTurnQueue.push(turnCall('done', { evidence: 'typed a key' }));
-    await runAgent({ task: 'change', maxTurns: 4 }, { adapter: makeAdapter(), llm: LLM_CONFIG, uiMaps: holder });
-    const id = holder.currentId();
-    if (id) expect(holder.resolve(id, 0)).toEqual({ ok: false, reason: 'stale' });
+    const adapter = makeAdapter({
+      uiTree: [
+        { name: 'Bold', controlType: 'button', bounds: { x: 100, y: 100, width: 80, height: 30 }, enabled: true },
+      ],
+    });
+    llmTurnQueue.push(turnCall('key', { key: 'a' }));          // turn 1: changesScreen:true
+    // Turn 2 is built from what the model actually SEES: extract the advertised
+    // snapshot_id + an el_NN id from the latest COMPILED UI block and act on it.
+    llmTurnQueue.push((opts: any) => {
+      const txt = JSON.stringify(opts?.messages ?? []);
+      const snapMatches = [...txt.matchAll(/snapshot_id=\\"(obs_\d+)\\"/g)];
+      const snapId = snapMatches.length ? snapMatches[snapMatches.length - 1][1] : 'obs_none';
+      // The rendered map line for the button looks like: el_0 [button] "Bold" …
+      const elMatches = [...txt.matchAll(/(el_\d+) \[button\] \\"Bold\\"/g)];
+      const elId = elMatches.length ? elMatches[elMatches.length - 1][1] : 'el_none';
+      return turnCall('invoke_element', { element_id: elId, snapshot_id: snapId });
+    });
+    llmTurnQueue.push(turnCall('done', { evidence: 'acted on the advertised post-action snapshot' }));
+    const result = await runAgent({ task: 'press the Bold button', maxTurns: 6 }, { adapter, llm: LLM_CONFIG, uiMaps: holder });
+    const invokeStep = result.steps.find(s => s.toolName === 'invoke_element');
+    expect(invokeStep).toBeTruthy();
+    expect(invokeStep!.result.text).not.toMatch(/stale|expired|rejected/i);
+    expect(invokeStep!.result.success).toBe(true);
   });
 });
 

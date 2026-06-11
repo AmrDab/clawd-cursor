@@ -655,10 +655,6 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         // this AFTER the tool, BEFORE stagnation detection.
         let postSnapshot: Awaited<ReturnType<typeof captureSnapshot>> | null = null;
         if (tool.changesScreen) {
-          anyScreenChangingTool = true;
-          // Invalidate the UIMap holder — the screen changed, existing el_NN refs
-          // are stale. The next turn's §6b storeUIMap re-puts a fresh map.
-          holder.invalidate();
           try {
             postSnapshot = await captureSnapshot(deps.adapter);
             activeApp = postSnapshot.activeWindow?.processName ?? activeApp;
@@ -669,6 +665,18 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
 
         const fingerprintChanged = postSnapshot ? fph.getHistory().slice(-1)[0] !== postSnapshot.fingerprint : false;
         if (postSnapshot) fph.push(postSnapshot.fingerprint);
+
+        // Invalidate the UIMap holder only when the action actually DID
+        // something: the tool reported success, or the fingerprint moved
+        // anyway (a failed action that still touched the screen). A rejected
+        // action that provably changed nothing must NOT stale the current
+        // map — keying on the static changesScreen flag alone meant every
+        // ref-rejection re-minted the map and inflated the stagnation
+        // counter (audit 2026-06-10, findings A1/M3).
+        if (tool.changesScreen && (result.success || fingerprintChanged)) {
+          anyScreenChangingTool = true;
+          holder.invalidate();
+        }
 
         // Layer C: reactive step discipline — verify the agent-stated `expect`
         // (HARD → DEVIATION) or apply the tolerant soft net when omitted. Reuses
@@ -774,13 +782,14 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
             } catch {
               // UIMap compilation failure is non-fatal — the agent still has the a11y snapshot.
             }
-            // If an action in this turn changed the screen, invalidate AFTER storing
-            // so the next turn's storeUIMap re-puts a fresh map. This ensures that
-            // any el_NN refs from the map produced post-action are still marked stale
-            // (the action may have already mutated the UI being referenced).
-            if (anyScreenChangingTool) {
-              holder.invalidate();
-            }
+            // NOTE: deliberately NO invalidate here. The map stored above was
+            // compiled from the POST-action snapshot — it is the freshest
+            // truth available, and its snapshot_id is exactly what the text
+            // block above invites the model to act on next turn. Invalidating
+            // it made every advertised el_NN ref dead on arrival (audit
+            // 2026-06-10, finding A1). The pre-action staleness hazard is
+            // already covered by the 5c invalidation that ran before this map
+            // was compiled.
           }
         } catch {
           nextBlocks.push({
