@@ -100,6 +100,82 @@ describe('agent batch — guards (re-perceive)', () => {
   });
 });
 
+describe('agent batch — per-step parity with the single-call pipeline (audit 2026-06-10 finding B)', () => {
+  it('resolves an el_NN ref to its label for the safety gate (batched Send is gated like a single call)', async () => {
+    unified.invoke_element = uTool('invoke_element');
+    const seenLabels: Array<string | undefined> = [];
+    safetyFn = (a) => { seenLabels.push(a.targetLabel); return { decision: 'allow', tier: 'input' }; };
+    const uiMaps = {
+      resolve: vi.fn(() => ({
+        ok: true,
+        map: { elements: [{ id: 'el_7', text: 'Send', normalized_text: 'send' }] },
+      })),
+      invalidate: vi.fn(),
+    };
+    await buildBatchTool().execute(
+      { steps: [{ name: 'invoke_element', args: { element_id: 'el_7', snapshot_id: 'obs_3' } }] },
+      { ...ctx, uiMaps } as any,
+    );
+    expect(seenLabels).toContain('Send');
+  });
+
+  it('invalidates the UIMap holder after a successful screen-changing step', async () => {
+    unified.click = { ...uTool('click'), changesScreen: true };
+    const uiMaps = { resolve: vi.fn(), invalidate: vi.fn() };
+    const r = await buildBatchTool().execute(
+      { steps: [{ name: 'click', args: { x: 1, y: 2 } }] },
+      { ...ctx, uiMaps } as any,
+    );
+    expect(r.success).toBe(true);
+    expect(uiMaps.invalidate).toHaveBeenCalled();
+  });
+
+  it('does NOT invalidate the holder for a failed step with no observable change', async () => {
+    unified.click = { ...uTool('click', vi.fn(async () => ({ success: false, text: 'ref rejected' }))), changesScreen: true };
+    const uiMaps = { resolve: vi.fn(), invalidate: vi.fn() };
+    await buildBatchTool().execute(
+      { steps: [{ name: 'click', args: { x: 1, y: 2 } }] },
+      { ...ctx, uiMaps } as any,
+    );
+    expect(uiMaps.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('honors an assertion-array expect inside a step\'s args — DEVIATION halts the batch', async () => {
+    // app_running check throws against the stub ctx (no platform adapter) →
+    // the assertion fails → reactiveCheck flips the step to DEVIATION.
+    unified.key = { ...uTool('key'), changesScreen: true };
+    unified.type = uTool('type');
+    const r = await buildBatchTool().execute(
+      {
+        steps: [
+          { name: 'key', args: { combo: 'Return', expect: [{ type: 'app_running', name: 'definitely-not-running' }] } },
+          { name: 'type', args: { text: 'should never run' } },
+        ],
+      },
+      ctx,
+    );
+    expect(r.success).toBe(false);
+    expect(r.text).toMatch(/DEVIATION/);
+    expect(unified.type.execute).not.toHaveBeenCalled();
+  });
+
+  it('blocks terminal tools inside a batch (done/give_up semantics would be discarded)', async () => {
+    unified.done = { ...uTool('done'), terminal: true };
+    const r = await run([{ name: 'done', args: { evidence: 'pretend finished' } }]);
+    expect(r.success).toBe(false);
+    expect(r.text).toMatch(/not available inside a batch/);
+  });
+
+  it('accepts the canonical `precheck` name for preconditions', async () => {
+    unified.read_screen = uTool('read_screen', vi.fn(async () => ({ success: true, text: 'WINDOWS [msedge] "YouTube"' })));
+    unified.type = uTool('type');
+    const r = await run([{ name: 'type', args: { text: 'x' }, precheck: { window: 'notepad' } }]);
+    expect(r.success).toBe(false);
+    expect(r.text).toMatch(/window "notepad" not focused/);
+    expect(unified.type.execute).not.toHaveBeenCalled();
+  });
+});
+
 describe('agent batch — safety + cap + parsing', () => {
   it('halts at a step the loop safety blocks', async () => {
     unified.invoke_element = uTool('invoke_element');
