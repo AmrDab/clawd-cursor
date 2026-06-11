@@ -160,7 +160,7 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 > **Editor permission allowlist (Claude Code, Cursor, &hellip;).** If your editor maintains a per-tool permission allowlist (keys like `mcp__clawdcursor__window`), use the **server-level wildcard** `"mcp__clawdcursor"` instead. It covers every tool in one entry and is immune to tool renames across versions — per-tool entries silently break whenever a tool is added, removed, or renamed.
 
-> **macOS first run.** Run `clawdcursor grant` to walk through the permission dialogs, then open **System Settings &rarr; Privacy &amp; Security** and enable the entry named **ClawdCursor** under **both** Accessibility and Screen Recording. clawdcursor consolidates all desktop control under this single native-app identity &mdash; both entries are required.
+> **macOS first run.** Run `clawdcursor grant` to walk through the permission dialogs, then open **System Settings &rarr; Privacy &amp; Security** and enable the entry named **ClawdCursor**. **Accessibility is required** (it powers the primary a11y-tree control path — clawdcursor is operational with this alone). **Screen Recording is optional**: it only gates the screenshot/vision fallback and OCR, so you can grant it later when a canvas-only app actually needs pixels. clawdcursor consolidates all desktop control under this single native-app identity.
 > **Linux:** install `tesseract-ocr`, `python3-gi`, `gir1.2-atspi-2.0`, and (Wayland only) `ydotool` or `wtype`.
 
 ---
