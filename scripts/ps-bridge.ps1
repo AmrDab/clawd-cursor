@@ -286,7 +286,26 @@ function Cmd-ActivateAtPoint {
 
     Start-Sleep -Milliseconds 40
     $newFg = [Win32UIA]::GetForegroundWindow()
-    return @{ success=$true; action="activated"; activated=($newFg -eq $root) }
+    # Report the identity of the window we promoted, so the click tool can warn
+    # when activation FAILED (Windows foreground-lock) or when the window at the
+    # coords is NOT what the agent intended — a blind keystroke after a missed
+    # click leaked an OTP into the wrong window (session 2026-06-11).
+    $rootPid = 0
+    [void][Win32UIA]::GetWindowThreadProcessId($root, [ref]$rootPid)
+    $rootName = "unknown"; $rootTitle = ""
+    try { $rootName = [System.Diagnostics.Process]::GetProcessById($rootPid).ProcessName } catch {}
+    try {
+        $el = [System.Windows.Automation.AutomationElement]::FromHandle($root)
+        if ($el) { $rootTitle = $el.Current.Name }
+    } catch {}
+    return @{
+        success   = $true
+        action    = "activated"
+        activated = ($newFg -eq $root)
+        processId = $rootPid
+        processName = $rootName
+        title     = $rootTitle
+    }
 }
 
 # ── Command: get-foreground-window ────────────────────────────────────────────

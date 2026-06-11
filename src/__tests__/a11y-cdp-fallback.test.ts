@@ -44,6 +44,8 @@ function makeCtx(opts: {
   platformUiTree?: any[];
   cdpConnected?: boolean;
   cdpPageEvaluate?: any;
+  activeWindowTitle?: string;
+  cdpTitle?: string;
 }): ToolContext {
   return {
     desktop: {} as any,
@@ -58,7 +60,7 @@ function makeCtx(opts: {
     } as any,
     platform: opts.platformFindElements !== undefined || opts.platformUiTree !== undefined ? {
       getActiveWindow: vi.fn().mockResolvedValue({
-        title: 'Test App',
+        title: opts.activeWindowTitle ?? 'Test App',
         processName: opts.processName ?? 'msedge',
         processId: 1234,
       }),
@@ -69,6 +71,7 @@ function makeCtx(opts: {
     } as any : undefined,
     cdp: {
       isConnected: vi.fn().mockResolvedValue(opts.cdpConnected ?? false),
+      getTitle: vi.fn().mockResolvedValue(opts.cdpTitle ?? null),
       getPage: vi.fn().mockReturnValue(
         opts.cdpPageEvaluate
           ? { evaluate: vi.fn().mockImplementation(opts.cdpPageEvaluate) }
@@ -151,6 +154,44 @@ describe('find_element — CDP DOM fallback', () => {
     const result = await findElement.handler({ name: 'NoSuchTarget' }, ctx);
     expect(cdpEvaluate).toHaveBeenCalledTimes(1);
     expect(result.text).toBe('(no elements found)');
+  });
+
+  // #bug 2026-06-11: the CDP connection was to a DIFFERENT browser than the
+  // focused window, so the fallback answered an Edge query with a relay
+  // Chrome's DOM. Scope the fallback to the focused window by title.
+  it('does NOT use CDP DOM when the connected page is a DIFFERENT window (cross-browser)', async () => {
+    const cdpEvaluate = vi.fn().mockResolvedValue([
+      { name: 'Continue with Google', controlType: 'web.button', bounds: { x: 445, y: 425, width: 80, height: 30 } },
+    ]);
+    const ctx = makeCtx({
+      processName: 'msedge',
+      activeWindowTitle: 'Device Activation - Microsoft Edge',   // focused: Edge
+      cdpTitle: 'Sign in to GitHub',                             // CDP target: a DIFFERENT page (relay Chrome)
+      platformFindElements: [],
+      cdpConnected: true,
+      cdpPageEvaluate: cdpEvaluate,
+    });
+    const result = await findElement.handler({ name: 'Continue' }, ctx);
+    expect(cdpEvaluate).not.toHaveBeenCalled();           // never queried the wrong browser's DOM
+    expect(result.text).not.toContain('Continue with Google');
+    expect(result.text).toBe('(no elements found)');
+  });
+
+  it('DOES use CDP DOM when the connected page corresponds to the focused window', async () => {
+    const cdpEvaluate = vi.fn().mockResolvedValue([
+      { name: 'Submit Order', controlType: 'web.button', bounds: { x: 200, y: 400, width: 80, height: 30 } },
+    ]);
+    const ctx = makeCtx({
+      processName: 'msedge',
+      activeWindowTitle: 'Checkout - Shop - Microsoft Edge',
+      cdpTitle: 'Checkout',                                     // contained in the window title → same window
+      platformFindElements: [],
+      cdpConnected: true,
+      cdpPageEvaluate: cdpEvaluate,
+    });
+    const result = await findElement.handler({ name: 'Submit' }, ctx);
+    expect(cdpEvaluate).toHaveBeenCalledTimes(1);
+    expect(result.text).toContain('Submit Order');
   });
 });
 

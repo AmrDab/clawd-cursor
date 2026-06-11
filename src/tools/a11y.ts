@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolContext } from './types';
 import { a11yToMouse } from './types';
 import type { UiElement, WindowInfo } from '../platform/types';
 import { getBrowserProcessNames } from '../llm/browser-config';
+import { windowTextIncludes } from './window-text';
 
 /**
  * Query Chrome DevTools Protocol DOM for interactive elements when UIA returns
@@ -44,6 +45,25 @@ async function queryCdpDom(
 
   const page = ctx.cdp.getPage?.();
   if (!page) return null;
+
+  // SCOPE CHECK: the CDP connection may be to a DIFFERENT browser than the
+  // focused window (e.g. the agent's own dedicated instance, or a relay
+  // Chrome). Answering a query about the focused Edge using another browser's
+  // DOM is actively misleading — it made an agent try to click "Continue with
+  // Google" buttons that existed only in a background Chrome (session
+  // 2026-06-11). Only use the CDP DOM as a fallback for THIS window when the
+  // connected page corresponds to the focused window's title.
+  try {
+    const cdpTitle = await ctx.cdp.getTitle?.();
+    const winTitle = activeWin?.title ?? '';
+    // A browser window title embeds the page title ("<page> - <profile> -
+    // <Browser>"). If we have a non-trivial page title and the focused window
+    // does NOT contain it, the CDP target is a different window — bail rather
+    // than return cross-browser results.
+    if (cdpTitle && cdpTitle.trim().length > 1 && !windowTextIncludes(winTitle, cdpTitle)) {
+      return null;
+    }
+  } catch { /* can't verify correspondence — fall through (best-effort) */ }
 
   const limit = query.limit ?? 50;
   const needle = query.name?.toLowerCase() || null;

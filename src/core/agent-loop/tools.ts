@@ -574,11 +574,12 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
         const raised = await ensureTargetForeground(ctx, fg0);
         const before = raised ? await ctx.platform.getActiveWindow().catch(() => null) : fg0;
-        await ctx.platform.mouseClick(x, y, { button, count });
+        const activation = await ctx.platform.mouseClick(x, y, { button, count });
         await sleep(150);
         const after = await ctx.platform.getActiveWindow().catch(() => null);
         const note = warning ? ` (${warning})` : '';
-        return { success: true, text: `Clicked ${button} x${count} at ${coordBreadcrumb(ix, iy, x, y, space, scale, ctx)}${raised}${focusBreadcrumb(before, after)}${note}` };
+        const focusWarn = focusTheftWarning(activation, before, after);
+        return { success: true, text: `Clicked ${button} x${count} at ${coordBreadcrumb(ix, iy, x, y, space, scale, ctx)}${raised}${focusBreadcrumb(before, after)}${note}${focusWarn}` };
       },
     },
 
@@ -1609,10 +1610,13 @@ export function buildUnifiedTools(): UnifiedTool[] {
         // `click` tool does with a11y coords (no imageScale; that's image-space only).
         const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
         const raised = await ensureTargetForeground(ctx, fg0);
-        await ctx.platform.mouseClick(hit.x, hit.y, { button, count: 1 });
+        const before = await ctx.platform.getActiveWindow().catch(() => null);
+        const activation = await ctx.platform.mouseClick(hit.x, hit.y, { button, count: 1 });
         await sleep(150);
         getAgentOcr().invalidateCache();
-        return { success: true, text: `smart_click: clicked "${hit.label}" (score ${hit.score.toFixed(2)}) at (${hit.x},${hit.y})${raised}`, targetLabel: hit.label };
+        const after = await ctx.platform.getActiveWindow().catch(() => null);
+        const focusWarn = focusTheftWarning(activation, before, after);
+        return { success: true, text: `smart_click: clicked "${hit.label}" (score ${hit.score.toFixed(2)}) at (${hit.x},${hit.y})${raised}${focusWarn}`, targetLabel: hit.label };
       },
     },
 
@@ -1953,6 +1957,33 @@ function focusBreadcrumb(
 
 function truncateTitle(s: string): string {
   return s.length > 32 ? s.slice(0, 31) + '…' : s;
+}
+
+/**
+ * Warn when a coordinate click could not be confirmed to land on the intended
+ * window — the cause of a keystroke leak where an OTP typed after a missed
+ * click went into the wrong window (session 2026-06-11). Two signals:
+ *   (a) the platform reported activation FAILED (Windows foreground-lock kept a
+ *       different window in front), or
+ *   (b) the foreground window CHANGED across the click (before ≠ after), which
+ *       for a click meant to interact with the already-focused window means the
+ *       click hit something else.
+ * Returns a loud, actionable suffix telling the agent to verify focus before
+ * typing; empty string when the click looks clean.
+ */
+function focusTheftWarning(
+  activation: { activated: boolean; title?: string; processName?: string } | void,
+  before: { title?: string } | null,
+  after: { title?: string } | null,
+): string {
+  const activationFailed = activation && activation.activated === false;
+  const foregroundChanged = !!before?.title && !!after?.title && before.title !== after.title;
+  if (!activationFailed && !foregroundChanged) return '';
+  const landed = after?.title ? `"${truncateTitle(after.title)}"` : 'an unknown window';
+  return ` ⚠ FOCUS NOT CONFIRMED — the click may have landed on ${landed} instead of your target`
+    + ` (Windows foreground-lock or coords over a different window). DO NOT type next:`
+    + ` re-focus the intended window first (focus_window / window.focus by processId),`
+    + ` or act on an a11y/el_NN target instead of coordinates.`;
 }
 
 /**

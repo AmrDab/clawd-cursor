@@ -21,6 +21,7 @@
  */
 import { getTool, getCompactTools } from './registry';
 import { evaluateToolCall } from './safety-gate';
+import { windowTextIncludes } from './window-text';
 import type { ToolContext, ToolResult, ToolDefinition } from './types';
 
 /** Resolve a step's tool by name from EITHER surface — a granular tool
@@ -79,8 +80,10 @@ async function checkGuard(guard: BatchGuard, ctx: ToolContext): Promise<{ ok: bo
     const t = getTool('get_active_window');
     if (t) {
       const r = await t.handler({}, ctx).catch((e): ToolResult => ({ text: String(e), isError: true }));
-      const txt = (r.text || '').toLowerCase();
-      if (!txt.includes(guard.window.toLowerCase())) {
+      // Window-aware normalization: real titles carry invisible Unicode (Edge's
+      // NBSP in "Microsoft Edge") that defeats a plain substring compare (#bug
+      // 2026-06-11).
+      if (!windowTextIncludes(r.text, guard.window)) {
         return { ok: false, detail: `foreground window is not "${guard.window}" (got: ${(r.text || '').slice(0, 90)})` };
       }
     }
@@ -89,6 +92,9 @@ async function checkGuard(guard: BatchGuard, ctx: ToolContext): Promise<{ ok: bo
     const t = getTool('find_element');
     if (t) {
       const r = await t.handler({ name: guard.element }, ctx).catch((e): ToolResult => ({ text: String(e), isError: true }));
+      // Element presence is decided by find_element's own absence markers, not
+      // by title matching — leave this ASCII-literal (the window guard above is
+      // where the invisible-Unicode normalization matters).
       const txt = (r.text || '').toLowerCase();
       const missing = r.isError || txt.includes('not found') || txt.includes('no match') || txt.includes('no element') || /\b0 (match|element)/.test(txt);
       if (missing) return { ok: false, detail: `element "${guard.element}" not present` };

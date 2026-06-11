@@ -155,4 +155,40 @@ describe('click tool coordinate space', () => {
     const r = await click.execute({ x: 100, y: 100 }, ctx);
     expect(r.text).toMatch(/focus "Terminal"→"Edge"/);
   });
+
+  // ── focus-theft warning (#bug 2026-06-11: OTP typed into the wrong window) ──
+  it('warns FOCUS NOT CONFIRMED when the platform reports activation failed', async () => {
+    const clicks: Array<{ x: number; y: number }> = [];
+    const ctx = makeCtx(clicks);
+    // mouseClick reports it could NOT bring the window at the point to front.
+    (ctx.platform.mouseClick as any) = vi.fn((x: number, y: number) => {
+      clicks.push({ x, y });
+      return Promise.resolve({ activated: false, title: 'Claude', processName: 'claude' });
+    });
+    const r = await click.execute({ x: 100, y: 100 }, ctx);
+    expect(r.text).toMatch(/FOCUS NOT CONFIRMED/);
+    expect(r.text).toMatch(/DO NOT type next/);
+  });
+
+  it('warns when foreground changed across the click (clicked away from the focused window)', async () => {
+    const clicks: Array<{ x: number; y: number }> = [];
+    const ctx = makeCtx(clicks);
+    let n = 0;
+    // before = the popup that was focused, after = a different window → theft.
+    (ctx.platform.getActiveWindow as any) = vi.fn(() =>
+      Promise.resolve({ title: n++ === 0 ? 'Device Activation - Microsoft Edge' : 'Claude', processName: 'x', processId: 1, bounds: { x: 0, y: 0, width: 1, height: 1 }, isMinimized: false }));
+    const r = await click.execute({ x: 100, y: 100 }, ctx);
+    expect(r.text).toMatch(/FOCUS NOT CONFIRMED/);
+  });
+
+  it('does NOT warn on a clean click (activation ok, foreground stable)', async () => {
+    const clicks: Array<{ x: number; y: number }> = [];
+    const ctx = makeCtx(clicks);
+    (ctx.platform.mouseClick as any) = vi.fn((x: number, y: number) => {
+      clicks.push({ x, y });
+      return Promise.resolve({ activated: true, title: 'Edge', processName: 'msedge' });
+    });
+    const r = await click.execute({ x: 100, y: 100 }, ctx);  // getActiveWindow returns 'Edge' both times
+    expect(r.text).not.toMatch(/FOCUS NOT CONFIRMED/);
+  });
 });

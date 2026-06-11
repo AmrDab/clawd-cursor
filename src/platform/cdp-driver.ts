@@ -251,6 +251,11 @@ export class CDPDriver {
         `--user-data-dir=${profileDir}`,
         '--no-first-run',
         '--no-default-browser-check',
+        // A fresh --user-data-dir profile has no saved window bounds, so Chromium
+        // opens at a small default size — the agent's browser came up as a tiny
+        // window (session 2026-06-11). Start maximized so screenshots/coords have
+        // the full viewport and the window is usable.
+        '--start-maximized',
         '--new-window',
         'about:blank',
       ];

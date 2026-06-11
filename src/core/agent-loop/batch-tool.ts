@@ -27,6 +27,7 @@ import { evaluate as safetyEvaluate, isAllowed } from '../safety';
 import { captureSnapshot } from '../sense/snapshot';
 import { reactiveCheck } from '../sense/reactive-check';
 import { OcrEngine } from '../../platform/ocr-engine';
+import { windowTextIncludes } from '../../tools/window-text';
 
 interface AgentBatchStep {
   name: string;
@@ -143,16 +144,16 @@ export function buildBatchTool(): UnifiedTool {
             // (not a substring of arbitrary element text), element against the
             // FULL element list (not a 60-element truncated render).
             if (precheck.window) {
-              const want = precheck.window.toLowerCase();
-              const got = `${snap.activeWindow?.processName ?? ''} ${snap.activeWindow?.title ?? ''}`.toLowerCase();
-              if (!got.includes(want)) {
+              // window-normalized: tolerate invisible Unicode in titles (Edge's
+              // NBSP in "Microsoft Edge") that defeats a plain substring compare.
+              const got = `${snap.activeWindow?.processName ?? ''} ${snap.activeWindow?.title ?? ''}`;
+              if (!windowTextIncludes(got, precheck.window)) {
                 trace.push(`  ${i}. [guard_failed] ${label} — window "${precheck.window}" not focused (active: ${snap.activeWindow?.processName ?? 'unknown'})`);
                 return halt(`batch halted at step ${i}: precondition failed (window "${precheck.window}" not focused) — re-plan from current state.`);
               }
             }
             if (precheck.element) {
-              const want = precheck.element.toLowerCase();
-              const found = snap.elements.some(e => (e.name ?? '').toLowerCase().includes(want));
+              const found = snap.elements.some(e => windowTextIncludes(e.name, precheck.element));
               if (!found) {
                 trace.push(`  ${i}. [guard_failed] ${label} — element "${precheck.element}" not present`);
                 return halt(`batch halted at step ${i}: precondition failed (element "${precheck.element}" not present) — re-plan from current state.`);
@@ -162,11 +163,11 @@ export function buildBatchTool(): UnifiedTool {
             // Snapshot unavailable — degrade to the legacy tree-text check
             // rather than blocking the batch outright.
             const tree = await perceiveTree({ ...ctx, activeApp });
-            if (precheck.window && !tree.includes(precheck.window.toLowerCase())) {
+            if (precheck.window && !windowTextIncludes(tree, precheck.window)) {
               trace.push(`  ${i}. [guard_failed] ${label} — window "${precheck.window}" not focused`);
               return halt(`batch halted at step ${i}: precondition failed (window "${precheck.window}" not focused) — re-plan from current state.`);
             }
-            if (precheck.element && !tree.includes(precheck.element.toLowerCase())) {
+            if (precheck.element && !windowTextIncludes(tree, precheck.element)) {
               trace.push(`  ${i}. [guard_failed] ${label} — element "${precheck.element}" not present`);
               return halt(`batch halted at step ${i}: precondition failed (element "${precheck.element}" not present) — re-plan from current state.`);
             }

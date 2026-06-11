@@ -40,6 +40,7 @@ import type {
   ScrollDirection,
   WaitForElementQuery,
   WindowState,
+  FocusActivation,
 } from './types';
 import { waitForLaunchedWindow, buildAppPredicate } from './launch-poll';
 
@@ -668,12 +669,19 @@ export class WindowsAdapter implements PlatformAdapter {
    * foreground window, call SetForegroundWindow to bring it forward before
    * the click lands. Non-fatal — if the PS call fails we proceed anyway.
    */
-  private async ensureForegroundAtPoint(x: number, y: number): Promise<void> {
+  private async ensureForegroundAtPoint(x: number, y: number): Promise<FocusActivation | undefined> {
     try {
-      await psRunner.run({ cmd: 'activate-at-point', x, y });
+      const r = await psRunner.run({ cmd: 'activate-at-point', x, y }) as {
+        activated?: boolean; reason?: string; title?: string; processName?: string;
+      };
+      // 'noop' reasons mean nothing to promote (no window, or already foreground)
+      // — both are fine, treat as activated.
+      const activated = r?.activated !== false;
+      return { activated, title: r?.title, processName: r?.processName, reason: r?.reason };
     } catch {
       // Non-fatal — click proceeds regardless. We do not want to block
-      // mouse input if the foreground check fails.
+      // mouse input if the foreground check fails. Undefined = unknown.
+      return undefined;
     }
   }
 
@@ -683,12 +691,14 @@ export class WindowsAdapter implements PlatformAdapter {
     return Button.LEFT;
   }
 
-  async mouseClick(x: number, y: number, opts?: { button?: MouseButton; count?: number }): Promise<void> {
+  async mouseClick(x: number, y: number, opts?: { button?: MouseButton; count?: number }): Promise<FocusActivation | void> {
     // Bring the window at (x, y) to the foreground before sending any
     // button events. Without this, a click intended for a Save As dialog
     // can land on a background Explorer window when the dialog lost focus
     // between the screenshot and the click (z-order / activation race).
-    await this.ensureForegroundAtPoint(x, y);
+    // The activation verdict flows back to the caller so a FAILED raise
+    // (foreground-lock) is visible instead of a silent wrong-window click.
+    const activation = await this.ensureForegroundAtPoint(x, y);
     await mouse.setPosition(new Point(x, y));
     this.lastCursor = { x, y };
     await this.delay(40);
@@ -707,6 +717,7 @@ export class WindowsAdapter implements PlatformAdapter {
       }
       if (i < count - 1) await this.delay(60);
     }
+    return activation;
   }
 
   async mouseMove(x: number, y: number): Promise<void> {

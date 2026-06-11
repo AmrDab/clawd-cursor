@@ -122,6 +122,21 @@ export interface PermissionStatus {
 export type MouseButton = 'left' | 'right' | 'middle';
 
 /**
+ * Result of the pre-click foreground promotion (Win32 WindowFromPoint +
+ * SetForegroundWindow). `activated:false` means the OS refused to bring the
+ * window at the click point to the foreground (foreground-lock) — the click
+ * likely landed on a DIFFERENT window than intended, so the caller must warn
+ * and not blindly send keystrokes next. `title`/`processName` identify the
+ * window that was actually promoted/clicked.
+ */
+export interface FocusActivation {
+  activated: boolean;
+  title?: string;
+  processName?: string;
+  reason?: string;
+}
+
+/**
  * Scroll direction — extended in Tranche 1A to include horizontal. Windows
  * and macOS native wheel APIs support both axes; Linux X11 uses xdotool
  * buttons 6/7 or nut-js's `scrollLeft/scrollRight`; Wayland is iffy on
@@ -275,8 +290,11 @@ export interface PlatformAdapter {
   waitForElement(query: WaitForElementQuery, timeoutMs: number): Promise<UiElement | null>;
 
   // ─── INPUT (mouse) ──────────────────────────────────────────────
-  /** All coords are in LOGICAL pixels (mouse coordinate space). */
-  mouseClick(x: number, y: number, opts?: { button?: MouseButton; count?: number }): Promise<void>;
+  /** All coords are in LOGICAL pixels (mouse coordinate space).
+   *  Returns a FocusActivation describing the window brought to the foreground
+   *  at the click point (when the platform verifies it) so callers can WARN on
+   *  a failed/ wrong-window activation; void/undefined when not verifiable. */
+  mouseClick(x: number, y: number, opts?: { button?: MouseButton; count?: number }): Promise<FocusActivation | void>;
   mouseMove(x: number, y: number): Promise<void>;
   /**
    * Move relative to the current cursor position. On Wayland where
