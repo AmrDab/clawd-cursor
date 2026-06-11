@@ -47,7 +47,7 @@ vi.mock('../platform/ocr-engine', () => ({
 // ── Imports after mocks ──────────────────────────────────────────────────────
 
 import { getAllTools, getCompactSurface, getTools } from '../tools/registry';
-import { getCompactTools } from '../tools/compact';
+import { getCompactTools, COMPOUND_ROUTE_INDEX } from '../tools/compact';
 import type { ToolContext } from '../tools/types';
 import { makeMockPlatform } from './helpers/mock-platform';
 
@@ -209,6 +209,23 @@ describe('compact-as-transform invariants', () => {
       it(`${route.compound}.${route.action} → delegate "${route.delegate}" exists`, () => {
         expect(granularNames.has(route.delegate)).toBe(true);
       });
+    }
+  });
+
+  // ── 1b. The LIVE route tables resolve too (no hand-copy drift) ───────────
+  // The local ACTION_MAP above is a readable snapshot, but it drifted (it
+  // missed compile_ui/find_*/smart_* — review 2026-06-11). This block iterates
+  // the REAL tables exported from compact.ts, so a future action whose
+  // delegate was never registered fails here even if the snapshot is stale.
+  describe('1b. Every LIVE compact route delegate resolves in getAllTools()', () => {
+    const granularNames = new Set(getAllTools().map(t => t.name));
+
+    for (const [compound, routes] of Object.entries(COMPOUND_ROUTE_INDEX)) {
+      for (const route of routes) {
+        it(`${compound}.${route.action} → delegate "${route.delegate}" exists (live table)`, () => {
+          expect(granularNames.has(route.delegate)).toBe(true);
+        });
+      }
     }
   });
 

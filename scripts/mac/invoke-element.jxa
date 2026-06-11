@@ -134,7 +134,9 @@ function run(argv) {
             } else if (a === '-ControlType' && hasNext) {
                 var ct = argv[++i];
                 params.role = CONTROL_TYPE_MAP[ct] || ct.toLowerCase();
-            } else if ((a === '-processId' || a === '-ProcessId') && hasNext) {
+            } else if ((a === '-processId' || a === '-ProcessId' || a === '-FocusedProcessId') && hasNext) {
+                // -FocusedProcessId accepted as an alias for callers that share
+                // arg-building with get-screen-context.jxa (defense-in-depth).
                 params.processId = parseInt(argv[++i], 10);
             } else if ((a === '-value' || a === '-Value') && hasNext) {
                 params.value = argv[++i];

@@ -468,8 +468,11 @@ export class MacOSAdapter implements PlatformAdapter {
 
   async findElements(query: { name?: string; controlType?: string; processId?: number }): Promise<UiElement[]> {
     try {
-      const args = ['-l', 'JavaScript', path.join(SCRIPTS_DIR, 'find-element.jxa')];
-      if (query.processId !== undefined) args.push('--', '-FocusedProcessId', String(query.processId));
+      const args = ['-l', 'JavaScript', path.join(SCRIPTS_DIR, 'find-element.jxa'), '--'];
+      // find-element.jxa parses '-ProcessId' (NOT '-FocusedProcessId' — that name
+      // is only understood by get-screen-context.jxa). Passing the wrong flag
+      // silently dropped pid scoping (review 2026-06-11).
+      if (query.processId !== undefined) args.push('-ProcessId', String(query.processId));
       if (query.name) args.push('-Name', query.name);
       if (query.controlType) args.push('-ControlType', query.controlType);
       const { stdout } = await execFileAsync('osascript', args, { timeout: A11Y_TREE_TIMEOUT_MS });
@@ -502,8 +505,13 @@ export class MacOSAdapter implements PlatformAdapter {
     data?: Record<string, unknown>;
   }> {
     try {
-      const args = ['-l', 'JavaScript', path.join(SCRIPTS_DIR, 'invoke-element.jxa')];
-      if (query.processId !== undefined) args.push('--', '-FocusedProcessId', String(query.processId));
+      const args = ['-l', 'JavaScript', path.join(SCRIPTS_DIR, 'invoke-element.jxa'), '--'];
+      // invoke-element.jxa parses '-ProcessId' (NOT '-FocusedProcessId' — that
+      // name belongs to get-screen-context.jxa). The wrong flag made the JXA
+      // fail its required-processId check, breaking every pid-scoped invoke /
+      // get-value on macOS (review 2026-06-11). The '--' is always present so
+      // later flags are never eaten by osascript when processId is omitted.
+      if (query.processId !== undefined) args.push('-ProcessId', String(query.processId));
       if (query.name) args.push('-Name', query.name);
       if (query.controlType) args.push('-ControlType', query.controlType);
       if (query.action) args.push('-Action', query.action);
@@ -513,7 +521,10 @@ export class MacOSAdapter implements PlatformAdapter {
       return {
         success: result?.success === true,
         bounds: result?.bounds,
-        data: result?.data,
+        // get-value returns its payload at the TOP level ({success, action,
+        // value, method}); consumers read res.data?.value — surface it
+        // (review 2026-06-11; parity with the Windows adapter).
+        data: result?.data ?? (result?.value !== undefined ? { value: result.value } : undefined),
       };
     } catch {
       return { success: false };

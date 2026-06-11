@@ -265,7 +265,9 @@ function actionCatalog(routes: ActionRoute[]): string {
  * caller at the compound that actually owns it (e.g. `system open_app` →
  * "that action is on `window`"), instead of a dead-end "unknown action".
  */
-const COMPOUND_ROUTE_INDEX: Record<string, ActionRoute[]> = {
+// Exported so the schema-invariant test can iterate the LIVE tables instead of
+// a hand-maintained copy that silently drifts (review 2026-06-11).
+export const COMPOUND_ROUTE_INDEX: Record<string, ActionRoute[]> = {
   computer: COMPUTER_ACTIONS,
   accessibility: ACCESSIBILITY_ACTIONS,
   window: WINDOW_ACTIONS,

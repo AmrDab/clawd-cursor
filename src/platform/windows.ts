@@ -619,7 +619,11 @@ export class WindowsAdapter implements PlatformAdapter {
       return {
         success: result?.success === true,
         bounds: result?.bounds,
-        data: result?.data,
+        // The bridge returns get-value's payload at the TOP level
+        // ({success, action, value, method}), not nested under .data — but
+        // every consumer reads res.data?.value. Surface it so a11y_get_value /
+        // element_value_contains actually see the value (review 2026-06-11).
+        data: result?.data ?? (result?.value !== undefined ? { value: result.value } : undefined),
       };
     } catch {
       return { success: false };
