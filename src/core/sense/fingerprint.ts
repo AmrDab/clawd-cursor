@@ -35,7 +35,13 @@ export function fingerprint(elements: SnapshotElement[], activeTitle?: string): 
     const role = e.role ?? e.source;
     // Normalize name: trim + collapse whitespace + lowercase
     const name = (e.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-    return `${role}|${name}|${cx}|${cy}`;
+    // Include the field VALUE (hashed short, never the raw text — it may be
+    // sensitive): typing changes value but not name/role/bounds, so a
+    // value-blind fingerprint made every successful type/fill look like "no
+    // observable change" and fed false stagnation nudges (audit 2026-06-10,
+    // finding D2). Secure fields carry value=undefined and stay excluded.
+    const val = e.value ? crypto.createHash('sha1').update(e.value).digest('hex').slice(0, 8) : '';
+    return `${role}|${name}|${cx}|${cy}|${val}`;
   });
 
   tokens.sort(); // order-insensitive

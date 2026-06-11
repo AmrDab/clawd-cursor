@@ -129,6 +129,20 @@ describe('fingerprint', () => {
   it('different elements produce different fingerprints', () => {
     expect(fingerprint([e('Send', 100, 200)])).not.toBe(fingerprint([e('Done', 100, 200)]));
   });
+
+  it('a changed field VALUE moves the fingerprint (typing is an observable change)', () => {
+    // Value-blind fingerprints made every successful type/fill look like
+    // "no observable change" (audit 2026-06-10, finding D2).
+    const empty = [{ ...e('To', 100, 200, 'edit'), value: '' }];
+    const typed = [{ ...e('To', 100, 200, 'edit'), value: 'amr@x.com' }];
+    expect(fingerprint(empty as SnapshotElement[])).not.toBe(fingerprint(typed as SnapshotElement[]));
+  });
+
+  it('secure fields (value undefined) do not leak into the fingerprint', () => {
+    const a = [{ ...e('Password', 100, 200, 'edit'), value: undefined }];
+    const b = [{ ...e('Password', 100, 200, 'edit'), value: undefined }];
+    expect(fingerprint(a as SnapshotElement[])).toBe(fingerprint(b as SnapshotElement[]));
+  });
 });
 
 describe('FingerprintHistory', () => {

@@ -23,10 +23,32 @@ describe('reactiveCheck', () => {
   });
 
   it('failing expect → DEVIATION, success:false', async () => {
-    const r = await reactiveCheck({ ...base, expect: [{ type: 'app_running', name: 'photoshop' }], adapter: adapter() });
+    const r = await reactiveCheck({ ...base, expect: [{ type: 'app_running', name: 'photoshop' }], adapter: adapter(), settleMs: 0 });
     expect(r!.success).toBe(false);
     expect(r!.text).toContain('DEVIATION');
     expect(r!.text).toContain('adapt');
+  });
+
+  it('settle poll: an assertion that passes on a LATER check within the budget is NOT a DEVIATION', async () => {
+    // First check fails (no windows), second succeeds — async UIs (chip
+    // resolution, lazy title updates) must get a settle window before the
+    // model is told to retry a possibly-taken action.
+    let calls = 0;
+    const a = adapter({
+      listWindows: vi.fn(async () => {
+        calls += 1;
+        return calls < 2 ? [] : [{ processId: 9, processName: 'notepad', title: 'Untitled - Notepad', bounds: { x: 0, y: 0, width: 800, height: 600 }, isMinimized: false }];
+      }),
+    });
+    const r = await reactiveCheck({ ...base, expect: [{ type: 'app_running', name: 'notepad' }], adapter: a, settleMs: 1500 });
+    expect(r!.success).toBe(true);
+    expect(r!.text).toMatch(/verified/i);
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+
+  it('DEVIATION text mentions the settle window so the model knows it already waited', async () => {
+    const r = await reactiveCheck({ ...base, expect: [{ type: 'app_running', name: 'photoshop' }], adapter: adapter(), settleMs: 0 });
+    expect(r!.text).toMatch(/settle window/);
   });
 
   it('malformed expect → rejected (not a crash), success:false', async () => {
