@@ -82,7 +82,7 @@ export function getExtraTools(): ToolDefinition[] {
 
     {
       name: 'mouse_triple_click',
-      description: 'Triple-click the left mouse button at image-space (x, y) — selects a paragraph in most text editors.',
+      description: 'Triple-click the left mouse button at image-space (x, y) — selects a paragraph in most text editors. In single-line edit fields (dialog filename boxes etc.) a select-all follows automatically when the triple-click left nothing selected, so subsequent typing reliably REPLACES the existing text.',
       parameters: {
         x: { type: 'number', description: 'X coordinate in image-space', required: true },
         y: { type: 'number', description: 'Y coordinate in image-space', required: true },
@@ -95,7 +95,24 @@ export function getExtraTools(): ToolDefinition[] {
         if (!ctx.platform) return needPlatform('mouse_triple_click');
         const sf = ctx.getMouseScaleFactor();
         await ctx.platform.mouseClick(Math.round(x * sf), Math.round(y * sf), { button: 'left', count: 3 });
-        return { text: `Triple-clicked at (${x}, ${y})` };
+        // #121: Win11 dialog edit fields (Save As filename box) register the
+        // triple-click but don't select-all — subsequent typing APPENDS at the
+        // caret instead of replacing ("Untitledclawdcursor-…"). Callers triple-
+        // click an edit field for exactly one reason: select everything. When
+        // the click landed in an editable control, guarantee that intent with
+        // an explicit select-all chord. Paragraph-selection in multi-line
+        // editors is unaffected (select-all only fires for edit/text inputs).
+        let selectAll = '';
+        try {
+          const fe = await ctx.platform.getFocusedElement();
+          const role = (fe?.controlType ?? '').toLowerCase();
+          if (/^(edit|textfield|searchfield|combobox)$/.test(role.replace(/^controltype\./, ''))) {
+            const combo = ctx.platform.platform === 'darwin' ? 'cmd+a' : 'ctrl+a';
+            await ctx.platform.keyPress(combo);
+            selectAll = ' + select-all (edit field)';
+          }
+        } catch { /* best-effort — the triple-click itself already happened */ }
+        return { text: `Triple-clicked at (${x}, ${y})${selectAll}` };
       },
     },
 

@@ -20,10 +20,56 @@
  */
 
 import type express from 'express';
+import type { ZodTypeAny } from 'zod';
 import { VERSION } from './version';
 import type { ToolContext, ToolDefinition } from '../tools/registry';
 import { getAllTools, getCompactSurface } from '../tools/registry';
 import { evaluateToolCall } from '../tools/safety-gate';
+
+// ── Typed SDK boundary (#115) ────────────────────────────────────────────────
+//
+// The SDK is ESM with subpath-"exports"-mapped types; our build is CJS with
+// moduleResolution "node" (node10), which CANNOT resolve those subpath type
+// declarations — that is what forced the previous `any`s (verified: switching
+// to moduleResolution node16 type-resolves the SDK but demands explicit .js
+// extensions on ~35 relative dynamic imports across the codebase — a separate
+// migration). Until that migration, the boundary is typed STRUCTURALLY: these
+// interfaces declare exactly the contract clawdcursor consumes, so drift in
+// how WE use the SDK fails typecheck, and drift in the SDK's wire behavior is
+// caught by the schema.snapshot.json test.
+
+/** One content block in an MCP tools/call result. */
+export type McpContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
+
+/** The result shape clawdcursor's tool handlers produce for the SDK. */
+export interface McpToolResult {
+  content: McpContentBlock[];
+  isError?: boolean;
+  [key: string]: unknown;   // SDK result index signature compatibility
+}
+
+/** The slice of the SDK's McpServer that clawdcursor drives. */
+export interface McpServerLike {
+  tool(
+    name: string,
+    description: string,
+    paramsSchema: Record<string, unknown>,
+    handler: (params: Record<string, unknown>) => Promise<McpToolResult>,
+  ): void;
+  connect(transport: McpTransportLike): Promise<void>;
+}
+
+/** The slice of an SDK transport that clawdcursor drives. */
+export interface McpTransportLike {
+  close?: () => Promise<void> | void;
+  handleRequest?: (
+    req: express.Request,
+    res: express.Response,
+    body?: unknown,
+  ) => Promise<void>;
+}
 
 /** Options for createMcpServer. */
 export interface CreateMcpServerOptions {
@@ -36,7 +82,7 @@ export interface CreateMcpServerOptions {
 /** A constructed MCP server with its registered tool count. */
 export interface McpServerHandle {
   /** The configured McpServer instance — connect a transport via .connect(). */
-  server: any;
+  server: McpServerLike;
   /** Number of tools registered (mirrors the surface size). */
   toolCount: number;
   /** Snapshot of the tools that were registered (in registration order). */
@@ -51,8 +97,13 @@ export interface McpServerHandle {
  */
 export async function createMcpServer(options: CreateMcpServerOptions): Promise<McpServerHandle> {
   const { compact, ctx } = options;
-  // Dynamic import: the SDK is ESM and our build is CJS.
-  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js' as any);
+  // Dynamic import: the SDK is ESM and our build is CJS. The specifier cast is
+  // a moduleResolution:"node" limitation (see the #115 note above); the VALUE
+  // is immediately narrowed to the structural contract.
+  const sdkMcp = await import('@modelcontextprotocol/sdk/server/mcp.js' as string) as {
+    McpServer: new (info: { name: string; version: string }, opts: { instructions: string }) => McpServerLike;
+  };
+  const { McpServer } = sdkMcp;
   const { z } = await import('zod');
 
   // MCP `instructions` — sent once at the initialize handshake and injected
@@ -92,9 +143,9 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
   for (const tool of tools) {
     // Convert parameter defs to a Zod schema map. The MCP SDK uses zod
     // shape objects (Record<string, ZodType>) — not full ZodObjects.
-    const zodParams: Record<string, any> = {};
+    const zodParams: Record<string, ZodTypeAny> = {};
     for (const [key, def] of Object.entries(tool.parameters)) {
-      let schema: any;
+      let schema: ZodTypeAny;
       if (def.type === 'number') schema = z.number();
       else if (def.type === 'boolean') schema = z.boolean();
       // 'array' params accept a real array (preferred) OR a JSON-encoded string,
@@ -124,7 +175,7 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
       tool.name,
       description,
       hasParams ? zodParams : {},
-      async (params: any) => {
+      async (params: Record<string, unknown>): Promise<McpToolResult> => {
         // Pass the holder so el_NN refs resolve to their element label for
         // the destructive-label rule (Send/Delete/Pay) on the MCP route too.
         const safetyError = evaluateToolCall(tool, params ?? {}, { uiMaps: ctx.uiMaps });
@@ -134,14 +185,15 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
         let result;
         try {
           result = await tool.handler(params, ctx);
-        } catch (err: any) {
+        } catch (err) {
           // A handler throw (e.g. projected tools' toolContextToAgent when the
           // platform adapter failed to init) must NOT propagate to the MCP SDK
           // — in stdio mode an unhandled rejection can corrupt the JSON-RPC
           // stream. Convert to a clean isError result.
-          return { content: [{ type: 'text', text: `${tool.name}: ${err?.message ?? String(err)}` }], isError: true };
+          const msg = err instanceof Error ? err.message : String(err);
+          return { content: [{ type: 'text', text: `${tool.name}: ${msg}` }], isError: true };
         }
-        const content: any[] = [];
+        const content: McpContentBlock[] = [];
         if (result.image) {
           content.push({ type: 'image', data: result.image.data, mimeType: result.image.mimeType });
         }
@@ -160,9 +212,11 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
  * protocol channel; logs must already be redirected to stderr by the
  * caller.
  */
-export async function startMcpStdio(server: any): Promise<void> {
-  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js' as any);
-  const transport = new StdioServerTransport();
+export async function startMcpStdio(server: McpServerLike): Promise<void> {
+  const sdkStdio = await import('@modelcontextprotocol/sdk/server/stdio.js' as string) as {
+    StdioServerTransport: new () => McpTransportLike;
+  };
+  const transport = new sdkStdio.StdioServerTransport();
   await server.connect(transport);
 }
 
@@ -178,13 +232,19 @@ export async function startMcpStdio(server: any): Promise<void> {
  * tests and agent-mode can share the same mount with their own gate.
  */
 export async function startMcpHttp(
-  server: any,
+  server: McpServerLike,
   app: express.Express,
   mountPath: string = '/mcp',
 ): Promise<{ close: () => Promise<void> }> {
-  const { StreamableHTTPServerTransport } = await import(
-    '@modelcontextprotocol/sdk/server/streamableHttp.js' as any
-  );
+  const sdkHttp = await import(
+    '@modelcontextprotocol/sdk/server/streamableHttp.js' as string
+  ) as {
+    StreamableHTTPServerTransport: new (opts: {
+      sessionIdGenerator: undefined;
+      enableJsonResponse: boolean;
+    }) => McpTransportLike;
+  };
+  const { StreamableHTTPServerTransport } = sdkHttp;
 
   // Stateless mode: each POST is independent — no session init handshake
   // required. This makes the dashboard, `clawdcursor task` CLI, and
@@ -218,16 +278,16 @@ export async function startMcpHttp(
     enableJsonResponse: true,
   });
 
-  const handle = async (req: any, res: any, body?: unknown) => {
+  const handle = async (req: express.Request, res: express.Response, body?: unknown) => {
     const transport = newTransport();
     res.on('close', () => {
       // Best-effort cleanup whenever the response ends, errors out, or the
       // client disconnects mid-stream.
-      try { void transport.close(); } catch { /* swallow */ }
+      try { void transport.close?.(); } catch { /* swallow */ }
     });
     try {
       await server.connect(transport);
-      await transport.handleRequest(req, res, body);
+      await transport.handleRequest?.(req, res, body);
     } catch (err) {
       if (!res.headersSent) {
         res.status(500).json({ error: `MCP transport error: ${(err as Error).message}` });

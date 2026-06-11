@@ -7,19 +7,23 @@
  */
 
 // Node.js v25+ on macOS: undici's fetch() can crash with EINVAL on setTypeOfService.
-// Catch this non-fatal socket error to prevent server crash.
-process.on('uncaughtException', (err: any) => {
-  if (err?.code === 'EINVAL' && err?.syscall === 'setTypeOfService') {
-    // Swallowed intentionally: Node.js v25+ on macOS attempts to set the IP
-    // QoS/TOS socket option via undici's fetch(); macOS does not support it
-    // and throws EINVAL. The HTTP request continues normally — this is purely
-    // a kernel-level no-op. We log at debug level so it remains observable
-    // without polluting normal output.
+// The throw happens asynchronously inside libuv's socket machinery, so it CANNOT
+// be try/caught at a call site — a process-level handler is the only intercept
+// point. #114 scopes it as tightly as a global handler allows:
+//   - the swallow matches ONE exact signature (code+syscall) AND only on darwin,
+//     the only platform where the kernel no-op occurs;
+//   - every other uncaught exception crashes with FULL provenance (name,
+//     message, stack) and a non-zero exit — same observable semantics as
+//     Node's default handler, plus our prefix for log correlation.
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (process.platform === 'darwin' && err?.code === 'EINVAL' && err?.syscall === 'setTypeOfService') {
+    // Known-benign: Node v25+ tries to set the IP QoS/TOS socket option via
+    // undici's fetch(); macOS doesn't support it. The request continues — this
+    // is purely a kernel-level no-op. Debug-level so it stays observable.
     console.debug('[clawdcursor] uncaughtException swallowed (known-benign): setTypeOfService EINVAL on macOS/Node v25+');
     return;
   }
-  // Re-throw any other uncaught exception
-  console.error('Uncaught exception:', err);
+  console.error(`Uncaught exception: ${err?.stack ?? err}`);
   process.exit(1);
 });
 
@@ -127,6 +131,13 @@ async function forceKillPort(port: number): Promise<boolean> {
   const { execSync } = await import('child_process');
   const os = await import('os');
 
+  // #114: only ever kill processes that are plausibly OURS. The port is
+  // configurable and ports get reused — blindly SIGKILLing whatever listens on
+  // it can take down an unrelated app (dev server, another tool). clawdcursor
+  // always runs under node, so a listener with any other image name is not
+  // ours: skip it, tell the user, and let them resolve the conflict.
+  const OURS = /node|clawdcursor/i;
+
   if (os.platform() === 'win32') {
     try {
       const output = execSync(
@@ -140,11 +151,22 @@ async function forceKillPort(port: number): Promise<boolean> {
       );
 
       if (pids.size === 0) return false;
+      let killedAny = false;
       for (const pid of pids) {
+        let image = '';
+        try {
+          const row = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, { encoding: 'utf-8' });
+          image = (row.split(',')[0] ?? '').replace(/"/g, '').trim();
+        } catch { /* tasklist unavailable — treat as unknown */ }
+        if (image && !OURS.test(image)) {
+          console.warn(`${e('⚠️', '[WARN]')} Port ${port} is held by "${image}" (pid ${pid}) — not a clawdcursor process; refusing to kill it. Free the port or change server.port.`);
+          continue;
+        }
         execSync(`taskkill /F /PID ${pid}`);
-        console.log(`${e('🐾', '>')} Killed process ${pid}`);
+        console.log(`${e('🐾', '>')} Killed process ${pid}${image ? ` (${image})` : ''}`);
+        killedAny = true;
       }
-      return true;
+      return killedAny;
     } catch {
       return false;
     }
@@ -163,10 +185,20 @@ async function forceKillPort(port: number): Promise<boolean> {
       .filter(n => Number.isInteger(n) && n > 0);
 
     if (pids.length === 0) return false;
+    let killedAny = false;
     for (const pid of pids) {
+      let image = '';
+      try {
+        image = execSync(`ps -p ${pid} -o comm=`, { encoding: 'utf-8', shell: '/bin/sh' }).trim();
+      } catch { /* ps unavailable / pid gone — treat as unknown */ }
+      if (image && !OURS.test(image)) {
+        console.warn(`${e('⚠️', '[WARN]')} Port ${port} is held by "${image}" (pid ${pid}) — not a clawdcursor process; refusing to kill it. Free the port or change server.port.`);
+        continue;
+      }
       try {
         process.kill(pid, 'SIGKILL');
-        console.log(`${e('🐾', '>')} Killed process ${pid}`);
+        console.log(`${e('🐾', '>')} Killed process ${pid}${image ? ` (${image})` : ''}`);
+        killedAny = true;
       } catch (err: any) {
         // ESRCH = the process already exited between lsof and now — that's
         // success for our purpose (the port is free). Re-throw anything else
@@ -174,7 +206,7 @@ async function forceKillPort(port: number): Promise<boolean> {
         if (err?.code !== 'ESRCH') throw err;
       }
     }
-    return true;
+    return killedAny;
   } catch {
     return false;
   }

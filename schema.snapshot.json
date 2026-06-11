@@ -1527,7 +1527,7 @@
     },
     {
       "name": "mouse_triple_click",
-      "description": "Triple-click the left mouse button at image-space (x, y) — selects a paragraph in most text editors.",
+      "description": "Triple-click the left mouse button at image-space (x, y) — selects a paragraph in most text editors. In single-line edit fields (dialog filename boxes etc.) a select-all follows automatically when the triple-click left nothing selected, so subsequent typing reliably REPLACES the existing text.",
       "category": "mouse",
       "parameters": {
         "type": "object",
