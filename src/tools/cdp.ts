@@ -27,7 +27,7 @@ export function getCdpTools(): ToolDefinition[] {
           // port — which is typically the USER'S own session. Disclose it so
           // the agent knows navigation/tab actions affect the user's tabs, not
           // a private instance (gauntlet F2).
-          return { text: `Attached to the EXISTING browser on port ${DEFAULT_CDP_PORT}: "${title}" at ${url}. ⚠ This is likely the user's own session — navigate/switch_tab/close affects THEIR open tabs. To act without disturbing their current page, open a NEW tab first.` };
+          return { text: `Attached to the EXISTING browser on port ${DEFAULT_CDP_PORT}: "${title}" at ${url}. ⚠ This is likely the user's own session — reads see their current page; the first navigation automatically opens the agent's OWN tab so their tabs are never navigated away. Do not close their tabs/windows.` };
         }
         return { text: `Failed to connect to CDP on port ${DEFAULT_CDP_PORT}. Use navigate_browser to launch Edge with CDP.`, isError: true };
       },

@@ -9,6 +9,21 @@
 import type { ClawdConfig } from '../types';
 
 export const DEFAULT_CDP_PORT = 9223;
+
+/**
+ * Port for the AGENT-OWNED dedicated browser instance (the one CDPDriver
+ * launches itself with `--user-data-dir=~/.clawdcursor/cdp-profile`).
+ *
+ * Deliberately DIFFERENT from DEFAULT_CDP_PORT (9223): ownership is encoded in
+ * the port. 9223 is reserved for browsers the USER put on the wire (their own
+ * launch flags, `relaunch_with_cdp`, the browser relay) — attaching there means
+ * "driving the user's session" and gets new-tab discipline. Sharing one port
+ * for both meant the driver could not tell its own instance from the user's:
+ * whoever squatted 9223 won, and a lingering agent instance the user adopted
+ * (music, browsing) got its tabs hijacked (root-cause fix 2026-06-11).
+ */
+export const AGENT_CDP_PORT = Number(process.env.CLAWD_AGENT_CDP_PORT ?? '') || 9333;
+
 const DEFAULT_BROWSER_PROCESSES = ['msedge', 'chrome', 'chromium', 'firefox', 'brave', 'opera', 'arc', 'safari'];
 
 /** Get configured browser executable path, or null for auto-detection */

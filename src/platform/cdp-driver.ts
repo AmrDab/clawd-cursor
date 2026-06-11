@@ -48,6 +48,7 @@ import { spawn } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { AGENT_CDP_PORT } from '../llm/browser-config';
 
 // ── Default CDP port — matches browser-config.ts and tool launch flags ──
 const DEFAULT_CDP_PORT = 9223;
@@ -114,6 +115,11 @@ export class CDPDriver {
   //                may be the user's own session (navigation affects THEIR tabs).
   //  'unknown'   — not yet connected.
   private connectionMode: 'dedicated' | 'attached' | 'unknown' = 'unknown';
+  // In 'attached' mode (someone else's browser), the agent must never drive the
+  // user's existing tabs. The first navigate() opens the agent's OWN tab and all
+  // subsequent work happens there. Mechanical — not dependent on the model
+  // honoring the disclosure text (root-cause fix 2026-06-11).
+  private agentTab: Page | null = null;
 
   /** How the live connection was established (see connectionMode). */
   getConnectionMode(): 'dedicated' | 'attached' | 'unknown' { return this.connectionMode; }
@@ -136,15 +142,23 @@ export class CDPDriver {
    *   msedge.exe --remote-debugging-port=9223
    *   chrome.exe --remote-debugging-port=9223
    *
+   * @param port Override the port for this attempt (defaults to the
+   *   constructor port). Ownership is encoded in the port: AGENT_CDP_PORT is
+   *   only ever used by our own dedicated-profile launcher, so connecting
+   *   there means 'dedicated'; any other port means we attached to a browser
+   *   someone else put on the wire → 'attached'.
    * @returns true if connected successfully
    */
-  async connect(): Promise<boolean> {
+  async connect(port?: number): Promise<boolean> {
+    const targetPort = port ?? this.cdpPort;
     try {
       this.browser = await chromium.connectOverCDP(
-        `http://127.0.0.1:${this.cdpPort}`,
+        `http://127.0.0.1:${targetPort}`,
         { timeout: 15000 },
       );
       this.ownsBrowser = true;
+      this.connectionMode = targetPort === AGENT_CDP_PORT ? 'dedicated' : 'attached';
+      this.agentTab = null;   // fresh connection → no agent tab claimed yet
 
       // Get the most relevant tab — search ALL browser contexts (not just the first)
       // Priority: user-navigated pages > pinned/system widgets > browser internal pages
@@ -181,7 +195,7 @@ export class CDPDriver {
       console.log(`   🔌 CDPDriver: connected to "${title}" at ${this.activePage.url()}`);
       return true;
     } catch (err) {
-      console.log(`   ❌ CDPDriver: failed to connect to CDP port ${this.cdpPort}: ${err}`);
+      console.log(`   ❌ CDPDriver: failed to connect to CDP port ${targetPort}: ${err}`);
       return false;
     }
   }
@@ -189,26 +203,33 @@ export class CDPDriver {
   /**
    * Ensure a CDP connection exists WITHOUT disturbing the user's own browser.
    *
-   * Order of attempts:
-   *   1. Already connected → done.
-   *   2. `connect()` — attach to any browser already on the debug port.
-   *   3. If `launch` is allowed, spawn the SYSTEM browser with the debug port
-   *      AND a dedicated `--user-data-dir`. Chromium keys its single-instance
-   *      lock on the profile directory, so a dedicated profile starts a
-   *      SEPARATE browser process — it never closes, reuses, or steals focus
-   *      from the user's existing windows. We then connect to that instance.
+   * Ownership is encoded in the PORT (root-cause fix 2026-06-11 — a single
+   * shared port meant the driver could not tell its own dedicated instance
+   * from the user's browser, and a lingering agent instance the user had
+   * adopted got its tabs hijacked):
    *
-   * This is the autonomous agent's path: a private, CDP-controlled browser it
-   * fully owns. Non-destructive by construction. Returns true once connected.
+   *   1. Already connected → done.
+   *   2. Attach on AGENT_CDP_PORT — only our own dedicated-profile launcher
+   *      ever uses that port, so this is OUR instance → 'dedicated'.
+   *   3. Attach on the user port (constructor port, default 9223) — a browser
+   *      the USER put on the wire (their own flags, relaunch_with_cdp, the
+   *      relay) → 'attached'; navigation gets new-tab discipline.
+   *   4. If `launch` is allowed, spawn the SYSTEM browser on AGENT_CDP_PORT
+   *      with a dedicated `--user-data-dir`. Chromium keys its single-instance
+   *      lock on the profile directory, so this starts a SEPARATE process that
+   *      never closes, reuses, or steals focus from the user's windows. The
+   *      blank tab is labeled "ClawdCursor — agent browser" so the window is
+   *      recognizable and doesn't get silently adopted as a personal browser.
    *
    * @param opts.launch   Allow launching a dedicated instance (default false → attach-only).
    * @param opts.exePaths Candidate browser executables, in priority order.
    */
   async ensureConnected(opts: { launch?: boolean; exePaths?: string[] } = {}): Promise<boolean> {
     if (await this.isConnected()) return true;
-    // A successful connect() here attached to a browser ALREADY on the debug
-    // port — which may be the user's own session. Mark it so callers disclose.
-    if (await this.connect()) { this.connectionMode = 'attached'; return true; }
+    // 2. Our own dedicated instance from a previous run, if it's still alive.
+    if (await this.connect(AGENT_CDP_PORT)) return true;       // → 'dedicated'
+    // 3. A browser the user put on the debug port.
+    if (await this.connect(this.cdpPort)) return true;         // → 'attached'
     if (!opts.launch) return false;
 
     const exe = (opts.exePaths ?? []).find(p => {
@@ -226,7 +247,7 @@ export class CDPDriver {
 
     try {
       const args = [
-        `--remote-debugging-port=${this.cdpPort}`,
+        `--remote-debugging-port=${AGENT_CDP_PORT}`,
         `--user-data-dir=${profileDir}`,
         '--no-first-run',
         '--no-default-browser-check',
@@ -243,20 +264,55 @@ export class CDPDriver {
     // Browser cold-start can take a couple seconds — poll the CDP endpoint.
     const deadline = Date.now() + 12_000;
     while (Date.now() < deadline) {
-      const live = await fetch(`http://127.0.0.1:${this.cdpPort}/json/version`, {
+      const live = await fetch(`http://127.0.0.1:${AGENT_CDP_PORT}/json/version`, {
         signal: AbortSignal.timeout(1500),
       }).then(r => r.ok).catch(() => false);
       if (live) break;
       await new Promise(r => setTimeout(r, 400));
     }
     // We spawned a dedicated --user-data-dir instance — the agent owns it.
-    const ok = await this.connect();
-    if (ok) this.connectionMode = 'dedicated';
+    const ok = await this.connect(AGENT_CDP_PORT);
+    if (ok) await this.labelAgentBrowser();
     return ok;
+  }
+
+  /**
+   * Stamp the dedicated instance's blank tab so the WINDOW is identifiable in
+   * the taskbar / Alt-Tab as the agent's, not a second personal browser. The
+   * 2026-06-11 incident started exactly this way: an unlabeled agent instance
+   * lingered, the user adopted it for music, and a later attach drove their tab.
+   */
+  private async labelAgentBrowser(): Promise<void> {
+    try {
+      const pg = this.activePage;
+      if (!pg || !pg.url().startsWith('about:')) return;
+      await pg.evaluate(() => {
+        document.title = 'ClawdCursor — agent browser';
+        document.body.innerHTML =
+          '<div style="font-family:system-ui;padding:40px;color:#444">' +
+          '<h2 style="margin:0 0 8px">🐾 ClawdCursor — agent browser</h2>' +
+          '<p>This window belongs to the clawdcursor agent (dedicated profile, port-isolated from your own browser).<br>' +
+          'You can minimize it; closing it just makes the agent launch a fresh one next time.</p></div>';
+      });
+    } catch { /* cosmetic only — never fail the connection over it */ }
   }
 
   /** Navigate the active page to a URL (waits for DOM content to load). */
   async navigate(url: string): Promise<CDPInteractionResult> {
+    // ATTACHED mode = someone else's browser (likely the user's session). The
+    // agent must not commandeer whatever tab the user last touched — claim ONE
+    // tab of our own on first navigation and stay in it. Mechanical, so it
+    // holds even when the model ignores the disclosure text.
+    if (this.connectionMode === 'attached' && this.browser) {
+      try {
+        if (!this.agentTab || this.agentTab.isClosed()) {
+          const ctx = this.browser.contexts()[0];
+          this.agentTab = await ctx.newPage();
+          console.log('   🗂 CDPDriver: attached mode — opened a dedicated agent tab (user tabs untouched)');
+        }
+        this.activePage = this.agentTab;
+      } catch { /* tab creation failed — fall back to the current page */ }
+    }
     const pg = this.requirePage();
     try {
       await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
@@ -274,6 +330,8 @@ export class CDPDriver {
     this.activePage = page;
     this.connected = true;
     this.ownsBrowser = false;
+    // An externally supplied page is by definition not our dedicated instance.
+    this.connectionMode = 'attached';
     console.log(`   🔌 CDPDriver: attached to existing page`);
   }
 

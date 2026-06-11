@@ -1639,12 +1639,13 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const url = await ctx.cdp.getUrl().catch(() => null);
         const title = await ctx.cdp.getTitle().catch(() => null);
         // Disclose provenance honestly: 'attached' means we connected to a
-        // browser already on the debug port — likely the USER'S own session, so
-        // navigating/closing affects THEIR tabs. 'dedicated' means a private
-        // instance the agent owns (safe to drive freely).
+        // browser already on the user debug port — likely the USER'S own
+        // session. Navigation is mechanically redirected into the agent's own
+        // tab by the driver (root-cause fix 2026-06-11), so their tabs are
+        // never navigated away; reads still see their current page.
         const mode = (ctx.cdp as { getConnectionMode?: () => string }).getConnectionMode?.() ?? 'unknown';
         const provenance = mode === 'attached'
-          ? ' ⚠ ATTACHED to an EXISTING browser (likely the user\'s own session) — navigate/close affects THEIR tabs, not a private instance. Open a new tab rather than reusing the current one if you must not disturb their page.'
+          ? ' ⚠ ATTACHED to an EXISTING browser (likely the user\'s own session). browser_navigate automatically works in the agent\'s OWN tab — the user\'s tabs are never navigated away; reads before navigating still see their current page. Do not close their tabs/windows.'
           : mode === 'dedicated'
             ? ' (dedicated agent-owned instance — safe to drive freely).'
             : '';
