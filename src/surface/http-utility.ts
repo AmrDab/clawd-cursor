@@ -28,6 +28,20 @@ import { e } from './format';
 
 const TOKEN_PATH = join(DATA_DIR, 'token');
 
+/**
+ * True when `host` resolves to the local loopback interface. The MCP surface
+ * controls the desktop, so the daemon refuses to bind anywhere else unless the
+ * operator passes `--allow-remote` (issue #113 — the bearer token must not be
+ * the ONLY thing between the LAN and full desktop control by default).
+ */
+export function isLoopbackHost(host: string): boolean {
+  const h = (host ?? '').trim().toLowerCase();
+  if (h === 'localhost' || h === '::1' || h === '0:0:0:0:0:0:0:1') return true;
+  if (/^127(\.\d{1,3}){3}$/.test(h)) return true;       // whole 127/8 block
+  if (h === '::ffff:127.0.0.1') return true;            // IPv4-mapped loopback
+  return false;
+}
+
 // ── Bearer token state ──────────────────────────────────────────────────
 //
 // The token is generated lazily — only when the daemon binds its port

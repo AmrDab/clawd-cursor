@@ -50,7 +50,7 @@ process.on('unhandledRejection', (reason: any) => {
 
 import { Command } from 'commander';
 import { Agent } from '../core/agent';
-import { createUtilityServer, requireAuth, initServerToken, getServerLogBuffer } from './http-utility';
+import { createUtilityServer, requireAuth, initServerToken, getServerLogBuffer, isLoopbackHost } from './http-utility';
 import { DEFAULT_CONFIG } from '../types';
 import type { ClawdConfig } from '../types';
 import { VERSION } from './version';
@@ -342,6 +342,28 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
     || (resolved.textBaseUrl && resolved.model)
     || (resolved.visionBaseUrl && resolved.visionModel)
   );
+  // SECURITY (#113): this surface is full desktop control. Loopback-only by
+  // default — a non-loopback bind (0.0.0.0 / LAN IP in config.server.host)
+  // requires an explicit `--allow-remote`, so a config typo can't silently
+  // expose the machine with only the bearer token in the way.
+  if (!isLoopbackHost(config.server.host)) {
+    if (!(opts as { allowRemote?: boolean }).allowRemote) {
+      console.error(
+        `${e('🛑', '[BLOCKED]')} Refusing to bind to non-loopback host "${config.server.host}".\n` +
+        `   This endpoint grants FULL desktop control; exposing it beyond 127.0.0.1 means\n` +
+        `   anyone on the network with the bearer token can drive this machine.\n` +
+        `   If that is really what you want, restart with:  clawdcursor agent --allow-remote\n` +
+        `   Otherwise set server.host back to 127.0.0.1 in your config.`,
+      );
+      process.exit(1);
+    }
+    console.warn(
+      `${e('⚠️', '[WARN]')} --allow-remote: binding to "${config.server.host}" — desktop control is\n` +
+      `   reachable from the network. The Bearer token is the ONLY protection. Prefer an\n` +
+      `   SSH tunnel or VPN over exposing this directly.`,
+    );
+  }
+
   const modeLabel = llmAvailable ? '' : ' (tools-only)';
   console.log(`${pc.green('✓')} ${pc.bold('clawdcursor')} ${pc.gray(`v${VERSION}`)} ${pc.gray(`— desktop control active on ${config.server.host}:${config.server.port}${modeLabel}`)}`);
 
@@ -621,6 +643,7 @@ program
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .option('--skip-consent', 'Skip consent prompt (requires NODE_ENV=development)')
   .option('--compact', 'Expose the 6-compound MCP surface (computer/accessibility/window/system/browser/task) over HTTP /mcp instead of the 97 granular tools (also CLAWD_MCP_COMPACT=1)')
+  .option('--allow-remote', 'Permit binding to a non-loopback server.host. DANGER: exposes full desktop control to the network; the Bearer token is the only protection')
   .action(async (opts) => {
     await runAgentMode(opts);
   });
@@ -640,6 +663,7 @@ program
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .option('--compact', 'Expose the 6-compound MCP surface over HTTP /mcp (also CLAWD_MCP_COMPACT=1)')
+  .option('--allow-remote', 'Permit binding to a non-loopback server.host. DANGER: exposes full desktop control to the network; the Bearer token is the only protection')
   .action(async (opts) => {
     // v0.9 PR7.4 — `start` is now a thin deprecation alias for `agent`.
     // The legacy /task /favorites /execute REST surface was deleted; callers

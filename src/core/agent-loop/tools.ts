@@ -1647,7 +1647,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const provenance = mode === 'attached'
           ? ' ⚠ ATTACHED to an EXISTING browser (likely the user\'s own session). browser_navigate automatically works in the agent\'s OWN tab — the user\'s tabs are never navigated away; reads before navigating still see their current page. Do not close their tabs/windows.'
           : mode === 'dedicated'
-            ? ' (dedicated agent-owned instance — safe to drive freely).'
+            ? ' (dedicated agent-owned instance — safe to drive freely). NOTE: this browser has its OWN profile — login state may DIFFER from the window you were driving. If a site demands login here but the on-screen window looked logged in, drive the on-screen window instead (keyboard/OCR) or use relaunch_with_cdp.'
             : '';
         return { success: true, text: `browser_connect: connected to "${title ?? '(blank)'}" at ${url ?? 'about:blank'}.${provenance} Use browser_navigate to open a URL, browser_read to see the page, browser_click/browser_type to interact.` };
       },

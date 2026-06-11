@@ -155,6 +155,12 @@ OPERATING PRINCIPLES
          browser_connect FAILS, fall back to steps 2–3 (OCR). Prefer this over
          driving the user's on-screen browser — the agent's own instance can't
          be occluded or lose focus.
+         ⚠ IDENTITY: the CDP browser is usually a DIFFERENT profile than the
+         window you were just driving — its login state may differ. If a site
+         demands login over CDP but the on-screen window looked logged in, do
+         NOT conclude the task is impossible: either go back to driving the
+         on-screen window (keyboard/OCR — it has the user's sessions), or use
+         relaunch_with_cdp so the DOM tools drive the user's own browser.
       2) Otherwise, if it's a browser and you need to navigate the on-screen
          one: the address bar IS in the a11y tree even when the page DOM is not
          — invoke_element("Address and search bar") (or key "mod+l") then type
