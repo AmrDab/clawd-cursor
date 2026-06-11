@@ -464,3 +464,52 @@ describe('name mapping completeness', () => {
     }
   });
 });
+
+// ── MCP-route parity (audit 2026-06-10, finding E) ───────────────────────────
+
+import { UIMapHolder } from '../core/sense/ui-map-holder';
+
+describe('projected handler — MCP route parity', () => {
+  const keyTool = () => buildUnifiedTools().find(t => t.name === 'key')!;
+  const invokeTool = () => buildUnifiedTools().find(t => t.name === 'invoke_element')!;
+
+  it('honors a caller-supplied expect assertion array (DEVIATION on failure, not silent drop)', async () => {
+    const def = projectToToolDefinition(keyTool());
+    const ctx = makeMockToolContext();
+    // app_running("nope") fails against the empty listWindows stub.
+    const r = await def.handler({ combo: 'a', expect: [{ type: 'app_running', name: 'nope' }] }, ctx);
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('DEVIATION');
+  }, 15_000);
+
+  it('verifies a passing expect and reports the check', async () => {
+    const def = projectToToolDefinition(keyTool());
+    const ctx = makeMockToolContext();
+    (ctx.platform as any).listWindows = vi.fn().mockResolvedValue([
+      { processId: 9, processName: 'notepad', title: 'Untitled - Notepad', bounds: { x: 0, y: 0, width: 800, height: 600 }, isMinimized: false },
+    ]);
+    const r = await def.handler({ combo: 'a', expect: [{ type: 'app_running', name: 'notepad' }] }, ctx);
+    expect(r.isError).toBe(false);
+    expect(r.text).toMatch(/verified/i);
+  });
+
+  it('does NOT invalidate the holder when a screen-changing call failed without acting (rejected ref)', async () => {
+    const def = projectToToolDefinition(invokeTool());
+    const holder = new UIMapHolder();
+    const spy = vi.spyOn(holder, 'invalidate');
+    const ctx = makeMockToolContext({ uiMaps: holder } as Partial<ToolContext>);
+    const r = await def.handler({ element_id: 'el_9', snapshot_id: 'obs_99' }, ctx);
+    expect(r.isError).toBe(true);            // unknown snapshot → ref rejected
+    expect(spy).not.toHaveBeenCalled();      // nothing happened → map stays valid
+  });
+
+  it('DOES invalidate the holder after a successful screen-changing call', async () => {
+    const def = projectToToolDefinition(keyTool());
+    const holder = new UIMapHolder();
+    const spy = vi.spyOn(holder, 'invalidate');
+    const ctx = makeMockToolContext({ uiMaps: holder } as Partial<ToolContext>);
+    const r = await def.handler({ combo: 'a' }, ctx);
+    expect(r.isError).toBe(false);
+    expect(spy).toHaveBeenCalled();
+  });
+});

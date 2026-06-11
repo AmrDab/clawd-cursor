@@ -125,7 +125,9 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
       description,
       hasParams ? zodParams : {},
       async (params: any) => {
-        const safetyError = evaluateToolCall(tool, params ?? {});
+        // Pass the holder so el_NN refs resolve to their element label for
+        // the destructive-label rule (Send/Delete/Pay) on the MCP route too.
+        const safetyError = evaluateToolCall(tool, params ?? {}, { uiMaps: ctx.uiMaps });
         if (safetyError) {
           return { content: [{ type: 'text', text: safetyError.text }], isError: true };
         }

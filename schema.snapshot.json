@@ -227,11 +227,11 @@
                 },
                 "arguments": {
                   "type": "object",
-                  "description": "Arguments for that tool, e.g. {\"action\":\"type\",\"text\":\"hi\"}."
+                  "description": "Arguments for that tool, e.g. {\"action\":\"type\",\"text\":\"hi\"}. May include an `expect` ASSERTION ARRAY (post-condition) — verified after the step by the tool itself."
                 },
                 "expect": {
                   "type": "object",
-                  "description": "Optional precondition re-checked by perceiving before the step: {\"window\":\"...\"} or {\"element\":\"...\"}."
+                  "description": "Optional precondition re-checked by perceiving before the step: {\"window\":\"...\"} or {\"element\":\"...\"}. (`precheck` is an accepted alias.)"
                 }
               },
               "required": [

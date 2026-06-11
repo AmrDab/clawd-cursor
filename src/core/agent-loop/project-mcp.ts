@@ -28,6 +28,12 @@
 import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
 import type { ToolDefinition, ToolContext, ToolResult, ParameterDef } from '../../tools/types';
 import { TOOL_META } from './tool-meta';
+import { reactiveCheck } from '../sense/reactive-check';
+import { OcrEngine } from '../../platform/ocr-engine';
+
+// Lazy OCR singleton for ocr_contains assertions in MCP-route expect checks.
+let _mcpOcr: OcrEngine | null = null;
+function mcpOcr(): OcrEngine { return (_mcpOcr ??= new OcrEngine()); }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -222,12 +228,32 @@ export function projectToToolDefinition(t: UnifiedTool): ToolDefinition {
     ctx: ToolContext,
   ): Promise<ToolResult> => {
     const agentCtx = await toolContextToAgent(ctx);
-    const result = await t.execute(params, agentCtx);
-    // Invalidate the shared UIMap holder after any screen-changing tool so
-    // that a stale compile_ui snapshot cannot be resolved on the MCP path.
-    // Runs regardless of success: a failed screen-change attempt is still
-    // enough to invalidate the previous map.
-    if (t.changesScreen) ctx.uiMaps?.invalidate();
+    let result = await t.execute(params, agentCtx);
+    const executed = result.success;
+    // Honor a caller-supplied `expect` assertion array. The projected schemas
+    // advertise it (same as the agent loop), so an external agent passing
+    // post-conditions over MCP must get them VERIFIED — they were silently
+    // dropped before (audit 2026-06-10, finding E). Hard check only: the
+    // loop-side soft "no observable change" net needs per-turn fingerprints
+    // the MCP route doesn't track.
+    if (params.expect !== undefined && params.expect !== null) {
+      const reactive = await reactiveCheck({
+        expect: params.expect,
+        toolText: result.text,
+        toolSuccess: result.success,
+        changesScreen: false,
+        observedChange: true,
+        adapter: agentCtx.platform,
+        ocrText: async () => (await mcpOcr().recognizeScreen()).fullText ?? '',
+      }).catch(() => null);
+      if (reactive) result = { ...result, success: reactive.success, text: reactive.text };
+    }
+    // Invalidate the shared UIMap holder only when the screen-changing action
+    // actually TOOK (pre-expect outcome — a DEVIATION still means the input
+    // was dispatched). A rejected el_NN ref / failed dispatch changed nothing
+    // and must not stale a still-valid map (parity with the agent loop's
+    // outcome-gated invalidation; audit finding E/A1).
+    if (t.changesScreen && executed) ctx.uiMaps?.invalidate();
     return unifiedToToolResult(result);
   };
 

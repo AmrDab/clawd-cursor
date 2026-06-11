@@ -1,7 +1,8 @@
 import { evaluateInput } from '../core/safety';
 import type { ToolDefinition, ToolResult } from './types';
+import type { UIMapHolder } from '../core/sense/ui-map-holder';
 
-function labelFromArgs(args: Record<string, unknown>): string | undefined {
+function labelFromArgs(args: Record<string, unknown>, uiMaps?: UIMapHolder): string | undefined {
   const candidates = [
     args.target,
     args.name,
@@ -11,7 +12,20 @@ function labelFromArgs(args: Record<string, unknown>): string | undefined {
     args.selector,
   ];
   const value = candidates.find(v => typeof v === 'string' && v.trim().length > 0);
-  return typeof value === 'string' ? value : undefined;
+  if (typeof value === 'string') return value;
+  // el_NN refs carry no name/target — resolve the element's label from the
+  // holder so the destructive-label rule (Send/Delete/Pay…) still fires on
+  // the MCP route's ref path. Stale/unknown snapshot → no label → the blunt
+  // no-label rule stays in effect (safe default). Audit 2026-06-10, finding E.
+  if (uiMaps && typeof args.element_id === 'string' && typeof args.snapshot_id === 'string') {
+    const r = uiMaps.resolve(args.snapshot_id, Date.now());
+    if (r.ok) {
+      const el = r.map.elements.find(e => e.id === args.element_id);
+      const label = el?.text ?? el?.normalized_text;
+      if (typeof label === 'string' && label.trim().length > 0) return label;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -28,13 +42,14 @@ function labelFromArgs(args: Record<string, unknown>): string | undefined {
 export function evaluateToolCall(
   tool: ToolDefinition,
   args: Record<string, unknown>,
+  opts?: { uiMaps?: UIMapHolder },
 ): ToolResult | null {
   const decision = evaluateInput({
     toolName: tool.name,
     args,
     safetyTier: tool.safetyTier,
     ctx: {
-      targetLabel: labelFromArgs(args),
+      targetLabel: labelFromArgs(args, opts?.uiMaps),
     },
   });
 

@@ -44,6 +44,10 @@ export interface BatchStep {
   arguments?: Record<string, unknown>;
   /** Optional precondition; if it fails the batch halts here and reports back. */
   expect?: BatchGuard;
+  /** Canonical alias for `expect` (matches the agent-loop batch). An `expect`
+   *  ASSERTION ARRAY belongs inside `arguments` instead — the projected tool
+   *  handlers verify it post-action. */
+  precheck?: BatchGuard;
   /** Optional human label for the trace. */
   label?: string;
 }
@@ -125,8 +129,11 @@ export async function executeBatch(
     }
 
     // Precondition: re-perceive and verify the step's expectation.
-    if (step.expect) {
-      const g = await checkGuard(step.expect, ctx);
+    // `precheck` is the canonical name (parity with the agent-loop batch);
+    // `expect` remains the documented MCP alias for back-compat.
+    const guard = step.precheck ?? step.expect;
+    if (guard) {
+      const g = await checkGuard(guard, ctx);
       if (!g.ok) {
         outcomes.push({ i, label, status: 'guard_failed', text: `precondition failed: ${g.detail}` });
         return halt(i, `precondition failed at step ${i} — re-plan from current state`);
@@ -135,8 +142,9 @@ export async function executeBatch(
 
     const args = step.arguments ?? {};
 
-    // Safety — identical gate to a normal tools/call.
-    const safetyErr = evaluateToolCall(tool, args);
+    // Safety — identical gate to a normal tools/call (incl. el_NN → label
+    // resolution via the shared holder, same as the direct MCP path).
+    const safetyErr = evaluateToolCall(tool, args, { uiMaps: ctx.uiMaps });
     if (safetyErr) {
       const isConfirm = (safetyErr.text || '').includes('safety confirm');
       if (!(isConfirm && opts.allowConfirm)) {
@@ -207,8 +215,8 @@ export function getBatchTools(): ToolDefinition[] {
             type: 'object',
             properties: {
               name: { type: 'string', description: 'Tool to call — a compound ("computer"/"window"/...) or a granular tool.' },
-              arguments: { type: 'object', description: 'Arguments for that tool, e.g. {"action":"type","text":"hi"}.' },
-              expect: { type: 'object', description: 'Optional precondition re-checked by perceiving before the step: {"window":"..."} or {"element":"..."}.' },
+              arguments: { type: 'object', description: 'Arguments for that tool, e.g. {"action":"type","text":"hi"}. May include an `expect` ASSERTION ARRAY (post-condition) — verified after the step by the tool itself.' },
+              expect: { type: 'object', description: 'Optional precondition re-checked by perceiving before the step: {"window":"..."} or {"element":"..."}. (`precheck` is an accepted alias.)' },
             },
             required: ['name'],
           },
