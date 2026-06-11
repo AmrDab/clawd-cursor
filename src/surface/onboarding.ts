@@ -143,8 +143,22 @@ export async function runOnboarding(context: 'start' | 'consent' = 'start', star
   if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
     saveConsent();
     console.log('\n  ✅ Consent saved. You won\'t be asked again.\n');
-    console.log('  Next step:');
-    console.log('    clawdcursor doctor\n');
+    // Two paths, two setups — most users need NO further commands. Telling
+    // everyone to run `doctor` here made agents/users believe it was required
+    // for MCP operation (it never was; doctor only configures the autonomous
+    // daemon's built-in LLM).
+    console.log('  Next steps — pick your path:');
+    console.log('');
+    console.log('  ▸ Your own AI drives clawdcursor (Claude Code, Cursor, Windsurf, …):');
+    if (process.platform === 'darwin') {
+      console.log('      clawdcursor grant        # approve Accessibility + Screen Recording');
+    }
+    console.log('      …then add the MCP entry to your editor — that\'s ALL the setup:');
+    console.log('      { "mcpServers": { "clawdcursor": { "command": "clawdcursor", "args": ["mcp", "--compact"] } } }');
+    console.log('');
+    console.log('  ▸ Autonomous daemon (clawdcursor brings its OWN LLM):');
+    console.log('      clawdcursor doctor       # pick + validate an AI provider (only needed for this mode)');
+    console.log('      clawdcursor agent\n');
     return true;
   }
 

@@ -26,3 +26,6 @@ docs/PHASE-A-DESIGN.md
 qa-drive.js
 *.scratch.*
 coverage/
+
+# MCP registry publisher tooling (vendored locally, never committed)
+.tools/

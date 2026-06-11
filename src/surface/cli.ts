@@ -711,7 +711,7 @@ program
 
 program
   .command('doctor')
-  .description('🩺 Diagnose setup and auto-configure the pipeline')
+  .description('🩺 Diagnose setup and configure the AI provider — only needed for `clawdcursor agent` (the autonomous daemon with its own LLM). Driving clawdcursor from your own agent over MCP needs no doctor: consent + (macOS) `grant` is the whole setup.')
   .option('--provider <provider>', 'AI provider (auto-detected, or specify: anthropic|openai|ollama|kimi|groq|...)')
   .option('--api-key <key>', 'AI provider API key')
   .option('--no-save', 'Don\'t save config to disk')

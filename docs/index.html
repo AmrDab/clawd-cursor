@@ -52,10 +52,14 @@
     Windows one-liner:  powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
     macOS / Linux:      curl -fsSL https://clawdcursor.com/install.sh | bash
 
-    After install, run in this order:
-      clawdcursor consent --accept   # one-time desktop-control authorization (required)
-      clawdcursor doctor             # verify permissions + optionally configure an LLM
-      clawdcursor mcp                # OR clawdcursor agent — see "PICK A MODE"
+    After install — pick your path:
+      clawdcursor consent --accept   # one-time desktop-control authorization (always required)
+      clawdcursor grant              # macOS only — approve Accessibility + Screen Recording
+      ── Editor-hosted agent (Claude Code/Cursor/…): that's ALL the setup.
+         Add the MCP entry below; your editor spawns `clawdcursor mcp` itself.
+      ── Autonomous daemon ONLY: also run `clawdcursor doctor` (configures the
+         daemon's built-in LLM), then `clawdcursor agent`. `doctor` is NOT
+         needed to drive clawdcursor over MCP from your own agent.
 
     ── PICK A MODE ─────────────────────────────────────────────────────────────
     `clawdcursor mcp`   — stdio MCP server. Use when AI lives in your editor
@@ -685,9 +689,9 @@
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-top:18px;">
         <pre style="background:transparent;font-size:0.82rem;line-height:1.55;color:var(--text);overflow-x:auto;"><code><span style="color:var(--text3)"># Install &amp; setup</span>
-clawdcursor consent          <span style="color:var(--text3)"># one-time desktop-control authorization</span>
-clawdcursor grant            <span style="color:var(--text3)"># macOS Accessibility + Screen Recording prompts</span>
-clawdcursor doctor           <span style="color:var(--text3)"># verify permissions, configure AI provider</span>
+clawdcursor consent          <span style="color:var(--text3)"># one-time desktop-control authorization (always required)</span>
+clawdcursor grant            <span style="color:var(--text3)"># macOS only — Accessibility + Screen Recording prompts. MCP setup ends here.</span>
+clawdcursor doctor           <span style="color:var(--text3)"># ONLY for `agent` mode — configures the daemon's built-in LLM (+ general diagnostics)</span>
 clawdcursor status           <span style="color:var(--text3)"># readiness check (consent, permissions, AI config)</span>
 
 <span style="color:var(--text3)"># Run</span>
@@ -724,7 +728,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
     </div>
 
-    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). On macOS the native helper builds automatically when Xcode Command Line Tools are present; run <code style="font-size:0.95em">clawdcursor grant</code> to approve Accessibility + Screen Recording. The one-liner installs Node if needed and links the global shim. After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>.</p>
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> — and on macOS <code style="font-size:0.95em">clawdcursor grant</code> (the native helper builds automatically when Xcode Command Line Tools are present). <strong>That's the whole setup when your own agent drives clawdcursor over MCP.</strong> <code style="font-size:0.95em">clawdcursor doctor</code> is only for the autonomous <code style="font-size:0.95em">agent</code> mode, where clawdcursor brings its own LLM.</p>
   </section>
 
 </div>

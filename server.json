@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.AmrDab/clawdcursor",
+  "description": "Safe cross-OS desktop control for any AI agent - the fallback execution layer.",
+  "repository": {
+    "url": "https://github.com/AmrDab/clawdcursor",
+    "source": "github"
+  },
+  "version": "1.5.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "clawdcursor",
+      "version": "1.5.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

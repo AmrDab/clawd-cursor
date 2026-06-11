@@ -127,13 +127,16 @@ powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
 curl -fsSL https://clawdcursor.com/install.sh | bash
 ```
 
-Then:
+Then — **the entire setup for the common case** (your own agent drives clawdcursor over MCP):
 
 ```bash
 clawdcursor consent --accept   # one-time desktop-control consent (required)
-clawdcursor doctor             # verify permissions + (optionally) configure an LLM provider
-clawdcursor agent              # OR `clawdcursor mcp` — see the table above
+clawdcursor grant              # macOS only — approve Accessibility + Screen Recording
 ```
+
+…and add the MCP config below to your editor. Done.
+
+> **`clawdcursor doctor` is NOT part of MCP setup.** It exists for one thing: configuring the built-in LLM for the **autonomous daemon** (`clawdcursor agent`), where clawdcursor brings its own brain. If Claude Code / Cursor / your own loop is the brain, skip it. (It also doubles as a general diagnostic whenever something seems off.)
 
 The installer clones into `~/clawdcursor`, runs `npm install`, builds, and `npm link`s a global shim. Runtime state lives at `~/.clawdcursor/` (auth token, pidfiles, logs). It does **not** edit any agent host config &mdash; that step is below.
 
@@ -153,7 +156,7 @@ Wire it into Claude Code, Cursor, Windsurf, or Zed:
 
 That's it. Ask your agent to *"open Outlook and reply to the latest email from Sarah"* and watch it run.
 
-> **Don't run `clawdcursor mcp` in a terminal yourself** &mdash; your editor launches it automatically over stdio when it needs the server. The only commands you run by hand are the install, `consent`, and `doctor` steps above.
+> **Don't run `clawdcursor mcp` in a terminal yourself** &mdash; your editor launches it automatically over stdio when it needs the server. The only commands you run by hand are the install, `consent`, and (macOS) `grant` steps above — plus `doctor` if and only if you use the autonomous `agent` mode.
 
 > **Editor permission allowlist (Claude Code, Cursor, &hellip;).** If your editor maintains a per-tool permission allowlist (keys like `mcp__clawdcursor__window`), use the **server-level wildcard** `"mcp__clawdcursor"` instead. It covers every tool in one entry and is immune to tool renames across versions — per-tool entries silently break whenever a tool is added, removed, or renamed.
 
