@@ -433,8 +433,8 @@
   <!-- Hero -->
   <div class="hero">
     <div class="hero-badge"><div class="pulse"></div> v1.5.0 — latest stable</div>
-    <h1>A cursor and a keyboard<br><span class="gr">for any AI agent</span></h1>
-    <p>Any model. Any app. One MCP entry. Local-only. 7 compact tools, single safety chokepoint, no telemetry. Cheap paths first &mdash; accessibility before pixels, vision only as a last resort.</p>
+    <h1>It sees. It acts. It verifies.<br><span class="gr">Desktop control for any AI agent</span></h1>
+    <p>Any model. Any app. One MCP entry. Local-only. clawdcursor compiles the screen into a map of stable element ids your agent acts on symbolically &mdash; no pixel guessing &mdash; then confirms every consequential action actually took. 7 compact tools, one safety chokepoint, no telemetry.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -450,8 +450,8 @@
 
   <!-- Stats -->
   <div class="stats">
-    <div class="stat"><div class="stat-val">6</div><div class="stat-lbl">Toolbox &mdash; compound tools (recommended)</div></div>
-    <div class="stat"><div class="stat-val">94</div><div class="stat-lbl">Tools &mdash; granular (compat / debug)</div></div>
+    <div class="stat"><div class="stat-val">7</div><div class="stat-lbl">Toolbox &mdash; compound tools (recommended)</div></div>
+    <div class="stat"><div class="stat-val">98</div><div class="stat-lbl">Tools &mdash; granular (compat / debug)</div></div>
     <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Operating Systems</div></div>
   </div>
 
@@ -500,7 +500,7 @@
   }
 }</code></pre>
         <div class="mode-stats">
-          <div><div class="mode-stat-val">6 / 94</div><div class="mode-stat-lbl">Compact / Granular tools</div></div>
+          <div><div class="mode-stat-val">7 / 98</div><div class="mode-stat-lbl">Compact / Granular tools</div></div>
           <div><div class="mode-stat-val">stdio</div><div class="mode-stat-lbl">Transport</div></div>
         </div>
       </div>
@@ -526,7 +526,7 @@
           <li>Stateless — no session init needed</li>
         </ol>
         <div class="mode-stats">
-          <div><div class="mode-stat-val">94</div><div class="mode-stat-lbl">Granular tools (compat)</div></div>
+          <div><div class="mode-stat-val">98</div><div class="mode-stat-lbl">Granular tools (compat)</div></div>
           <div><div class="mode-stat-val">any</div><div class="mode-stat-lbl">HTTP client</div></div>
         </div>
       </div>
@@ -594,9 +594,9 @@
         <p>X11 and Wayland. AT-SPI for a11y, Tesseract for OCR.</p>
       </div>
       <div class="feat-card">
-        <div class="feat-icon">🖱️</div>
-        <h4>Smart tools</h4>
-        <p>Click by name, type by label, read screen. A11y first, OCR as fallback.</p>
+        <div class="feat-icon">✅</div>
+        <h4>Verified actions</h4>
+        <p>Pass <code style="font-size:0.82em">expect</code> on send/save/submit &mdash; clawdcursor confirms the outcome on screen and reports a <strong>DEVIATION</strong> instead of a hollow success.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">⌨️</div>
@@ -724,7 +724,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
     </div>
 
-    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). On macOS also run <code style="font-size:0.95em">clawdcursor grant</code> for the native accessibility helper. The one-liner installs Node if needed and links the global shim. After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>.</p>
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). On macOS the native helper builds automatically when Xcode Command Line Tools are present; run <code style="font-size:0.95em">clawdcursor grant</code> to approve Accessibility + Screen Recording. The one-liner installs Node if needed and links the global shim. After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> then <code style="font-size:0.95em">clawdcursor doctor</code>.</p>
   </section>
 
 </div>
@@ -733,7 +733,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <div class="wrap">
   <div class="cta">
     <h2>Give your agent safe desktop control.</h2>
-    <p>Open source. Any model. Localhost only. No telemetry.</p>
+    <p>Open source. Any model. Localhost-only by default &mdash; enforced. No telemetry.</p>
     <a href="https://github.com/AmrDab/clawdcursor" class="btn-p">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
       Star on GitHub
