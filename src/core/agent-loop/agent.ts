@@ -774,6 +774,10 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
                 const cur = holder.current()!;          // currentFresh implies it exists
                 uiId = cur.snapshot_id;
                 uiRender = renderUIMap(cur);
+                // Re-advertising this map to the model — restart its TTL clock
+                // so the ref survives the upcoming LLM round-trip (the clock
+                // otherwise still runs from the original mid-turn compile).
+                holder.touch(uiId, Date.now());
               }
               nextBlocks.push({
                 type: 'text',

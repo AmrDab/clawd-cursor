@@ -6,8 +6,17 @@
  */
 import type { UIMap, MaxCost } from './ui-map-types';
 
-/** GUI state changes fast — action refs expire quickly. 5s strict default. */
-export const TTL_MS = 5_000;
+/**
+ * Wall-clock backstop for ref freshness. The PRIMARY staleness signal is
+ * event-driven (`invalidate()` after every screen-changing action) plus the
+ * resolve-time window guard (pid/title must still match) — the TTL only
+ * catches background drift no agent action caused. It must therefore be
+ * sized to SURVIVE an LLM round-trip: refs are advertised at the end of
+ * turn N and consumed on turn N+1, after prompt assembly + a full model
+ * call (45s timeout, backoff retries). The original 5s expired virtually
+ * every cross-turn ref (audit 2026-06-10, finding A2).
+ */
+export const TTL_MS = 60_000;
 
 /** Perception-cost ordering for reuse decisions: cheap < ocr_ok < vision_ok. */
 export const COST_RANK: Record<MaxCost, number> = { cheap: 0, ocr_ok: 1, vision_ok: 2 };
@@ -61,6 +70,16 @@ export class UIMapHolder {
   /** Mark all held maps invalid — called after any screen-changing action. */
   invalidate(): void {
     this.invalidated = true;
+  }
+
+  /** Re-stamp the current map's compiledAt — called when the loop re-ADVERTISES
+   *  an existing map to the model (§6b reuse branch), so the TTL clock runs
+   *  from the last advertisement, not the original compile. No-op unless the
+   *  id is the current, non-invalidated map (never resurrects stale maps). */
+  touch(snapshotId: string, now: number): void {
+    const current = this.held[this.held.length - 1];
+    if (!current || current.map.snapshot_id !== snapshotId || this.invalidated) return;
+    current.compiledAt = now;
   }
 
   currentId(): string | undefined {
