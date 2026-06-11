@@ -112,16 +112,24 @@ var INTERACTIVE_ROLES = {
 function buildUINode(element, maxDepth, depth) {
     if (depth > maxDepth) return null;
 
-    var name  = '';
-    var role  = '';
-    var value = '';
+    var name    = '';
+    var role    = '';
+    var value   = '';
+    var subrole = '';
 
-    try { name  = element.name()  || ''; } catch (e) {}
-    try { role  = element.role()  || ''; } catch (e) {}
-    try { value = element.value() || ''; } catch (e) {}
+    try { name    = element.name()    || ''; } catch (e) {}
+    try { role    = element.role()    || ''; } catch (e) {}
+    try { value   = element.value()   || ''; } catch (e) {}
+    // Secureness lives in the AX SUBROLE: a password field reports
+    // role=AXTextField, subrole=AXSecureTextField. Surface it so the snapshot
+    // builder can redact the value (audit 2026-06-11, M2) — without this the
+    // cleartext password reached the LLM prompt + fingerprint on macOS.
+    try { subrole = element.subrole() || ''; } catch (e) {}
 
     var isInteractive = !!INTERACTIVE_ROLES[role];
     var hasName       = name.trim().length > 0;
+    var isSecure      = (subrole === 'AXSecureTextField');
+    if (isSecure) { value = ''; }   // never emit the secret, even pre-redaction
 
     // Build children first so we can decide whether to include this node
     var children = [];
@@ -144,6 +152,8 @@ function buildUINode(element, maxDepth, depth) {
         name:         name,
         automationId: '',            // macOS has no AutomationId concept
         controlType:  role,
+        subrole:      subrole || undefined,
+        secure:       isSecure || undefined,
         bounds:       getBounds(element),
         value:        value || undefined,
         children:     children.length > 0 ? children : undefined

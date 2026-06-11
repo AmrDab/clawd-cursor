@@ -21,7 +21,7 @@
 
 import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
 import { buildBatchTool } from './batch-tool';
-import { imageScale, scaleCoord } from './coord-scale';
+import { imageScale, scaleCoord, screenCenter } from './coord-scale';
 import { ensureTargetForeground } from './focus-guard';
 import { resolveAlias } from '../router/aliases';
 import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../platform/uri-handler';
@@ -703,8 +703,12 @@ export function buildUnifiedTools(): UnifiedTool[] {
         const hasXY = args.x !== undefined || args.y !== undefined;
         const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
         const scale = space === 'image' ? imageScale(ctx) : 1;
-        let x = Math.floor(ctx.screen.physicalWidth / 2);
-        let y = Math.floor(ctx.screen.physicalHeight / 2);
+        // No-coordinate default: center of the screen IN THE DRIVER'S SPACE
+        // (logical points on macOS, physical px elsewhere) — physicalWidth/2
+        // mislanded 2× off on Retina (audit 2026-06-11, M3).
+        const center = screenCenter(ctx);
+        let x = center.x;
+        let y = center.y;
         if (hasXY) {
           const c = coerceCoord(args.x, args.y);
           if (Number.isFinite(c.x) && Number.isFinite(c.y)) { x = scaleCoord(c.x, scale); y = scaleCoord(c.y, scale); }
@@ -1634,7 +1638,17 @@ export function buildUnifiedTools(): UnifiedTool[] {
         if (!ok) return { success: false, text: `browser_connect: could not ${allowLaunch ? 'launch or attach to' : 'attach to'} a CDP browser — fall back to read_text/smart_click.` };
         const url = await ctx.cdp.getUrl().catch(() => null);
         const title = await ctx.cdp.getTitle().catch(() => null);
-        return { success: true, text: `browser_connect: connected to "${title ?? '(blank)'}" at ${url ?? 'about:blank'}. Use browser_navigate to open a URL, browser_read to see the page, browser_click/browser_type to interact.` };
+        // Disclose provenance honestly: 'attached' means we connected to a
+        // browser already on the debug port — likely the USER'S own session, so
+        // navigating/closing affects THEIR tabs. 'dedicated' means a private
+        // instance the agent owns (safe to drive freely).
+        const mode = (ctx.cdp as { getConnectionMode?: () => string }).getConnectionMode?.() ?? 'unknown';
+        const provenance = mode === 'attached'
+          ? ' ⚠ ATTACHED to an EXISTING browser (likely the user\'s own session) — navigate/close affects THEIR tabs, not a private instance. Open a new tab rather than reusing the current one if you must not disturb their page.'
+          : mode === 'dedicated'
+            ? ' (dedicated agent-owned instance — safe to drive freely).'
+            : '';
+        return { success: true, text: `browser_connect: connected to "${title ?? '(blank)'}" at ${url ?? 'about:blank'}.${provenance} Use browser_navigate to open a URL, browser_read to see the page, browser_click/browser_type to interact.` };
       },
     },
     {

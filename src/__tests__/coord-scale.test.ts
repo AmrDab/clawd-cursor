@@ -16,7 +16,7 @@
  * behavior end-to-end with a mock adapter (OS-agnostic).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { imageScale, scaleCoord, LLM_TARGET_WIDTH } from '../core/agent-loop/coord-scale';
+import { imageScale, scaleCoord, screenCenter, LLM_TARGET_WIDTH } from '../core/agent-loop/coord-scale';
 import { buildUnifiedTools } from '../core/agent-loop/tools';
 import type { AgentToolContext } from '../core/agent-loop/types';
 
@@ -90,6 +90,26 @@ describe('imageScale — macOS Retina (#154)', () => {
       screen: { physicalWidth: 3840, logicalWidth: 1920 },
       _platform: 'linux',
     })).toBe(3);
+  });
+});
+
+describe('screenCenter — scroll no-coordinate fallback (M3)', () => {
+  it('macOS Retina: centers in LOGICAL space, not physical (2560 logical / 5120 physical → 1280,720)', () => {
+    const c = screenCenter({
+      screen: { physicalWidth: 5120, physicalHeight: 2880, logicalWidth: 2560, logicalHeight: 1440 },
+      _platform: 'darwin',
+    });
+    expect(c).toEqual({ x: 1280, y: 720 });   // was (2560,1440) = off-screen edge before the fix
+  });
+  it('Windows/Linux: centers in PHYSICAL space (nut-js is physical there)', () => {
+    expect(screenCenter({ screen: { physicalWidth: 2560, physicalHeight: 1440 }, _platform: 'win32' }))
+      .toEqual({ x: 1280, y: 720 });
+    expect(screenCenter({ screen: { physicalWidth: 3840, physicalHeight: 2160 }, _platform: 'linux' }))
+      .toEqual({ x: 1920, y: 1080 });
+  });
+  it('macOS falls back to physical when logical is absent', () => {
+    expect(screenCenter({ screen: { physicalWidth: 1440, physicalHeight: 900 }, _platform: 'darwin' }))
+      .toEqual({ x: 720, y: 450 });
   });
 });
 

@@ -65,6 +65,11 @@ export interface WindowInfo {
 export interface UiElement {
   name: string;
   controlType: string;
+  /** Platform subrole when present (macOS AX exposes e.g. "AXSecureTextField",
+   *  "AXSearchField"); used to detect secureness and refine the role. */
+  subrole?: string;
+  /** Whether this is a password/secure field — its `value` is withheld. */
+  secure?: boolean;
   bounds: { x: number; y: number; width: number; height: number };
   /** Optional structured value (e.g. text field contents). */
   value?: string;

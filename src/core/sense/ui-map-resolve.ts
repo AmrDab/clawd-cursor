@@ -53,7 +53,12 @@ export function resolveRef(
   // The map's window must STILL be the active window — for BOTH dispatch paths
   // (a unique name is no safer than bounds if the window changed under us).
   if (!activeWindow) return { ok: false, error: 'cannot verify active window — call compile_ui again' };
-  const pidKnown = map.process_id !== undefined && map.process_id !== '';
+  // A zero/empty pid means the adapter couldn't read it (macOS unixId read can
+  // fail → normalizeWindow defaults to 0; Windows shares the `?? 0` pattern), so
+  // treat it as UNKNOWN and fall back to the title instead of comparing against a
+  // bogus 0 — which would spuriously reject (or, if both sides are 0, falsely
+  // accept) (audit 2026-06-11, M6).
+  const pidKnown = map.process_id !== undefined && map.process_id !== '' && map.process_id !== '0';
   const sameWin = pidKnown
     ? String(activeWindow.processId) === map.process_id   // pid is authoritative when known
     : activeWindow.title === map.window_title;            // fall back to title only when pid unknown

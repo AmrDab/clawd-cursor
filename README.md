@@ -101,7 +101,7 @@ Sixty seconds from zero to a tool-calling agent on your desktop.
 npm i -g clawdcursor
 ```
 
-> Works as-is on Windows and Linux. On **macOS**, also run `clawdcursor grant` afterward to build the native helper (Accessibility + Screen Recording). The OS installer scripts below do this step for you.
+> Works as-is on Windows and Linux. On **macOS**, the native helper builds automatically during install when the Swift toolchain (Xcode Command Line Tools) is present. If it wasn't — e.g. `npm i -g` on a machine without the toolchain — build it once with `cd "$(npm root -g)/clawdcursor" && bash native/build.sh`, then run `clawdcursor grant` to approve Accessibility + Screen Recording (`grant` approves permissions; it does **not** compile the helper). The OS installer scripts below do both steps for you.
 
 **Or one line per OS (clones the repo, builds, and handles the macOS native build automatically):**
 

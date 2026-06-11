@@ -69,3 +69,24 @@ export function imageScale(ctx: {
 export function scaleCoord(v: number, scale: number): number {
   return Math.round(v * scale);
 }
+
+/**
+ * Screen-center point in the coordinate space the OS mouse driver consumes —
+ * LOGICAL points on macOS, PHYSICAL pixels on Windows/Linux. Used by the
+ * no-coordinate scroll fallback ("scroll at the center of the screen"). Using
+ * physicalWidth/2 on a 2× Retina panel fed a logical-space driver a coord at
+ * the far edge (#154 double-count), so the wheel fired in the wrong region.
+ */
+export function screenCenter(ctx: {
+  screen?: { physicalWidth?: number; physicalHeight?: number; logicalWidth?: number; logicalHeight?: number };
+  _platform?: string;
+}): { x: number; y: number } {
+  const platform = ctx._platform ?? process.platform;
+  const s = ctx.screen ?? {};
+  if (platform === 'darwin') {
+    const w = s.logicalWidth || s.physicalWidth || 0;
+    const h = s.logicalHeight || s.physicalHeight || 0;
+    return { x: Math.floor(w / 2), y: Math.floor(h / 2) };
+  }
+  return { x: Math.floor((s.physicalWidth ?? 0) / 2), y: Math.floor((s.physicalHeight ?? 0) / 2) };
+}

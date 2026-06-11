@@ -144,6 +144,32 @@ function ConvertTo-UINode {
         @{ x = [Math]::Round($rect.X); y = [Math]::Round($rect.Y); width = [Math]::Round($rect.Width); height = [Math]::Round($rect.Height) }
     }
 
+    # Read the field VALUE for editable controls so the value-aware fingerprint
+    # (which hashes element.value) actually moves when text is typed on Windows —
+    # the tree node carried NO value before, so the D2 fix was inert here while
+    # working on macOS (audit 2026-06-11, M5). Guarded: only Edit/Document/
+    # ComboBox controls, never password fields, capped length, never throws.
+    $nodeValue = $null
+    if ($typeName -eq 'ControlType.Edit' -or $typeName -eq 'ControlType.Document' -or $typeName -eq 'ControlType.ComboBox') {
+        $isPassword = $false
+        try { $isPassword = $cur.IsPassword } catch { }
+        if (-not $isPassword) {
+            try {
+                $vp = $Element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                $v = $vp.Current.Value
+                if ($v -and $v.Length -gt 0) { $nodeValue = $v }
+            } catch { }
+            if ($null -eq $nodeValue) {
+                try {
+                    $tp = $Element.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
+                    $t = $tp.DocumentRange.GetText(2000)
+                    if ($t -and $t.Length -gt 0) { $nodeValue = $t }
+                } catch { }
+            }
+            if ($nodeValue -and $nodeValue.Length -gt 2000) { $nodeValue = $nodeValue.Substring(0, 2000) }
+        }
+    }
+
     $node = [ordered]@{
         name         = if ($cur.Name) { $cur.Name } else { "" }
         automationId = if ($cur.AutomationId) { $cur.AutomationId } else { "" }
@@ -151,6 +177,7 @@ function ConvertTo-UINode {
         className    = if ($cur.ClassName) { $cur.ClassName } else { "" }
         isEnabled    = $cur.IsEnabled
         bounds       = $bounds
+        value        = $nodeValue
         children     = @()
     }
 
@@ -648,17 +675,30 @@ function Cmd-InvokeElement {
             }
         }
         "get-value" {
+            # Document/RichEdit controls (Win11 Notepad, WordPad, many editors)
+            # expose a ValuePattern that GetCurrentPattern returns successfully
+            # but whose .Current.Value is ALWAYS "" — the real text lives in the
+            # TextPattern. The old code returned that "" because the try only
+            # caught a throw, not an empty value, so get_value /
+            # element_value_contains read blank while text was on screen →
+            # false DEVIATIONs that told the model to retry (duplicating writes).
+            # Try ValuePattern, and if it yields nothing, fall through to
+            # TextPattern, then Name. Prefer the first NON-EMPTY result.
+            $val = $null; $method = $null
             try {
-                $p = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-                return @{ success=$true; action="get-value"; value=$p.Current.Value }
-            } catch {
+                $vp = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+                $v = $vp.Current.Value
+                if ($null -ne $v -and $v.Length -gt 0) { $val = $v; $method = "ValuePattern" }
+            } catch { }
+            if ($null -eq $val) {
                 try {
-                    $p = $element.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
-                    return @{ success=$true; action="get-value"; value=$p.DocumentRange.GetText(-1); method="TextPattern" }
-                } catch {
-                    return @{ success=$true; action="get-value"; value=$element.Current.Name; method="Name" }
-                }
+                    $tp = $element.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern)
+                    $t = $tp.DocumentRange.GetText(-1)
+                    if ($null -ne $t -and $t.Length -gt 0) { $val = $t; $method = "TextPattern" }
+                } catch { }
             }
+            if ($null -eq $val) { $val = $element.Current.Name; $method = "Name" }
+            return @{ success=$true; action="get-value"; value=$val; method=$method }
         }
         "focus" {
             try { $element.SetFocus(); return @{ success=$true; action="focus" } }

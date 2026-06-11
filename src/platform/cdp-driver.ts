@@ -108,6 +108,15 @@ export class CDPDriver {
   private cdpPort: number;
   private ownsBrowser = false; // true if we created the browser connection
   private cursorInjected = false;
+  // Provenance of the current connection, for honest disclosure to the agent:
+  //  'dedicated' — we spawned a private --user-data-dir instance the agent owns.
+  //  'attached'  — we connected to a browser ALREADY on the debug port, which
+  //                may be the user's own session (navigation affects THEIR tabs).
+  //  'unknown'   — not yet connected.
+  private connectionMode: 'dedicated' | 'attached' | 'unknown' = 'unknown';
+
+  /** How the live connection was established (see connectionMode). */
+  getConnectionMode(): 'dedicated' | 'attached' | 'unknown' { return this.connectionMode; }
 
   /**
    * @param cdpPort CDP debugging port (default 9223)
@@ -197,7 +206,9 @@ export class CDPDriver {
    */
   async ensureConnected(opts: { launch?: boolean; exePaths?: string[] } = {}): Promise<boolean> {
     if (await this.isConnected()) return true;
-    if (await this.connect()) return true;
+    // A successful connect() here attached to a browser ALREADY on the debug
+    // port — which may be the user's own session. Mark it so callers disclose.
+    if (await this.connect()) { this.connectionMode = 'attached'; return true; }
     if (!opts.launch) return false;
 
     const exe = (opts.exePaths ?? []).find(p => {
@@ -238,7 +249,10 @@ export class CDPDriver {
       if (live) break;
       await new Promise(r => setTimeout(r, 400));
     }
-    return this.connect();
+    // We spawned a dedicated --user-data-dir instance — the agent owns it.
+    const ok = await this.connect();
+    if (ok) this.connectionMode = 'dedicated';
+    return ok;
   }
 
   /** Navigate the active page to a URL (waits for DOM content to load). */

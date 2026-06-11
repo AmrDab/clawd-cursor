@@ -331,7 +331,10 @@ export function getExtraTools(): ToolDefinition[] {
       description:
         'Polite close request — the app receives WM_CLOSE / AXCloseAction / _NET_CLOSE_WINDOW ' +
         'and may prompt ("Save changes?") or refuse. Returns when the request was posted, ' +
-        'NOT when the window actually closed.',
+        'NOT when the window actually closed. NOTE: this closes the WHOLE window — on a ' +
+        'tabbed app (modern Notepad, browsers, editors) that can discard MULTIPLE tabs/' +
+        'documents at once, including unsaved ones. To close just one tab, prefer the ' +
+        'in-app shortcut (Ctrl/Cmd+W) via the keyboard instead. Confirm-tier by default.',
       parameters: {
         processName: { type: 'string', description: 'Optional process name match', required: false },
         processId:   { type: 'number', description: 'Optional process id match', required: false },

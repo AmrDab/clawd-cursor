@@ -84,7 +84,19 @@ export function getShortcutTools(): ToolDefinition[] {
           filtered = filtered.filter(s => !s.contextHints?.length);
         }
 
-        const results = filtered.map(s => formatShortcut(s, platform));
+        // Drop shortcuts that have NO key on this platform (e.g. macOS-only
+        // entries like Hide-Others/App-Exposé resolve to "" on Windows/Linux),
+        // and dedupe by id so a stray duplicate definition can't surface the
+        // same shortcut twice (gauntlet F6).
+        const seen = new Set<string>();
+        const results = filtered
+          .map(s => formatShortcut(s, platform) as { id: string; key: string })
+          .filter(r => {
+            if (!r.key || r.key.trim() === '') return false;
+            if (seen.has(r.id)) return false;
+            seen.add(r.id);
+            return true;
+          });
 
         if (results.length === 0) {
           return {
@@ -97,7 +109,7 @@ export function getShortcutTools(): ToolDefinition[] {
             platform,
             count: results.length,
             shortcuts: results,
-            hint: 'Use shortcuts_execute with the intent string to run a shortcut, or key_press with the key combo directly.',
+            hint: 'Run a shortcut with the system compound: { action: "shortcuts_run", intent: "<intent>" }. Or press the key combo directly via computer.key.',
           }, null, 2),
         };
       },

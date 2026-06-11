@@ -265,29 +265,31 @@ function run(argv) {
                 break;
                 
             case 'get-value':
+                // Prefer AXValue, but fall back to the name property when AXValue
+                // is absent OR empty. Some controls expose an AXValue that reads
+                // "" while the real text is only in the title/name — returning the
+                // empty string there caused false "value did not change" reads
+                // (parity with the Windows ValuePattern→TextPattern fix).
+                var gotVal = null, gotMethod = null;
                 try {
                     var val = targetElement.value();
-                    result = {
-                        success: true,
-                        action: 'get-value',
-                        value: val
-                    };
-                } catch (e) {
-                    // Fallback to name property
+                    if (val !== null && val !== undefined && String(val).length > 0) {
+                        gotVal = val; gotMethod = 'AXValue';
+                    }
+                } catch (e) { /* no AXValue — try name */ }
+                if (gotVal === null) {
                     try {
                         var name = targetElement.name();
-                        result = {
-                            success: true,
-                            action: 'get-value',
-                            value: name,
-                            method: 'name'
-                        };
-                    } catch (ne) {
-                        result = {
-                            success: false,
-                            error: 'Element has no value or name property'
-                        };
-                    }
+                        if (name !== null && name !== undefined && String(name).length > 0) {
+                            gotVal = name; gotMethod = 'name';
+                        }
+                    } catch (ne) { /* no name either */ }
+                }
+                if (gotVal !== null) {
+                    result = { success: true, action: 'get-value', value: gotVal, method: gotMethod };
+                } else {
+                    // Genuinely empty (e.g. an empty field) — report "" success, not an error.
+                    result = { success: true, action: 'get-value', value: '', method: 'empty' };
                 }
                 break;
                 

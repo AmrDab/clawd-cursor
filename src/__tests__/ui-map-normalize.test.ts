@@ -15,6 +15,23 @@ describe('normalizeRole', () => {
     expect(normalizeRole('SomethingWeird')).toBe('unknown');
     expect(normalizeRole(undefined)).toBe('unknown');
   });
+
+  it('maps macOS AX control types to the same roles (post-AX-strip and raw)', () => {
+    // The adapter strips "AX", but be defensive about both forms.
+    expect(normalizeRole('TextField')).toBe('input');
+    expect(normalizeRole('AXTextField')).toBe('input');
+    expect(normalizeRole('TextArea')).toBe('input');
+    expect(normalizeRole('SecureTextField')).toBe('input');
+    expect(normalizeRole('SearchField')).toBe('input');
+    expect(normalizeRole('Link')).toBe('link');
+    expect(normalizeRole('AXLink')).toBe('link');
+    expect(normalizeRole('PopUpButton')).toBe('button');
+  });
+
+  it('macOS AX text fields and links are editable/clickable (regression: were dead on mac)', () => {
+    expect(inferCapabilities({ role: normalizeRole('TextField'), source: 'a11y', enabled: true }).editable).toBe(true);
+    expect(inferCapabilities({ role: normalizeRole('Link'), source: 'a11y', enabled: true }).clickable).toBe(true);
+  });
 });
 
 describe('normText', () => {

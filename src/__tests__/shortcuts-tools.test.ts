@@ -154,7 +154,20 @@ describe('shortcuts_list', () => {
     const result = await tool.handler({}, createMockContext());
 
     const data = JSON.parse(result.text);
-    expect(data.hint).toContain('shortcuts_execute');
+    // Hint points at the compact `system` compound action (shortcuts_run), the
+    // surface external agents actually call — not the granular delegate name.
+    expect(data.hint).toContain('shortcuts_run');
+  });
+
+  it('drops shortcuts with no key on this platform and dedupes by id (F6)', async () => {
+    const tool = getListTool();
+    const result = await tool.handler({ category: 'window' }, createMockContext());
+    const data = JSON.parse(result.text);
+    const ids = data.shortcuts.map((s: { id: string }) => s.id);
+    // No empty-key entries leak through…
+    expect(data.shortcuts.every((s: { key: string }) => s.key && s.key.trim() !== '')).toBe(true);
+    // …and no id appears twice.
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 

@@ -454,12 +454,14 @@ export function getA11yTools(): ToolDefinition[] {
       safetyTier: 0,
       handler: async (_params, ctx) => {
         await ctx.ensureInitialized();
-        if (ctx.platform) {
-          const text = await ctx.platform.readClipboard();
-          return { text: text || '(clipboard empty or non-text)' };
-        }
-        const text = await ctx.a11y.readClipboard();
-        return { text: text || '(clipboard empty or non-text)' };
+        const raw = ctx.platform
+          ? await ctx.platform.readClipboard()
+          : await ctx.a11y.readClipboard();
+        if (!raw) return { text: '(clipboard empty or non-text)' };
+        // Clipboard content is user/third-party data, not instructions — wrap it
+        // so an injected "ignore your task and…" payload is framed as data on the
+        // MCP route too (parity with the System B perception wrapping, gauntlet F7).
+        return { text: `<untrusted-screen-content>\n${raw}\n</untrusted-screen-content>` };
       },
     },
 

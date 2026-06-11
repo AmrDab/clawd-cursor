@@ -100,6 +100,14 @@ const ACCESSIBILITY_ACTIONS: ActionRoute[] = [
   { action: 'state',          delegate: 'get_element_state' },
   { action: 'list_children',  delegate: 'a11y_list_children', argRemap: { name: 'parentName' } },
   { action: 'wait_for',       delegate: 'wait_for_element' },
+  // el_NN UI State Compiler (v1.5.0) — the flagship perception substrate. These
+  // were granular-only, leaving compact-surface agents unable to reach the
+  // {element_id, snapshot_id} ref path the `invoke`/`set_value` actions accept
+  // (gauntlet F1). compile_ui fuses a11y+OCR into one ranked map with stable
+  // ids; the finders locate a target semantically and return an el_NN to act on.
+  { action: 'compile_ui',     delegate: 'compile_ui' },
+  { action: 'find_button',    delegate: 'find_action_button' },
+  { action: 'find_field',     delegate: 'find_input_field' },
   // Smart auto-fallback (OCR → a11y → CDP, by element text — no coordinates).
   // Restores the smart_* ergonomics to the recommended compound surface.
   { action: 'smart_click',    delegate: 'smart_click' },
@@ -139,9 +147,6 @@ const SYSTEM_ACTIONS: ActionRoute[] = [
   { action: 'relaunch_with_cdp', delegate: 'relaunch_with_cdp' },
   // v0.9.2 — pipeline introspection (give external brains the same context
   // the autonomous loop's LLM gets injected automatically).
-  { action: 'app_guide',       delegate: 'get_app_guide' },
-  { action: 'detect_app',      delegate: 'detect_app' },
-  { action: 'classify_task',   delegate: 'classify_task' },
   { action: 'system_prompt',   delegate: 'get_system_prompt' },
   // URI escape hatches — accomplish an intent WITHOUT driving UI by dispatching
   // a registered URI scheme (mailto:, tel:, slack:, vscode:, spotify:, file:, …).
@@ -156,8 +161,6 @@ const SYSTEM_ACTIONS: ActionRoute[] = [
   { action: 'open_app',        delegate: 'open_app' },
   { action: 'open_file',       delegate: 'open_file' },
   { action: 'open_url',        delegate: 'open_url' },
-  // Persist a learned app guide (write companion to `app_guide`, which reads).
-  { action: 'learn_app',       delegate: 'learn_app' },
 ];
 
 const BROWSER_ACTIONS: ActionRoute[] = [
@@ -364,7 +367,8 @@ export function getCompactTools(): ToolDefinition[] {
       description:
         'Interact with the OS accessibility tree — read element names, find by name/role, invoke, toggle, expand/collapse, set value, query state. ' +
         `Pick an action: ${actionCatalog(ACCESSIBILITY_ACTIONS)}. ` +
-        'Always preferred over `computer.click(x,y)` when the target has a name — more reliable across DPI, window resize, layout shifts.',
+        'Always preferred over `computer.click(x,y)` when the target has a name — more reliable across DPI, window resize, layout shifts. ' +
+        'For sparse/ambiguous UIs: `compile_ui` fuses a11y+OCR into one ranked map of elements with stable ids; `find_button`/`find_field` locate a target semantically and return an {element_id, snapshot_id} you pass straight to `invoke`/`set_value` (survives layout shifts, no coordinates).',
       parameters: buildCompoundSchema(ACCESSIBILITY_ACTIONS),
       category: 'perception',
       safetyTier: 0,

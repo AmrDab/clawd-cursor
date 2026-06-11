@@ -20,12 +20,18 @@ function normPlatform(p: 'darwin' | 'win32' | 'linux'): Platform {
 }
 
 const SECURE_CONTROL_TYPES = new Set([
-  'edit', 'passwordbox', 'securefield', 'axsecuretextfield', 'axpasswordfield',
+  // Windows UIA (post "ControlType." strip) and macOS AX (post "AX" strip).
+  'edit', 'passwordbox', 'securefield',
+  'securetextfield', 'passwordfield',
 ]);
 
-function looksSecure(controlType?: string, name?: string): boolean {
+function looksSecure(controlType?: string, name?: string, subrole?: string): boolean {
+  // AX subrole is the authoritative macOS signal (role is the generic
+  // "TextField"; the secureness is in subrole=AXSecureTextField). Strip any AX
+  // prefix before the set test so "SecureTextField" matches (audit 2026-06-11, M2).
+  if (subrole && /securetextfield/i.test(subrole)) return true;
   if (!controlType && !name) return false;
-  const tLower = (controlType ?? '').toLowerCase();
+  const tLower = (controlType ?? '').replace(/^ax/i, '').toLowerCase();
   const nLower = (name ?? '').toLowerCase();
   if (SECURE_CONTROL_TYPES.has(tLower)) return true;
   if (/\b(password|passcode|pin|secret|token|api\s*key|credit\s*card|cvv|ssn)\b/.test(nLower)) return true;
@@ -63,7 +69,9 @@ export async function captureSnapshot(adapter: PlatformAdapter): Promise<Snapsho
       elements = tree
         .filter(el => el.bounds.width > 0 && el.bounds.height > 0)
         .map(el => {
-          const secure = looksSecure(el.controlType, el.name);
+          // Trust the adapter's explicit secure flag first (macOS AX subrole),
+          // then fall back to control-type/name/subrole heuristics.
+          const secure = el.secure === true || looksSecure(el.controlType, el.name, el.subrole);
           return {
             name: el.name ?? '',
             role: el.controlType,

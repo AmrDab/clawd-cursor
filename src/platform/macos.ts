@@ -449,7 +449,15 @@ export class MacOSAdapter implements PlatformAdapter {
   async getUiTree(processId?: number): Promise<UiElement[]> {
     try {
       const args = ['-l', 'JavaScript', path.join(SCRIPTS_DIR, 'get-screen-context.jxa')];
-      if (processId !== undefined) args.push('--', '-FocusedProcessId', String(processId));
+      // Match the Windows adapter's depth (8). The JXA default is 2, which only
+      // reaches window → group → child — far too shallow for real apps (Mail,
+      // Safari chrome, System Settings nest controls deeper), so compile_ui/
+      // el_NN saw a near-empty tree and named targets went missing on macOS
+      // (audit 2026-06-11, M4). The legacy AccessibilityManager already drives
+      // this same script at depth 8.
+      const scriptArgs = ['-MaxDepth', '8'];
+      if (processId !== undefined) scriptArgs.push('-FocusedProcessId', String(processId));
+      args.push('--', ...scriptArgs);
       const { stdout } = await execFileAsync('osascript', args, { timeout: A11Y_TREE_TIMEOUT_MS });
       const data = JSON.parse(stdout);
       return this.flattenTree(data?.uiTree);
@@ -912,11 +920,17 @@ export class MacOSAdapter implements PlatformAdapter {
 
   private normalizeElement = (raw: any): UiElement => {
     const enabled = raw.enabled;
+    // AX secure fields (subrole AXSecureTextField) carry secure=true from the
+    // JXA helper. Never surface their value — the helper already blanked it, but
+    // drop it here too so a future helper change can't leak it (M2).
+    const secure = raw.secure === true;
     return {
       name: raw.name ?? '',
       controlType: (raw.controlType ?? '').replace('AX', ''),
+      subrole: raw.subrole,
+      secure,
       bounds: raw.bounds ?? { x: 0, y: 0, width: 0, height: 0 },
-      value: raw.value,
+      value: secure ? undefined : raw.value,
       enabled,
       focused: raw.focused,
       // Tranche 1A: state fields — the JXA helper surfaces these when set.
