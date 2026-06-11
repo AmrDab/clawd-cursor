@@ -260,7 +260,17 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
       // the text model (a11y-first) reads images poorly, and the configured
       // vision model exists for exactly these turns. Text-model cost is kept
       // for a11y turns. General: any vision-needing task.
-      const activeLlm = (deps.llm.vision && historyHasImage(history)) ? deps.llm.vision : llmConfig;
+      //
+      // imageInContext is ALSO the coordinate-space signal: raw click/drag
+      // coords default to image-space only while a screenshot is actually in
+      // the model's context. Keying that default on "the vision model is
+      // active" conflated model choice with coordinate provenance — in a
+      // vision-only config it scaled a11y/@x,y screen coords from turn 1
+      // with no screenshot anywhere (audit 2026-06-10, finding C1). Old
+      // screenshots age out of history (see trimOldScreenshots), so neither
+      // the image default nor vision routing latches for the rest of the run.
+      const imageInContext = historyHasImage(history);
+      const activeLlm = (deps.llm.vision && imageInContext) ? deps.llm.vision : llmConfig;
       log.info('agent.turn_model', { turn, model: activeLlm.model, vision: activeLlm === deps.llm.vision });
 
       // 1. Call the LLM with tools. Retry TRANSIENT failures (overload, rate
@@ -629,7 +639,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           targetWindow: input.targetWindow,
           cdp: deps.cdp ?? null,
           uiMaps: holder,
-          coordSpaceDefault: (activeLlm === deps.llm.vision) ? 'image' : 'screen',
+          coordSpaceDefault: imageInContext ? 'image' : 'screen',
         };
 
         let result: Awaited<ReturnType<UnifiedTool['execute']>>;
@@ -999,8 +1009,21 @@ function shotToInnerBlock(shot: ScreenshotResult): { type: 'image'; source: { ty
 }
 
 /**
- * Remove image content from all but the most recent N user turns. Keeps
- * the agent in budget when many screenshots accumulate.
+ * How long a screenshot stays in context, measured in HISTORY MESSAGES
+ * (each loop turn appends ~2: assistant + user). 6 ≈ 3 turns. After that
+ * the image is replaced with a placeholder, so (a) the model stops
+ * reasoning over stale pixels, (b) vision-model routing and the
+ * image-space coordinate default decay back to text/screen instead of
+ * latching for the rest of the run (audit 2026-06-10, finding C1), and
+ * (c) the run stops paying vision pricing on image-free turns.
+ */
+const MAX_SCREENSHOT_AGE_MESSAGES = 6;
+
+/**
+ * Remove image content from all but the most recent N RECENT user turns.
+ * Keeps the agent in budget when many screenshots accumulate; ages out
+ * even the newest screenshot once it falls MAX_SCREENSHOT_AGE_MESSAGES
+ * behind the head of history.
  */
 function trimOldScreenshots(history: LLMToolTurn[], keepLast: number): void {
   const imageTurnIndices: number[] = [];
@@ -1014,9 +1037,12 @@ function trimOldScreenshots(history: LLMToolTurn[], keepLast: number): void {
     }
   });
 
-  if (imageTurnIndices.length <= keepLast) return;
+  const cutoff = history.length - MAX_SCREENSHOT_AGE_MESSAGES;
+  const keep = new Set(imageTurnIndices.filter(i => i >= cutoff).slice(-keepLast));
+  const dropList = imageTurnIndices.filter(i => !keep.has(i));
+  if (dropList.length === 0) return;
 
-  const dropSet = new Set(imageTurnIndices.slice(0, imageTurnIndices.length - keepLast));
+  const dropSet = new Set(dropList);
   for (const i of dropSet) {
     const turn = history[i];
     if (!Array.isArray(turn.content)) continue;

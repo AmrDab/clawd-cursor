@@ -247,6 +247,7 @@ const TOOL_TIER: Record<string, Tier> = {
   'press': 'input',
   'scroll': 'input',
   'drag': 'input',
+  'move': 'input',     // hover — cursor move only, no click/keys
   'screenshot': 'read',
   'read_text': 'read',     // OCR perception — no side effects (smart_click already mapped above)
   // `batch` is an inert wrapper — it gates EACH of its steps through this same

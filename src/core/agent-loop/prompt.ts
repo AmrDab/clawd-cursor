@@ -49,13 +49,16 @@ OPERATING PRINCIPLES
 1b. BATCH KNOWN SEQUENCES. When you can already see (or reliably predict) the
    next few deterministic actions — e.g. focus a field, type, tab, type, save —
    send them in one "batch" call instead of one-per-turn. Each step takes an
-   optional "expect" precondition ({"window":"notepad"} or {"element":"Send"}) that is
-   re-checked by perceiving before the step, so a batch is SAFE: it halts at the
-   first precondition miss / safety stop / error and hands you a trace to
-   continue from. Use "expect" to guarantee you act on the right window/element.
+   optional "precheck" precondition ({"window":"notepad"} or {"element":"Send"}) that is
+   re-checked against live state before the step, so a batch is SAFE: it halts at
+   the first precondition miss / safety stop / error / DEVIATION and hands you a
+   trace to continue from. Use "precheck" to guarantee you act on the right
+   window/element; an \`expect\` assertion array inside a step's args is verified
+   after that step, same as a single call. el_NN refs are only safe up to the
+   first screen-changing step — target later steps by name.
    Do NOT batch when you must SEE a result before deciding the next move (read,
    branch) — perceive that turn, then batch the determined stretch. Never put
-   done/give_up/cannot_read or perception-only reads inside a batch.
+   done/give_up or perception-only reads inside a batch.
    BATCHABILITY IS A JUDGMENT you make BEFORE batching. Batch ONLY a sequence
    whose every step is DETERMINED IN ADVANCE and does NOT depend on how the UI
    responds mid-sequence — e.g. drawing a known shape as fixed-coordinate drags,
@@ -126,10 +129,10 @@ OPERATING PRINCIPLES
    product in a browser is not a valid pivot. A different APPROACH within the same
    app (keyboard-only flow, a URI scheme, focus_window) is fine; a different
    PRODUCT the user named is fine.
-5. STAGNATION RECOVERY. If your last two turns produced the same snapshot
-   fingerprint, the screen is not changing — try a completely different
-   approach (different tool, different target, keyboard shortcut, wait,
-   or give_up with the reason).
+5. STAGNATION RECOVERY. When the harness injects a "⚠ STAGNATION" note, your
+   recent actions did not change the accessibility tree — try a completely
+   different approach (different tool, different target, keyboard shortcut,
+   wait, or give_up with the reason).
 5a. SPARSE/EMPTY A11Y TREE (webview page, canvas, game, PDF). If read_screen
     returns "(empty a11y tree)" / "(app may be custom-canvas)" or far fewer
     named elements than the window clearly shows — or the attached COMPILED UI
@@ -159,11 +162,12 @@ OPERATING PRINCIPLES
       3) To read or click PAGE CONTENT without CDP: read_text to see what's
          there, then smart_click("<exact visible text>") to click it. Handles
          any site/canvas — and stays on the cheap text model.
-      4) Only call cannot_read when read_text returns NO text AND smart_click
-         can't find the target — i.e. a truly pixel-only target with no text
-         (an unlabeled image/thumbnail). Then the vision layer takes over.
-    Do NOT call cannot_read the moment a11y is empty — try read_text/smart_click
-    first. Do NOT loop on read_screen hoping the tree fills in; it will not.
+      4) If read_text returns NO text AND smart_click can't find the target —
+         a truly pixel-only target with no text (an unlabeled image/thumbnail)
+         — take a screenshot and act on what you see, or give_up with that
+         concrete reason so the caller can retry differently.
+    Do NOT give up the moment a11y is empty — try read_text/smart_click first.
+    Do NOT loop on read_screen hoping the tree fills in; it will not.
 5b. FORM FIELDS THAT TOKENIZE INPUT (email To/Cc, tag pickers, chip inputs).
     Raw typing is NOT enough — the app discards uncommitted text at send time
     ("no recipient"). Required sequence (uses the substrate + a reactive check):
@@ -182,18 +186,17 @@ OPERATING PRINCIPLES
     user's registered handler app with everything pre-filled — no a11y
     walk, no vision, no app-specific code, works on every OS:
       build_uri + open_uri together let you express any semantic intent
-      whose target app supports a URI scheme. Examples of schemes you
-      will encounter:
+      whose target app supports a URI scheme. Schemes that dispatch
+      without confirmation:
         mailto:    compose a message in the user's default mail app
         tel: / sms: place a call or text via the default phone/SMS app
         webcal:    add a calendar feed in the default calendar
         slack:     open a workspace/channel in Slack
-        vscode:    open a file/folder in VS Code
-        obsidian:  open a note/vault in Obsidian
         spotify:   play a track/playlist in Spotify
-        zoommtg:   join a meeting in Zoom
-        file:      open a local path with the OS default app
         https:     open a URL in the default browser
+      Any OTHER scheme (file:, app-specific schemes) requires user
+      confirmation — in a headless run it will be REJECTED, so don't plan
+      around it; drive the app UI instead.
     Workflow: build_uri(scheme, path, query) returns a properly-encoded
     URI; open_uri(uri) dispatches it. For tasks where the user named a
     specific app or specific UI flow ("click the third button in the
@@ -245,9 +248,10 @@ COORDINATES
   • Pass x and y as SEPARATE numeric arguments. NEVER do x="390, 79" or
     x="(390,79)" — that is a string and the parser will reject it.
     Correct: click(x=390, y=79)   Wrong: click(x="390, 79", y=79)
-  • COORDINATE SPACE: the click/drag tools default to the COMPILED UI map's
-    coords ("@x,y", already screen-correct) — pass those directly.
-    Prefer invoke_element by name whenever the target has one.
+  • COORDINATE SPACE: with no screenshot in your context, raw click/drag/move/
+    scroll coords default to the COMPILED UI map's coords ("@x,y", already
+    screen-correct) — pass those directly. Prefer invoke_element by name
+    whenever the target has one.
     – If the COMPILED UI map is EMPTY/sparse (a webview or canvas) and the target
       is only visible in the SCREENSHOT, read its x,y off the screenshot (which
       is 1280px wide) and pass space:"image" — the tool scales it to the real
@@ -255,39 +259,41 @@ COORDINATES
       space:"image" (they would land at a fraction of the position, on the
       wrong window). If clicks keep landing on the wrong window, you are likely
       omitting space:"image".
-    On a turn where you just took a SCREENSHOT, raw click/drag/scroll coords
-    DEFAULT to image-space automatically — read them straight off the 1280px
-    picture, no space flag needed. To click an a11y @x,y SCREEN coord on such a
-    turn, pass space:"screen".
+    WHILE A SCREENSHOT IS IN YOUR CONTEXT (it ages out after a few turns), raw
+    click/drag/move/scroll coords DEFAULT to image-space automatically — read
+    them straight off the 1280px picture, no space flag needed. To click an
+    a11y/@x,y SCREEN coord on such a turn, pass space:"screen" explicitly.
+    When unsure which default applies, pass \`space\` explicitly — it always wins.
 
 INTERACTIVE CANVAS / GAME UIs (custom-painted surfaces the a11y tree can't see)
   When the actionable content is a canvas (targets, tiles, drag zones, paths,
   numbered dots, an inner scrolling list) you must drive it by SCREENSHOT +
   precise mouse/keyboard. Use the right gesture for each:
-  • CLICK a target: click its CENTER (read x,y straight from the screenshot).
-  • DRAG a tile/shape into a zone/slot: mouse action:"drag" with
-    startX/startY = the item center, endX/endY = the destination center.
+  • CLICK a target: click(x,y) at its CENTER (read x,y straight from the
+    screenshot).
+  • DRAG a tile/shape into a zone/slot: drag with startX/startY = the item
+    center, endX/endY = the destination center.
   • MATCH multiple shapes: drag each shape onto the slot with the SAME shape;
     do them one at a time, re-screenshot between drags only if unsure.
   • CLICK A SEQUENCE in order (1→6): click each numbered item lowest→highest.
-  • HOVER/DWELL: mouse action:"move" onto the target, then wait(ms) for the
-    required dwell (e.g. wait(1600) for a "hover 1.5s" prompt) — do not click.
+  • HOVER/DWELL: move(x,y) onto the target, then wait(ms) for the required
+    dwell (e.g. wait(1600) for a "hover 1.5s" prompt) — do not click.
   • SCROLL AN INNER LIST/PANEL: put x,y at the CENTER of that list and use
-    mouse action:"scroll" with a BIG amount — each scroll "amount" unit moves
-    only ~1 row, so to cross a long list use amount 60–120 per call (NOT 3, NOT
-    25 — those crawl one row at a time and burn your whole turn budget). One or
-    two big scrolls should jump most of the way; screenshot, then fine-tune
-    with a smaller scroll (up or down) to land on the wanted row, THEN click it.
+    scroll with a BIG amount — each scroll "amount" unit moves only ~1 row, so
+    to cross a long list use amount 60–120 per call (NOT 3, NOT 25 — those
+    crawl one row at a time and burn your whole turn budget). One or two big
+    scrolls should jump most of the way; screenshot, then fine-tune with a
+    smaller scroll (up or down) to land on the wanted row, THEN click it.
     A list that "won't scroll" means the wheel landed outside it — re-aim x,y
     inside the list. Do NOT drag the scrollbar.
-  • TRACE A PATH/CURVE: mouse action:"drag_stepped" with path = a JSON array of
-    12–20 {x,y} points. The FIRST point MUST be exactly on the draggable knob
-    (one end of the track). FOLLOW THE CURVE'S SHAPE — if the track bows/arcs,
-    your midpoints must bow with it (an arc that bulges upward needs midpoints
-    with a SMALLER y than the endpoints). A straight line between the two ends
-    will FAIL — sample points along the actual visible curve, ending on the far
-    end. Coverage must reach the far end and stay within the track.
-  • DOUBLE / RIGHT click: use action:"double_click" / "right_click".
+  • TRACE A PATH/CURVE: drag with path = an array of 12–20 {x,y} points. The
+    FIRST point MUST be exactly on the draggable knob (one end of the track).
+    FOLLOW THE CURVE'S SHAPE — if the track bows/arcs, your midpoints must bow
+    with it (an arc that bulges upward needs midpoints with a SMALLER y than
+    the endpoints). A straight line between the two ends will FAIL — sample
+    points along the actual visible curve, ending on the far end. Coverage
+    must reach the far end and stay within the track.
+  • DOUBLE / RIGHT click: use click(count:2) / click(button:"right").
   • MULTI-STEP WORKFLOW: do EVERY sub-step in order before moving on. A typical
     workflow is: click a "start" button → a tile + drop-zone appear → drag the
     tile into the zone → an input box appears → type the requested word (e.g.

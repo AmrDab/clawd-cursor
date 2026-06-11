@@ -304,6 +304,20 @@ export const TOOL_META: Record<string, ToolMeta> = {
       startY: 'Start Y in image-space',
       endX: 'End X in image-space',
       endY: 'End Y in image-space',
+      path: 'Stepped drag path: array of {x,y} points (min 2). When given, startX/startY/endX/endY are ignored.',
+      space: 'Coordinate space. Omit (default) or pass "image" for screenshot coords. Pass "screen" for a11y coords already in physical pixels.',
+    },
+  },
+
+  move: {
+    mcpName: 'mouse_hover',
+    category: 'mouse',
+    compactGroup: 'computer',
+    safetyTier: 1,
+    costClass: 'act',
+    paramDescriptions: {
+      x: 'X coordinate in image-space',
+      y: 'Y coordinate in image-space',
       space: 'Coordinate space. Omit (default) or pass "image" for screenshot coords. Pass "screen" for a11y coords already in physical pixels.',
     },
   },

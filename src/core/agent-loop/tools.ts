@@ -183,15 +183,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           value: { type: 'string', description: 'Value for set-value action' },
           element_id: { type: 'string', description: 'Target a compiled element from compile_ui (requires snapshot_id)' },
           snapshot_id: { type: 'string', description: 'The compile_ui snapshot the element_id came from (requires element_id)' },
-          expect: {
-            type: 'array',
-            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
-            items: {
-              type: 'object',
-              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
-              required: ['type'],
-            },
-          },
+          expect: EXPECT_SCHEMA,
         },
         // `name` OR `automationId` must be supplied; neither is required at
         // the JSON-schema level — the execute() body guards the total absence.
@@ -288,15 +280,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           processId: { type: 'number' },
           element_id: { type: 'string', description: 'Target a compiled element from compile_ui (requires snapshot_id)' },
           snapshot_id: { type: 'string', description: 'The compile_ui snapshot the element_id came from (requires element_id)' },
-          expect: {
-            type: 'array',
-            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
-            items: {
-              type: 'object',
-              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
-              required: ['type'],
-            },
-          },
+          expect: EXPECT_SCHEMA,
         },
         required: ['value'],
         additionalProperties: false,
@@ -556,7 +540,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
     // ─── INPUT (mouse) ──────────────────────────────────────────
     {
       name: 'click',
-      description: 'Click at (x,y). Default coords come from the a11y snapshot (already screen-correct). If you read the target off the SCREENSHOT instead, pass space:"image" so the tool scales it. Prefer invoke_element when the target has an a11y name.',
+      description: 'Click at (x,y). The default coordinate space follows context (image-space while a screenshot is in your context, else screen-space) — pass `space` explicitly when mixing sources: space:"screen" for a11y/@x,y map coords, space:"image" for coords read off the screenshot. Prefer invoke_element when the target has an a11y name.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -565,6 +549,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           button: { type: 'string', enum: ['left', 'right'] },
           count: { type: 'number', description: '1=single, 2=double' },
           space: COORD_SPACE_SCHEMA,
+          expect: EXPECT_SCHEMA,
         },
         required: ['x', 'y'],
         additionalProperties: false,
@@ -598,7 +583,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
 
     {
       name: 'drag',
-      description: 'Drag the mouse from (startX,startY) to (endX,endY) — select text, draw, resize. Coords default to a11y-snapshot/screen space. If you read the start/end off the SCREENSHOT (e.g. drawing on a canvas you can only see in the picture), pass space:"image" so the tool scales them — otherwise the drag lands at the wrong scale/position.',
+      description: 'Drag the mouse from (startX,startY) to (endX,endY) — select text, draw, resize. To TRACE A CURVE/PATH (gesture, curved track, drawing), pass `path` = an array of 12–20 {x,y} points instead: press at the first point, move through each, release at the last. The default coordinate space follows context; if you read coords off the SCREENSHOT, pass space:"image" so the tool scales them.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -606,20 +591,55 @@ export function buildUnifiedTools(): UnifiedTool[] {
           startY: { type: 'number' },
           endX: { type: 'number' },
           endY: { type: 'number' },
+          path: {
+            type: 'array',
+            description: 'Stepped drag path: array of {x,y} points (min 2). When given, startX/startY/endX/endY are ignored. Press at first point, release at last.',
+            items: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] },
+          },
           space: COORD_SPACE_SCHEMA,
+          expect: EXPECT_SCHEMA,
         },
-        required: ['startX', 'startY', 'endX', 'endY'],
         additionalProperties: false,
       },
       changesScreen: true,
       async execute(args, ctx) {
+        const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
+        const scale = space === 'image' ? imageScale(ctx) : 1;
+
+        // Stepped path variant: press at the first point, walk the rest,
+        // release at the last (canvas tracing — same gesture the MCP-side
+        // mouse_drag_stepped performs).
+        if (args.path !== undefined) {
+          let pts: Array<{ x: number; y: number }>;
+          try { pts = typeof args.path === 'string' ? JSON.parse(args.path) : args.path as Array<{ x: number; y: number }>; }
+          catch { return { success: false, isError: true, text: 'drag: `path` must be an array of {x,y} points' }; }
+          if (!Array.isArray(pts) || pts.length < 2 || !pts.every(p => p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y)))) {
+            return { success: false, isError: true, text: 'drag: `path` needs at least 2 {x,y} points with finite coords' };
+          }
+          const scaled = pts.map(p => ({ x: scaleCoord(Number(p.x), scale), y: scaleCoord(Number(p.y), scale) }));
+          const fg0p = await ctx.platform.getActiveWindow().catch(() => null);
+          const raisedP = await ensureTargetForeground(ctx, fg0p);
+          const beforeP = raisedP ? await ctx.platform.getActiveWindow().catch(() => null) : fg0p;
+          await ctx.platform.mouseMove(scaled[0].x, scaled[0].y);
+          await ctx.platform.mouseDown('left');
+          try {
+            for (let i = 1; i < scaled.length; i++) {
+              await ctx.platform.mouseMove(scaled[i].x, scaled[i].y);
+              await sleep(16);   // let the app register the motion between segments
+            }
+          } finally {
+            await ctx.platform.mouseUp('left');
+          }
+          await sleep(200);
+          const afterP = await ctx.platform.getActiveWindow().catch(() => null);
+          return { success: true, text: `Stepped-drag through ${pts.length} ${space} points → screen (${scaled[0].x},${scaled[0].y})…(${scaled[scaled.length - 1].x},${scaled[scaled.length - 1].y}) [×${scale}]${raisedP}${focusBreadcrumb(beforeP, afterP)}` };
+        }
+
         const start = coerceCoord(args.startX, args.startY);
         const end = coerceCoord(args.endX, args.endY);
         if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) {
-          return { success: false, isError: true, text: `drag: startX/startY/endX/endY must be finite numbers, got ${JSON.stringify(args)}` };
+          return { success: false, isError: true, text: `drag: startX/startY/endX/endY must be finite numbers (or pass \`path\`), got ${JSON.stringify(args)}` };
         }
-        const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
-        const scale = space === 'image' ? imageScale(ctx) : 1;
         const sx = scaleCoord(start.x, scale), sy = scaleCoord(start.y, scale);
         const ex = scaleCoord(end.x, scale), ey = scaleCoord(end.y, scale);
         const fg0 = await ctx.platform.getActiveWindow().catch(() => null);
@@ -629,6 +649,33 @@ export function buildUnifiedTools(): UnifiedTool[] {
         await sleep(200);
         const after = await ctx.platform.getActiveWindow().catch(() => null);
         return { success: true, text: `Dragged ${space} (${start.x},${start.y})→(${end.x},${end.y}) → screen (${sx},${sy})→(${ex},${ey}) [×${scale}]${raised}${focusBreadcrumb(before, after)}` };
+      },
+    },
+
+    {
+      name: 'move',
+      description: 'Move the cursor to (x,y) WITHOUT clicking — hover/dwell over a target (pair with wait(ms) for a required dwell time). The default coordinate space follows context; pass space:"image" for coords read off the screenshot.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+          space: COORD_SPACE_SCHEMA,
+        },
+        required: ['x', 'y'],
+        additionalProperties: false,
+      },
+      changesScreen: false,
+      async execute(args, ctx) {
+        const c = coerceCoord(args.x, args.y);
+        if (!Number.isFinite(c.x) || !Number.isFinite(c.y)) {
+          return { success: false, isError: true, text: `move: x/y must be finite numbers, got x=${JSON.stringify(args.x)} y=${JSON.stringify(args.y)}` };
+        }
+        const space = args.space === 'image' ? 'image' : args.space === 'screen' ? 'screen' : (ctx.coordSpaceDefault ?? 'screen');
+        const scale = space === 'image' ? imageScale(ctx) : 1;
+        const x = scaleCoord(c.x, scale), y = scaleCoord(c.y, scale);
+        await ctx.platform.mouseMove(x, y);
+        return { success: true, text: `Cursor moved (hover) to ${space} (${c.x},${c.y}) → screen (${x},${y}) [×${scale}]` };
       },
     },
 
@@ -675,15 +722,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
         type: 'object',
         properties: {
           text: { type: 'string' },
-          expect: {
-            type: 'array',
-            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
-            items: {
-              type: 'object',
-              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
-              required: ['type'],
-            },
-          },
+          expect: EXPECT_SCHEMA,
         },
         required: ['text'],
         additionalProperties: false,
@@ -725,15 +764,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           // `key_press.key` and the compound surface alias).
           combo: { type: 'string', description: 'Key/combo to press (e.g. "Return", "mod+s"). Space-separate for a sequence.' },
           key: { type: 'string', description: 'Alias for combo — accepted for MCP/compound backward-compatibility.' },
-          expect: {
-            type: 'array',
-            description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
-            items: {
-              type: 'object',
-              properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
-              required: ['type'],
-            },
-          },
+          expect: EXPECT_SCHEMA,
         },
         // Neither is required at the JSON-Schema level so the validator passes
         // when only one is provided; the execute() guard catches a total absence.
@@ -1854,12 +1885,30 @@ function buildWinQuery(args: Record<string, unknown>): { processName?: string; p
   return Object.keys(q).length ? q : undefined;
 }
 
+/**
+ * Shared `expect` arg schema for consequential tools. The agent loop (and the
+ * batch executor) verify these post-conditions reactively after the action —
+ * a failure surfaces as a DEVIATION (Layer C). Exposed on every tool the model
+ * uses for send/save/submit-class actions, including the OCR/coordinate
+ * fallbacks (click/smart_click/open_uri/browser_click) where verification
+ * matters most (audit 2026-06-10, finding C2/M3).
+ */
+const EXPECT_SCHEMA = {
+  type: 'array',
+  description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
+  items: {
+    type: 'object',
+    properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
+    required: ['type'],
+  },
+} as const;
+
 /** Shared `space` arg schema for the granular pointer tools (click/drag/scroll). */
 const COORD_SPACE_SCHEMA = {
   type: 'string',
   enum: ['screen', 'image'],
   description:
-    'Coordinate space of the x/y you pass. "screen" (default) = accessibility-snapshot coords, already correct for the real screen. "image" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. Use "image" ONLY when the target is not in the a11y snapshot and you read it off the picture. When you JUST took a screenshot and are clicking/dragging something you see in it, you almost always want space:"image".',
+    'Coordinate space of the x/y you pass. "screen" = accessibility/COMPILED-UI coords (@x,y), already correct for the real screen. "image" = coords you read off the SCREENSHOT (downscaled to 1280px wide); the tool scales them up to the real screen. When omitted, the DEFAULT FOLLOWS CONTEXT: "image" while a screenshot is in your context, "screen" otherwise. So pass space:"screen" explicitly when clicking an @x,y map coord on a screenshot turn, and space:"image" when you read coords off the picture.',
 } as const;
 
 /** One-line coordinate breadcrumb for tool-result text: makes the input space,
