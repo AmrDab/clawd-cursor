@@ -1148,7 +1148,7 @@
     },
     {
       "name": "mouse_click",
-      "description": "Click at (x,y). Default coords come from the a11y snapshot (already screen-correct). If you read the target off the SCREENSHOT instead, pass space:\"image\" so the tool scales it. Prefer invoke_element when the target has an a11y name.",
+      "description": "Click at (x,y). The default coordinate space follows context (image-space while a screenshot is in your context, else screen-space) — pass `space` explicitly when mixing sources: space:\"screen\" for a11y/@x,y map coords, space:\"image\" for coords read off the screenshot. Prefer invoke_element when the target has an a11y name.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1180,6 +1180,31 @@
               "screen",
               "image"
             ]
+          },
+          "expect": {
+            "type": "array",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "window_title_contains",
+                    "app_running",
+                    "element_exists",
+                    "element_value_contains",
+                    "clipboard_contains",
+                    "file_exists",
+                    "file_contains",
+                    "ocr_contains"
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
           }
         },
         "required": [
@@ -1234,7 +1259,7 @@
     },
     {
       "name": "mouse_drag",
-      "description": "Drag the mouse from (startX,startY) to (endX,endY) — select text, draw, resize. Coords default to a11y-snapshot/screen space. If you read the start/end off the SCREENSHOT (e.g. drawing on a canvas you can only see in the picture), pass space:\"image\" so the tool scales them — otherwise the drag lands at the wrong scale/position.",
+      "description": "Drag the mouse from (startX,startY) to (endX,endY) — select text, draw, resize. To TRACE A CURVE/PATH (gesture, curved track, drawing), pass `path` = an array of 12–20 {x,y} points instead: press at the first point, move through each, release at the last. The default coordinate space follows context; if you read coords off the SCREENSHOT, pass space:\"image\" so the tool scales them.",
       "category": "mouse",
       "parameters": {
         "type": "object",
@@ -1255,6 +1280,25 @@
             "type": "number",
             "description": "End Y in image-space"
           },
+          "path": {
+            "type": "array",
+            "description": "Stepped drag path: array of {x,y} points (min 2). When given, startX/startY/endX/endY are ignored. Press at first point, release at last.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ]
+            }
+          },
           "space": {
             "type": "string",
             "description": "Coordinate space. Omit (default) → image-space coords from the latest screenshot (scaled to physical pixels). Pass \"screen\" → a11y-snapshot coords (already physical, not scaled).",
@@ -1262,14 +1306,33 @@
               "screen",
               "image"
             ]
+          },
+          "expect": {
+            "type": "array",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "window_title_contains",
+                    "app_running",
+                    "element_exists",
+                    "element_value_contains",
+                    "clipboard_contains",
+                    "file_exists",
+                    "file_contains",
+                    "ocr_contains"
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
           }
-        },
-        "required": [
-          "startX",
-          "startY",
-          "endX",
-          "endY"
-        ]
+        }
       },
       "costClass": "act"
     },

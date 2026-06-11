@@ -31,6 +31,7 @@ import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
 import { parseAssertions, checkAssertions, renderReport } from '../verify/assertions';
 import { compileUIMap, defaultCompileDeps } from '../sense/ui-map';
 import { renderUIMap } from '../sense/ui-map-render';
+import { wrapUntrustedScreenContent } from './prompt';
 import { resolveRef } from '../sense/ui-map-resolve';
 import { findActionButton, findInputField } from '../sense/ui-map-find';
 
@@ -143,7 +144,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           `[${el.controlType || 'Element'}] "${el.name || ''}" @${el.bounds.x},${el.bounds.y} ${el.bounds.width}×${el.bounds.height}${el.value ? ` value="${el.value.slice(0, 40)}"` : ''}${el.focused ? ' [FOCUSED]' : ''}`,
         );
         const more = tree.length > 60 ? `\n… +${tree.length - 60} more` : '';
-        return { success: true, text: `Fresh a11y (${tree.length} els):\n${lines.join('\n')}${more}` };
+        return { success: true, text: `Fresh a11y (${tree.length} els):\n${wrapUntrustedScreenContent(lines.join('\n') + more)}` };
       },
     },
 
@@ -462,7 +463,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
         });
         if (!res.success) return { success: false, text: `"${name}" has no readable value.` };
         const value = (res.data as any)?.value ?? '';
-        return { success: true, text: `"${name}" = "${truncate(String(value), 120)}"` };
+        return { success: true, text: wrapUntrustedScreenContent(`"${name}" = "${truncate(String(value), 120)}"`) };
       },
     },
 
@@ -1419,7 +1420,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
       changesScreen: false,
       async execute(_args, ctx) {
         const text = await ctx.platform.readClipboard();
-        return { success: true, text: `Clipboard (${text.length} chars):\n${truncate(text, 500)}` };
+        return { success: true, text: `Clipboard (${text.length} chars):\n${wrapUntrustedScreenContent(truncate(text, 500))}` };
       },
     },
 
@@ -1512,7 +1513,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           lines.push(`@${minX},${minY} "${lineText}"`);
         }
         if (lines.length === 0) return { success: true, text: `(read_text: no lines match "${filter}")` };
-        return { success: true, text: `OCR (${result.elements.length} words, ${result.durationMs}ms):\n${lines.join('\n')}` };
+        return { success: true, text: `OCR (${result.elements.length} words, ${result.durationMs}ms):\n${wrapUntrustedScreenContent(lines.join('\n'))}` };
       },
     },
 
@@ -1541,7 +1542,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
         };
         const map = await compileUIMap(defaultCompileDeps(ctx.platform, now, id), hints);
         holder.put(map, now, hints.max_cost ?? 'ocr_ok');
-        return { success: true, text: renderUIMap(map) };
+        return { success: true, text: wrapUntrustedScreenContent(renderUIMap(map)) };
       },
     },
 
@@ -1669,7 +1670,8 @@ export function buildUnifiedTools(): UnifiedTool[] {
         if (!ctx.cdp || !(await ctx.cdp.isConnected())) return { success: false, text: 'browser_read: not connected — call browser_connect first.' };
         const selector = typeof args.selector === 'string' ? args.selector.trim() : '';
         const text = selector ? await ctx.cdp.readText(selector, 3000) : await ctx.cdp.getPageContext();
-        return { success: true, text };
+        // Page content is the highest-risk injection surface — always delimited.
+        return { success: true, text: wrapUntrustedScreenContent(text) };
       },
     },
     {
