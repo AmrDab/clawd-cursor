@@ -65,6 +65,25 @@ permission allowlists keep working; v1.5.0 only **adds** capability.
   all tabs/documents; dead `system` compound actions removed; `shortcuts_list`
   drops platform-empty keys and de-duplicates.
 
+### Changed — security & browser ownership (post-RC hardening, same release)
+
+- **Loopback-only bind is now enforced.** The daemon refuses to start when
+  `server.host` is a non-loopback address unless launched with
+  `--allow-remote` (which prints a loud warning). If you deliberately bind to
+  `0.0.0.0`/a LAN IP, add the flag; otherwise set the host back to `127.0.0.1`.
+- **The agent's dedicated browser moved to its own CDP port** (`9333`, env
+  `CLAWD_AGENT_CDP_PORT`); port `9223` is now reserved for browsers *you* put
+  on the wire (`relaunch_with_cdp`, your own debug flags). Ownership is encoded
+  in the port, the dedicated instance's window is labeled
+  *"ClawdCursor — agent browser"*, and in attached mode navigation mechanically
+  opens the agent's **own tab** — your tabs are never navigated away.
+- `mouse_triple_click` follows up with select-all when it lands in an edit
+  field, so typing after it replaces pre-filled text (Save As dialogs).
+- Dependencies: commander 15, zod 4 (the MCP SDK peer-supports both), tsx
+  4.22.4.
+- CI: coverage ratchet thresholds + a production-path perf tripwire join the
+  existing npm-audit gate; the MCP SDK boundary is now explicitly typed.
+
 ### Fixed — macOS parity (cross-platform audit)
 
 - **el_NN now works on macOS.** The role map was Windows-UIA-only, so macOS AX
