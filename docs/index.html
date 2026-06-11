@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawd Cursor v1.0.4 — the local MCP server for safe desktop control</title>
-  <meta name="description" content="Clawd Cursor v1.0.4 — the local MCP server that gives any agent safe desktop control. 6 compact compound tools (computer, accessibility, window, system, browser, task), MCP stdio + HTTP, single safety.evaluate() chokepoint, no telemetry, Windows + macOS + Linux.">
-  <meta property="og:title" content="Clawd Cursor v1.0.4">
-  <meta property="og:description" content="The local MCP server that gives any agent safe desktop control. Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry.">
+  <title>Clawd Cursor v1.5.0 — the local MCP server for safe desktop control</title>
+  <meta name="description" content="Clawd Cursor v1.5.0 — the local MCP server that gives any agent safe desktop control. 7 compact compound tools (computer, accessibility, window, system, browser, task, batch), MCP stdio + HTTP, single safety.evaluate() chokepoint, no telemetry, Windows + macOS + Linux.">
+  <meta property="og:title" content="Clawd Cursor v1.5.0">
+  <meta property="og:description" content="The local MCP server that gives any agent safe desktop control. Any model. Any app. One MCP entry. Local-only. 7 compact tools, single safety chokepoint, no telemetry.">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://clawdcursor.com/">
@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
-    AGENT-READABLE SUMMARY (v1.0.1)
+    AGENT-READABLE SUMMARY (v1.5.0)
     clawdcursor: the local MCP server that gives any agent safe desktop control.
 
     ── WHAT IT IS ──────────────────────────────────────────────────────────────
@@ -25,16 +25,25 @@
     to 127.0.0.1. Bearer-token auth on every HTTP request.
 
     ── TOOL SURFACE (PUBLIC) ────────────────────────────────────────────────────
-    6 compact compound tools — ~1500 tokens of catalog. RECOMMENDED.
+    7 compact compound tools — ~1500 tokens of catalog. RECOMMENDED.
       computer      — mouse, keyboard, screenshot (raw I/O)
-      accessibility — drive UI by element name, not pixel
+      accessibility — drive UI by element name; compile a fused el_NN UI map
+                      and act on {element_id, snapshot_id} (survives layout shifts)
       window        — launch, focus, resize apps
       system        — clipboard, OCR, shortcuts, webview detection
       browser       — Chrome DevTools Protocol for Electron/WebView2 apps
       task          — hand off a full task to the built-in autonomous loop
+      batch         — run a guarded, safety-gated sequence of the above in one call
+
+    ── WHAT'S NEW IN v1.5.0 ─────────────────────────────────────────────────────
+    UI State Compiler — one fused, confidence-scored map of the screen
+      (accessibility + OCR) with stable el_NN ids. Act symbolically, not by pixel.
+    Reactive verification — pass `expect` on a consequential action and the call
+      verifies the outcome (with a settle window) and reports a DEVIATION if the
+      UI didn't obey, instead of silently "succeeding."
 
     ── COMPATIBILITY / DEBUGGING ────────────────────────────────────────────────
-    94 granular tools (one schema per verb) available via --granular flag or
+    98 granular tools (one schema per verb) available via --granular flag or
     `tools/list` on either transport. Use when your runtime requires every
     primitive as a top-level MCP tool, or for direct debugging.
 
@@ -423,9 +432,9 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v1.0.4 — latest stable</div>
+    <div class="hero-badge"><div class="pulse"></div> v1.5.0 — latest stable</div>
     <h1>A cursor and a keyboard<br><span class="gr">for any AI agent</span></h1>
-    <p>Any model. Any app. One MCP entry. Local-only. 6 compact tools, single safety chokepoint, no telemetry. Cheap paths first &mdash; accessibility before pixels, vision only as a last resort.</p>
+    <p>Any model. Any app. One MCP entry. Local-only. 7 compact tools, single safety chokepoint, no telemetry. Cheap paths first &mdash; accessibility before pixels, vision only as a last resort.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -513,7 +522,7 @@
         <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">Your agent already has a brain — you just want HTTP tools. Same daemon, no built-in agent loop.</p>
         <ol>
           <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor agent --no-llm</code></li>
-          <li>94 tools on <code style="font-size:0.82em">:3847/mcp</code></li>
+          <li>98 tools on <code style="font-size:0.82em">:3847/mcp</code></li>
           <li>Stateless — no session init needed</li>
         </ol>
         <div class="mode-stats">
@@ -532,9 +541,9 @@
 
     <div class="pipe-flow">
       <div class="pipe-step router">
-        <h4><span class="pipe-num">1</span> Accessibility</h4>
+        <h4><span class="pipe-num">1</span> Compile the screen</h4>
         <span class="pipe-tag">Zero pixels</span>
-        <p>Read the a11y tree, act on element names. No screenshot, no vision LLM.</p>
+        <p>Fuse the a11y tree (+ OCR) into one el_NN map. Act on an element by id — no screenshot, no vision LLM.</p>
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step agent">
@@ -544,22 +553,22 @@
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step verifier">
-        <h4><span class="pipe-num">3</span> Safety</h4>
-        <span class="pipe-tag">Single chokepoint</span>
-        <p>Every tool call gates through one safety layer. Destructive actions need confirmation.</p>
+        <h4><span class="pipe-num">3</span> Verify &amp; gate</h4>
+        <span class="pipe-tag">Reactive + one chokepoint</span>
+        <p>Pass <code style="font-size:0.82em">expect</code> and the action confirms its outcome — DEVIATION if the UI didn't obey. Every call routes through one safety layer.</p>
       </div>
     </div>
 
     <div class="feat-grid" style="grid-template-columns: repeat(2, 1fr);">
       <div class="feat-card">
         <div class="feat-icon">🎯</div>
-        <h4>Toolbox &mdash; 6 compound tools</h4>
-        <p>The recommended surface — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code>. ~12× smaller catalog than the granular Tools surface.</p>
+        <h4>Toolbox &mdash; 7 compound tools</h4>
+        <p>The recommended surface — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code>, <code style="font-size:0.82em">batch</code>. ~12× smaller catalog than the granular Tools surface.</p>
       </div>
       <div class="feat-card">
-        <div class="feat-icon">🧩</div>
-        <h4>One adapter per OS</h4>
-        <p>Windows, macOS, Linux behind a single interface. Linux covers X11 and Wayland.</p>
+        <div class="feat-icon">🗺️</div>
+        <h4>UI State Compiler</h4>
+        <p>One fused, confidence-scored map of the screen with stable <code style="font-size:0.82em">el_NN</code> ids. Act symbolically — it survives DPI, resize, and layout shifts.</p>
       </div>
     </div>
   </section>
@@ -607,8 +616,8 @@
     <details class="cli-details">
       <summary class="cli-summary">
         <span class="sect-label" style="margin-bottom:0;">Tools</span>
-        <span class="cli-summary-title">6 compact tools + 94 granular <span class="cli-summary-chev" aria-hidden="true">›</span></span>
-        <span class="cli-summary-sub">The 6 compact compounds are the recommended public surface. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. The 94 granular tools (one schema per verb) are listed below for compatibility and debugging — use them when your runtime requires every primitive as a top-level MCP tool. (94 total.)</span>
+        <span class="cli-summary-title">7 compact tools + 98 granular <span class="cli-summary-chev" aria-hidden="true">›</span></span>
+        <span class="cli-summary-sub">The 7 compact compounds are the recommended public surface. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. The 98 granular tools (one schema per verb) are listed below for compatibility and debugging — use them when your runtime requires every primitive as a top-level MCP tool. (98 total.)</span>
       </summary>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-top:18px;overflow:hidden;">
@@ -683,7 +692,7 @@ clawdcursor status           <span style="color:var(--text3)"># readiness check 
 
 <span style="color:var(--text3)"># Run</span>
 clawdcursor mcp              <span style="color:var(--text3)"># stdio MCP server for editor hosts</span>
-clawdcursor mcp --compact    <span style="color:var(--text3)"># same, with 6 compound tools (recommended)</span>
+clawdcursor mcp --compact    <span style="color:var(--text3)"># same, with 7 compound tools (recommended)</span>
 clawdcursor agent            <span style="color:var(--text3)"># HTTP MCP daemon at :3847/mcp, optional built-in LLM</span>
 clawdcursor agent --no-llm   <span style="color:var(--text3)"># tool surface only — your agent brings its own brain</span>
 clawdcursor stop             <span style="color:var(--text3)"># stop every running mode</span>
@@ -733,7 +742,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 </div>
 
 <footer>
-  <p>clawd<strong>cursor</strong> v1.0.4 · localhost only · MIT ·
+  <p>clawd<strong>cursor</strong> v1.5.0 · localhost only · MIT ·
     <a href="https://clawdcursor.com">Home</a> ·
     <a href="https://github.com/AmrDab/clawdcursor">GitHub</a> ·
     <a href="https://github.com/AmrDab/clawdcursor/blob/main/CHANGELOG.md">Changelog</a> ·

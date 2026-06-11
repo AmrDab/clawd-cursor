@@ -2,6 +2,84 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.0] - 2026-06-11 — UI State Compiler + reactive verification
+
+The headline of this release is a new perception substrate and a verification
+discipline that together let a cheap text model drive the desktop reliably,
+without reaching for screenshots. No tools were renamed — existing editor
+permission allowlists keep working; v1.5.0 only **adds** capability.
+
+### Added — the el_NN UI State Compiler
+
+- **`compile_ui`** fuses the accessibility tree and OCR into ONE confidence-scored,
+  source-attributed UI map: every element gets a stable `el_NN` id, a role, a
+  name, coordinates, and capability flags. Act on an element symbolically via
+  `{element_id, snapshot_id}` — near-free in tokens, DPI-proof, and it survives
+  layout shifts.
+- **Semantic finders** `find_action_button(intent)` / `find_input_field(purpose)`
+  locate a target by meaning (synonyms + geometric label association) and return
+  the `el_NN` to act on, escalating to OCR only when the a11y tree is sparse.
+- These are reachable from BOTH the granular surface and the compact
+  `accessibility` compound (`action: "compile_ui" | "find_button" | "find_field"`).
+
+### Added — reactive step discipline (Layer C)
+
+- Consequential actions (`invoke_element`, `set_field_value`, `type`, `key`,
+  `click`, `drag`, …) take an optional **`expect`** array of assertions. After the
+  action, clawdcursor verifies the stated outcome — polling for a short settle
+  window so asynchronous UIs (chip resolution, lazy title updates) aren't falsely
+  failed — and reports a **DEVIATION** when the UI didn't obey, instead of
+  reporting a hollow success. The agent adapts rather than building on a false
+  assumption.
+- A new `move` (hover) action and a stepped `drag` `path` (curve tracing) round
+  out the canvas/gesture surface.
+
+### Fixed — agent-loop reliability (internal audit)
+
+- The post-action UI map is no longer invalidated the instant it's advertised —
+  `el_NN` refs offered for the next turn now actually resolve.
+- Ref freshness no longer races the LLM round-trip (TTL widened; event-driven
+  invalidation + the window guard are the real staleness signals).
+- `batch` steps now get the FULL single-call pipeline: label resolution for the
+  safety gate, active-app refresh between steps, outcome-gated map invalidation,
+  and per-step `expect` verification.
+- Coordinate-space default follows context (image-space only while a screenshot
+  is actually in context; it no longer latches on for the rest of a run).
+- Every screen-derived tool output (a11y, OCR, page DOM, clipboard) is wrapped in
+  `<untrusted-screen-content>` delimiters — prompt-injection defense now covers
+  every perception path, not just two.
+
+### Fixed — external-agent (MCP) surface
+
+- The `el_NN` substrate is now reachable over stdio MCP (a session UIMap holder
+  is constructed for the editor-hosted server, not only the daemon).
+- The safety gate resolves `el_NN` refs to their element label over MCP too, so
+  destructive-label gating (Send/Delete/Pay) fires the same as in-loop; a
+  caller-supplied `expect` is honored on the MCP route.
+- `cdp_connect` / `browser_connect` now disclose when they **attached to your
+  existing browser session** vs launched a dedicated agent-owned instance.
+- `get_value` reads the editor's text via TextPattern (Windows) / non-empty
+  AXValue (macOS) when ValuePattern is empty — fixes false "value is blank"
+  reads on Win11 Notepad and the duplicate-write retries they caused.
+- `read_clipboard` output is untrusted-wrapped; `close_window` warns it discards
+  all tabs/documents; dead `system` compound actions removed; `shortcuts_list`
+  drops platform-empty keys and de-duplicates.
+
+### Fixed — macOS parity (cross-platform audit)
+
+- **el_NN now works on macOS.** The role map was Windows-UIA-only, so macOS AX
+  text fields and links resolved to "unknown" and the find/fill/link-click path
+  was effectively dead — added the AX role synonyms.
+- **macOS password fields are redacted.** Secureness lives in the AX *subrole*
+  (`AXSecureTextField`); the helper now reads it and withholds the value, so a
+  secret never reaches the prompt or the fingerprint.
+- The no-coordinate `scroll` center is computed in the driver's coordinate space
+  (logical points on Retina) instead of mislanding 2× off.
+- macOS UI-tree traversal deepened to match Windows (depth 8), so `compile_ui`
+  sees real apps instead of a near-empty tree.
+- README corrected: `clawdcursor grant` approves permissions; it does not build
+  the native helper.
+
 ## [1.0.4] - 2026-06-07 — fix Windows minimize/resize (#153)
 
 - **`window minimize` (and `window resize`) silently did nothing on Windows.**

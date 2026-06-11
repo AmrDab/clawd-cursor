@@ -22,7 +22,7 @@
 <p align="center">
   <a href="#quickstart">Quickstart</a> &middot;
   <a href="#the-fallback-execution-layer">Why</a> &middot;
-  <a href="#toolbox--6-compound-tools-recommended">Toolbox</a> &middot;
+  <a href="#toolbox--7-compound-tools-recommended">Toolbox</a> &middot;
   <a href="#how-it-works">How it works</a> &middot;
   <a href="#platform-support">Platforms</a> &middot;
   <a href="CHANGELOG.md">Changelog</a>
@@ -50,16 +50,26 @@ It's **model-agnostic** (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), **
 
 ---
 
-## Toolbox &mdash; 6 compound tools (recommended)
+## New in v1.5.0
 
-Two catalogs ship side-by-side. The **toolbox** (this section) is 6 compound tools, each with an `action` enum that covers ~10-15 verbs. **Tools** (next section) is the 94 underlying granular primitives, one schema per verb.
+- **UI State Compiler.** `compile_ui` fuses the accessibility tree and OCR into one confidence-scored map of the screen, every element tagged with a stable `el_NN` id. Act on an element by `{element_id, snapshot_id}` instead of pixels &mdash; it's near-free in tokens and survives DPI, resize, and layout shifts. `find_button` / `find_field` locate a target by meaning and hand you the id.
+- **Reactive verification.** Pass `expect` on a consequential action and clawdcursor confirms the outcome (with a short settle window for async UIs), reporting a **DEVIATION** when the UI didn't obey instead of a hollow success.
+- **Honest cross-platform parity.** The compiler, secure-field redaction, and coordinate handling were brought to full parity on macOS; the external-agent (MCP) surface now resolves `el_NN` refs through the safety gate and discloses when it attached to your existing browser. No tools were renamed &mdash; existing permission allowlists keep working.
+
+See the [changelog](CHANGELOG.md) for the full list.
+
+---
+
+## Toolbox &mdash; 7 compound tools (recommended)
+
+Two catalogs ship side-by-side. The **toolbox** (this section) is 7 compound tools, each with an `action` enum that covers ~10-15 verbs. **Tools** (next section) is the 98 underlying granular primitives, one schema per verb.
 
 Compound is the default surface. Catalog footprint is ~1,500 tokens (about 12&times; smaller than granular), which keeps small models focused on the action choice instead of drowning in primitives. Same `computer_20250124` shape Anthropic uses, so editor hosts already know how to drive it.
 
 | Toolbox | Actions |
 |---|---|
-| `computer` | `screenshot`, `click`, `double_click`, `right_click`, `triple_click`, `hover`, `scroll`, `scroll_horizontal`, `drag`, `drag_path`, `type`, `key`, `wait` |
-| `accessibility` | `read_tree`, `find`, `get_element`, `focused`, `invoke`, `focus`, `set_value`, `get_value`, `expand`, `collapse`, `toggle`, `select`, `state`, `list_children`, `wait_for` |
+| `computer` | `screenshot`, `click`, `double_click`, `right_click`, `triple_click`, `hover`, `move`, `scroll`, `scroll_horizontal`, `drag`, `drag_path`, `type`, `key`, `wait` |
+| `accessibility` | `read_tree`, `find`, `get_element`, `focused`, `invoke`, `focus`, `set_value`, `get_value`, `expand`, `collapse`, `toggle`, `select`, `state`, `list_children`, `wait_for`, `compile_ui`, `find_button`, `find_field`, `smart_click`, `smart_type`, `smart_read` |
 | `window` | `list`, `active`, `focus`, `maximize`, `minimize`, `restore`, `close`, `resize`, `list_displays`, `screen_size`, `open_app`, `open_file`, `open_url`, `switch_tab`, `navigate` |
 | `system` | `clipboard_read`, `clipboard_write`, `system_time`, `ocr`, `undo`, `shortcuts_list`, `shortcuts_run`, `delegate`, `detect_webview`, `relaunch_with_cdp`, `system_prompt` |
 | `browser` | `connect`, `page_context`, `read_text`, `click`, `type`, `select_option`, `evaluate`, `wait_for`, `list_tabs`, `switch_tab`, `scroll` |
@@ -147,7 +157,7 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 > **Editor permission allowlist (Claude Code, Cursor, &hellip;).** If your editor maintains a per-tool permission allowlist (keys like `mcp__clawdcursor__window`), use the **server-level wildcard** `"mcp__clawdcursor"` instead. It covers every tool in one entry and is immune to tool renames across versions — per-tool entries silently break whenever a tool is added, removed, or renamed.
 
-> **macOS first run.** Run `clawdcursor grant` to walk through the permission dialogs, then open **System Settings &rarr; Privacy &amp; Security** and enable the entry named **ClawdCursor** under **both** Accessibility and Screen Recording. v1.0.0 consolidates all desktop control under this single native-app identity &mdash; both entries are required.
+> **macOS first run.** Run `clawdcursor grant` to walk through the permission dialogs, then open **System Settings &rarr; Privacy &amp; Security** and enable the entry named **ClawdCursor** under **both** Accessibility and Screen Recording. clawdcursor consolidates all desktop control under this single native-app identity &mdash; both entries are required.
 > **Linux:** install `tesseract-ocr`, `python3-gi`, `gir1.2-atspi-2.0`, and (Wayland only) `ydotool` or `wtype`.
 
 ---
@@ -209,7 +219,7 @@ flowchart TB
 
     act["Act on the desktop<br/>computer.click/type/key/drag<br/>accessibility.invoke/set_value<br/>window.open_app<br/>system.shortcuts_run<br/>browser.click/type<br/>batch — N steps in 1 call"] --> safety
 
-    safety["Single safety gate<br/>safety.evaluate()<br/>allow / confirm / block"] -- allowed --> tools["clawdcursor tool registry<br/>94 granular + 6 compound"]
+    safety["Single safety gate<br/>safety.evaluate()<br/>allow / confirm / block"] -- allowed --> tools["clawdcursor tool registry<br/>98 granular + 7 compound"]
     safety -- needs user --> confirm["Human confirmation"] --> tools
     safety -- denied --> blocked["blocked"]
 
@@ -275,9 +285,9 @@ curl -s -X POST http://127.0.0.1:3847/mcp \
 
 ---
 
-## Tools &mdash; 94 granular primitives
+## Tools &mdash; 98 granular primitives
 
-The flat catalog. Each of the 6 compound toolboxes above dispatches to one of these under the hood. Use this surface directly when:
+The flat catalog. Each of the 7 compound toolboxes above dispatches to one of these under the hood. Use this surface directly when:
 
 - **Compatibility** &mdash; your agent runtime requires every action as a top-level MCP tool (no `action` enum). Run the daemon without `--compact` (granular is the default for `clawdcursor agent`) to expose them.
 - **Debugging** &mdash; you want to call a specific primitive directly (`key_press`, `mouse_click`, `read_screen`) without going through the compound dispatcher.
@@ -360,7 +370,7 @@ Five directories. Everything else is a leaf module.
 | Directory | What lives here |
 |---|---|
 | `src/core/` | Thin agent loop (`agent.ts`, `runAgent`), sense layer (a11y/snapshot/fingerprint), focus guard, safety gate. |
-| `src/tools/` | The 94 granular tools + 6 compound aggregators + `batch`, playbooks (`find-replace`, `extract-compose`), tool registry, dispatch. |
+| `src/tools/` | The 98 granular tools + 7 compound aggregators + `batch`, playbooks (`find-replace`, `extract-compose`), tool registry, dispatch. |
 | `src/platform/` | `PlatformAdapter` interface + Windows / macOS / Linux / Wayland implementations, OCR engine, CDP driver, URI handler. |
 | `src/llm/` | Provider clients (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), credentials, model config. |
 | `src/surface/` | CLI (`clawdcursor`), MCP server (stdio + HTTP), dashboard, doctor, onboarding, readiness probes. |
@@ -414,7 +424,7 @@ clawdcursor task <t>        Send a task to the running agent
 
 Options:
   --port <port>          Default: 3847
-  --compact              MCP only: expose compact tools instead of 94 granular
+  --compact              MCP only: expose compact tools instead of 98 granular
   --provider <name>      `agent` only: anthropic | openai | gemini | ollama | ...
   --accept               `agent` and `consent` only: skip the consent prompt
 ```
