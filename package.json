@@ -70,12 +70,14 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
     "sync-version": "tsx scripts/sync-version.ts",
-    "version": "tsx scripts/sync-version.ts && git add SKILL.md docs/index.html docs/install.sh docs/install.ps1"
+    "version": "tsx scripts/sync-version.ts && git add SKILL.md docs/index.html docs/install.sh docs/install.ps1",
+    "test:coverage": "vitest run --coverage",
+    "perf:smoke": "tsx scripts/perf-smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@nut-tree-fork/nut-js": "^4.2.0",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "croner": "^10.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -83,7 +85,7 @@
     "playwright": "^1.60.0",
     "sharp": "^0.34.5",
     "ws": "^8.21.0",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -93,9 +95,10 @@
     "@types/ws": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.4.1",
     "supertest": "^7.2.2",
-    "tsx": "^4.22.2",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
