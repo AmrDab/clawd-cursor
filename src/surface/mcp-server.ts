@@ -135,7 +135,10 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
       '(3) capture a screenshot ([perceive-image]) only as a last resort when both fail. ' +
       'Prefer named-target actions (by a11y name) over pixel coordinates. ' +
       'For fully autonomous, low-cost execution, start the daemon (`clawdcursor agent`) ' +
-      'and use the `task` tool — it runs a local cheap-model pipeline instead of your model.';
+      'and use the `task` tool — it runs a local cheap-model pipeline instead of your model. ' +
+      '`task` waits up to 45s; longer tasks return {status:"running"} and CONTINUE in the ' +
+      'background — re-call with the same instruction to keep waiting, task {action:"status"} ' +
+      'to poll, task {action:"abort"} to stop. A timeout on your side is NOT a task failure.';
 
   const server = new McpServer({ name: 'clawdcursor', version: VERSION }, { instructions });
   const tools = compact ? getCompactSurface() : getAllTools();

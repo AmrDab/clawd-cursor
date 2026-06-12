@@ -21,6 +21,70 @@ async function commandExists(cmd: string): Promise<boolean> {
   }
 }
 
+// ─── Bounded-sync delegation (timeout-proof `task`) ─────────────────────────
+//
+// MCP clients enforce a per-tool-call timeout (commonly ~60s). The old
+// delegate_to_agent awaited the WHOLE autonomous loop — a 90s task blew the
+// client's deadline, the call "timed out", and the work finished invisibly in
+// the background (live failure 2026-06-12: wallpaper task succeeded in 22
+// turns while the caller saw a timeout). Fix: wait synchronously only up to a
+// bound that stays under the client ceiling; if the loop is still going,
+// return a RUNNING receipt and keep the task alive. A re-call with the SAME
+// task text re-attaches to the in-flight run instead of starting a duplicate.
+
+interface InflightDelegation {
+  task: string;
+  startedAt: number;
+  /** Never rejects — settle state is recorded on the entry fields. */
+  promise: Promise<void>;
+  settled: boolean;
+  result?: { success: boolean; steps?: Array<{ description?: string }>; duration?: number };
+  error?: unknown;
+}
+
+let inflightDelegation: InflightDelegation | null = null;
+
+/** Test hook — clears the module-level in-flight holder. */
+export function __resetInflightDelegationForTests(): void {
+  inflightDelegation = null;
+}
+
+const SYNC_WAIT_DEFAULT_MS = 45_000; // under common 60s MCP client timeouts
+const SYNC_WAIT_MIN_MS = 1_000;
+const SYNC_WAIT_MAX_MS = 50_000;
+
+const normTask = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+const sleepMs = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+function startDelegation(
+  agent: { executeTask: (t: string) => Promise<NonNullable<InflightDelegation['result']>> },
+  task: string,
+): InflightDelegation {
+  const entry: InflightDelegation = { task, startedAt: Date.now(), promise: Promise.resolve(), settled: false };
+  entry.promise = agent.executeTask(task).then(
+    r => { entry.settled = true; entry.result = r; },
+    e => { entry.settled = true; entry.error = e; },
+  );
+  return entry;
+}
+
+function formatDelegationResult(entry: InflightDelegation): { text: string; isError?: boolean } {
+  if (entry.error) {
+    const err = entry.error as { message?: string };
+    return { text: `delegate_to_agent: ${err?.message ?? String(entry.error)}`, isError: true };
+  }
+  const result = entry.result;
+  return {
+    text: JSON.stringify({
+      success: result?.success,
+      steps: result?.steps?.length ?? 0,
+      duration: `${((result?.duration ?? 0) / 1000).toFixed(1)}s`,
+      lastAction: result?.steps?.slice(-1)?.[0]?.description ?? '(unknown)',
+    }, null, 2),
+    isError: !result?.success,
+  };
+}
+
 export function getOrchestrationTools(): ToolDefinition[] {
   return [
     {
@@ -28,15 +92,16 @@ export function getOrchestrationTools(): ToolDefinition[] {
       description:
         "Hand a whole task to clawdcursor's built-in thin agent loop, which drives the toolbox with the model configured via `clawdcursor doctor` (perceive → act → iterate until done). " +
         "For an expensive frontier model this is the delegation lever: hand grunt work to a cheaper configured model that takes the wheel. " +
+        "BOUNDED-SYNC: waits up to `timeout` seconds (default 45) for completion. A finished task returns its result directly; a longer task returns a {status:\"running\"} receipt with progress while the loop CONTINUES in the background — re-call with the SAME task text to keep waiting (re-attaches, never restarts), or poll agent_status / abort via abort_task. " +
         "Requires `clawdcursor agent` running WITH a model configured; in tools-only / --no-llm mode there is no model to drive it.",
       parameters: {
         task: { type: 'string', description: 'Natural language task description', required: true },
-        timeout: { type: 'number', description: 'Advisory; the agent enforces its own wall-clock timeout', required: false },
+        timeout: { type: 'number', description: 'Max seconds to WAIT for completion before returning a running receipt (default 45, clamped 1–50; stays under MCP client call-timeouts). The task itself keeps running — this only bounds the wait.', required: false },
       },
       category: 'orchestration',
       compactGroup: 'task',
       safetyTier: 1,
-      handler: async ({ task }, ctx) => {
+      handler: async ({ task, timeout }, ctx) => {
         // Run the task IN-PROCESS on the daemon's configured-model agent.
         // (This previously self-called the daemon's own /mcp via mcpCall, which
         // the streamable-HTTP transport rejects with "Already connected to a
@@ -45,20 +110,70 @@ export function getOrchestrationTools(): ToolDefinition[] {
         if (!ctx?.agent) {
           return { text: 'delegate_to_agent: no model-backed agent attached. This needs `clawdcursor agent` running WITH a model configured (run `clawdcursor doctor`). In tools-only / --no-llm mode there is no model to drive the task — drive the toolbox tools directly instead.', isError: true };
         }
-        try {
-          const result = await ctx.agent.executeTask(String(task ?? ''));
-          return {
-            text: JSON.stringify({
-              success: result.success,
-              steps: result.steps?.length ?? 0,
-              duration: `${((result.duration ?? 0) / 1000).toFixed(1)}s`,
-              lastAction: result.steps?.slice(-1)?.[0]?.description ?? '(unknown)',
-            }, null, 2),
-            isError: !result.success,
-          };
-        } catch (err: any) {
-          return { text: `delegate_to_agent: ${err?.message ?? String(err)}`, isError: true };
+        const text = String(task ?? '').trim();
+        if (!text) {
+          return { text: 'delegate_to_agent: task must be a non-empty string', isError: true };
         }
+        const timeoutSec = Number(timeout);
+        const boundMs = Math.min(SYNC_WAIT_MAX_MS, Math.max(SYNC_WAIT_MIN_MS,
+          Number.isFinite(timeoutSec) && timeoutSec > 0 ? timeoutSec * 1000 : SYNC_WAIT_DEFAULT_MS));
+
+        let entry = inflightDelegation;
+        if (entry && !entry.settled) {
+          // A delegated task is still running. Same text → re-attach and keep
+          // waiting; different text → tell the caller the truth instead of
+          // queueing or double-running.
+          if (normTask(entry.task) !== normTask(text)) {
+            const runningFor = ((Date.now() - entry.startedAt) / 1000).toFixed(0);
+            return {
+              text: `delegate_to_agent: the agent is BUSY with a different task ("${entry.task.slice(0, 100)}", running ${runningFor}s). ` +
+                    `Poll agent_status (compact: task {action:"status"}), abort it first (abort_task / task {action:"abort"}), ` +
+                    `or re-call with the SAME task text to keep waiting on it.`,
+              isError: true,
+            };
+          }
+        } else if (entry && entry.settled && normTask(entry.task) === normTask(text)) {
+          // Finished while the caller was away — hand over the stored result.
+          inflightDelegation = null;
+          return formatDelegationResult(entry);
+        } else {
+          // Start fresh. Guard against a run started through another route
+          // (submit_task / scheduler) that this holder doesn't know about.
+          const state = ctx.agent.getState?.();
+          if (state?.status && state.status !== 'idle') {
+            return {
+              text: `delegate_to_agent: agent is busy (status=${state.status}) with a task started elsewhere (submit_task/scheduler). Poll agent_status or call abort_task first.`,
+              isError: true,
+            };
+          }
+          entry = startDelegation(ctx.agent, text);
+          inflightDelegation = entry;
+        }
+
+        await Promise.race([entry.promise, sleepMs(boundMs)]);
+
+        if (entry.settled) {
+          if (inflightDelegation === entry) inflightDelegation = null;
+          return formatDelegationResult(entry);
+        }
+
+        // Still running — return a receipt instead of blowing the caller's
+        // MCP timeout. NOT an error: the task is alive and progressing.
+        const st = ctx.agent.getState?.() ?? {};
+        return {
+          text: JSON.stringify({
+            status: 'running',
+            task: entry.task,
+            elapsed: `${((Date.now() - entry.startedAt) / 1000).toFixed(0)}s`,
+            progress: {
+              status: st.status,
+              currentStep: st.currentStep,
+              stepsCompleted: st.stepsCompleted,
+              stepsTotal: st.stepsTotal,
+            },
+            next: 'Task continues in the background. Re-call this tool with the SAME task text to keep waiting (re-attaches — it will NOT restart the task). Or poll agent_status (compact: task {action:"status"}) / abort with abort_task (task {action:"abort"}).',
+          }, null, 2),
+        };
       },
     },
 

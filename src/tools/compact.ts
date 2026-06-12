@@ -163,6 +163,17 @@ const SYSTEM_ACTIONS: ActionRoute[] = [
   { action: 'open_url',        delegate: 'open_url' },
 ];
 
+// `task` compound — bounded-sync delegation plus its poll/cancel companions.
+// status/abort exist here because a >45s task returns a RUNNING receipt and
+// the compact surface must be able to follow up (the granular submit_task/
+// agent_status/abort_task family used to be granular-only — live failure
+// 2026-06-12: a compact-surface agent had NO non-timing-out delegation path).
+const TASK_ACTIONS: ActionRoute[] = [
+  { action: 'run',    delegate: 'delegate_to_agent', argRemap: { instruction: 'task' } },
+  { action: 'status', delegate: 'agent_status' },
+  { action: 'abort',  delegate: 'abort_task' },
+];
+
 const BROWSER_ACTIONS: ActionRoute[] = [
   { action: 'connect',        delegate: 'cdp_connect' },
   { action: 'page_context',   delegate: 'cdp_page_context' },
@@ -273,6 +284,7 @@ export const COMPOUND_ROUTE_INDEX: Record<string, ActionRoute[]> = {
   window: WINDOW_ACTIONS,
   system: SYSTEM_ACTIONS,
   browser: BROWSER_ACTIONS,
+  task: TASK_ACTIONS,
 };
 
 /** Which other compound(s) expose `action`, excluding the one already tried. */
@@ -416,20 +428,33 @@ export function getCompactTools(): ToolDefinition[] {
         '**Requires the `clawdcursor agent` daemon to be running** (binds 127.0.0.1:3847 with an LLM configured). ' +
         'Hand clawdcursor a WHOLE natural-language task and let its internal pipeline decide how to execute it (router → blind agent → hybrid → vision fallback). ' +
         'Use this when you don\'t want to micromanage every primitive — clawdcursor decomposes the task, picks the cheapest execution path, and returns a trace. ' +
+        'BOUNDED-SYNC: waits up to `timeout` seconds (default 45) — a longer task returns {status:"running"} with progress while it CONTINUES in the background; re-call with the SAME instruction to keep waiting (re-attaches, never restarts), {action:"status"} to poll, {action:"abort"} to stop it. ' +
         'The `computer`/`accessibility`/`window`/`system`/`browser` compounds are for when you want step-level control yourself. ' +
         'If the daemon isn\'t running you get a clear error telling you how to start it.',
       parameters: {
+        action: {
+          type: 'string',
+          description: 'Default "run" (submit/continue the instruction). "status" → poll the running task (cheap, poll at 1–2 Hz). "abort" → stop the running task.',
+          required: false,
+          enum: ['run', 'status', 'abort'],
+        },
         instruction: {
           type: 'string',
-          description: 'Natural-language task description, e.g. "open Notepad and type hello", "go to github.com", "send email in Outlook".',
-          required: true,
+          description: 'Natural-language task description, e.g. "open Notepad and type hello", "go to github.com", "send email in Outlook". Required for action "run" (the default); ignored for status/abort.',
+          required: false,
+        },
+        timeout: {
+          type: 'number',
+          description: 'Max seconds to WAIT for completion before returning a running receipt (default 45, clamped 1–50). The task keeps running — this only bounds the wait.',
+          required: false,
         },
       },
       category: 'orchestration',
       safetyTier: 1,
-      handler: (args, ctx) => dispatchCompound('task', [
-        { action: '__task__', delegate: 'delegate_to_agent', argRemap: { instruction: 'task' } },
-      ], { action: '__task__', ...args }, ctx),
+      handler: (args, ctx) => {
+        const action = typeof args.action === 'string' && args.action ? args.action : 'run';
+        return dispatchCompound('task', TASK_ACTIONS, { ...args, action }, ctx);
+      },
     },
 
     // `batch` — run an ordered list of the above calls in one shot (declarative,
