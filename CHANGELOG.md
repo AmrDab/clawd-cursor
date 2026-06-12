@@ -2,6 +2,50 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.1] - 2026-06-12 — bulletproofing patch (live-session bugs)
+
+Every fix in this patch came from a real failure observed while agents drove
+real UIs — found in live runs, fixed at the root, regression-tested.
+
+### Fixed — safety
+
+- **Coordinate clicks can no longer silently land on the wrong window.** When
+  Windows' foreground-lock defeats the pre-click activation (or the click
+  point is over a different window), `click`/`smart_click` now return a loud
+  **"⚠ FOCUS NOT CONFIRMED — DO NOT type next"** warning with the window that
+  was actually promoted, instead of a hollow success. The trigger was a real
+  keystroke leak: an OTP typed after a missed click went into a background
+  chat window.
+
+### Fixed — `task` delegation no longer times out MCP clients
+
+- `task` / `delegate_to_agent` used to await the **whole** autonomous loop, so
+  any task longer than the client's per-call timeout (~60s) "timed out" while
+  the work finished invisibly. Now it waits up to `timeout` seconds (default
+  45, clamped 1–50): finished → result as before; still running → a
+  `{status:"running"}` receipt with live progress while the loop continues.
+  Re-calling with the **same** task text re-attaches (never restarts); the
+  compact `task` tool gains `{action:"status"}` / `{action:"abort"}`.
+  A client-side timeout is **not** a task failure.
+
+### Fixed — perception honesty
+
+- Window/element guards (`expect:{window:...}`) now normalize invisible
+  Unicode — Edge's title contains a no-break space in "Microsoft Edge" that
+  made correct guards fail.
+- The a11y → CDP DOM fallback verifies the connected page actually corresponds
+  to the **focused** window before answering; it no longer reports another
+  browser's buttons as if they were on the focused page.
+
+### Fixed — ergonomics
+
+- The agent's dedicated browser launches maximized (fresh profiles used to
+  open as a tiny window).
+- `consent` / README / website / `doctor --help` now state the two-path
+  onboarding truth: MCP setup is `consent` + (macOS) `grant` — `doctor` is
+  only for the autonomous `agent` mode. macOS: Accessibility is required;
+  Screen Recording is optional (vision fallback only).
+
 ## [1.5.0] - 2026-06-11 — UI State Compiler + reactive verification
 
 The headline of this release is a new perception substrate and a verification

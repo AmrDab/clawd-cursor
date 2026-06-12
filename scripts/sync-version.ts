@@ -57,7 +57,23 @@ const TARGETS: SyncTarget[] = [
     desc: 'SKILL frontmatter `version:` field',
   },
 
-  // docs/index.html — marketing site. Six places, all distinct contexts.
+  // server.json — the MCP registry manifest (added 2026-06-11). Carries the
+  // version TWICE: the server entry and the npm package pin. A stale value
+  // here makes the official registry advertise an old release.
+  {
+    file: 'server.json',
+    pattern: /("version":\s*")\d+\.\d+\.\d+(")/g,
+    replacement: `$1${VERSION}$2`,
+    desc: 'server.json registry manifest versions (server + npm package)',
+  },
+
+  // docs/index.html — marketing site. Several places, all distinct contexts.
+  {
+    file: 'docs/index.html',
+    pattern: /(AGENT-READABLE SUMMARY \(v)\d+\.\d+\.\d+(\))/,
+    replacement: `$1${VERSION}$2`,
+    desc: 'index.html agent-readable summary header',
+  },
   {
     file: 'docs/index.html',
     pattern: /(<title>Clawd Cursor v)\d+\.\d+\.\d+/,
