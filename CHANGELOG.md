@@ -2,6 +2,26 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [Unreleased]
+
+### Added — on-screen control banner (transparency)
+
+- **"ClawdCursor — desktop control in progress" banner**: a topmost,
+  no-focus-steal pill at the top-center of the screen with a blinking red
+  recording dot, shown whenever an agent is actively driving the desktop —
+  pinned for the whole run of an autonomous task, and activity-triggered
+  (auto-hides after ~30s idle) for external agents driving over MCP
+  (stdio or HTTP). **Double-click it to stop**: runs the `clawdcursor stop`
+  flow (abort in-flight task → graceful shutdown). The human at the machine
+  always knows, and always has a kill switch. Windows today (macOS/Linux
+  adapters welcome — the controller is platform-neutral); disable with
+  `--no-banner` or `CLAWD_NO_BANNER=1`.
+
+### Fixed
+
+- Unmatched HTTP routes now return JSON 404 with the endpoint list instead of
+  Express's default HTML error page.
+
 ## [1.5.1] - 2026-06-12 — bulletproofing patch (live-session bugs)
 
 Every fix in this patch came from a real failure observed while agents drove

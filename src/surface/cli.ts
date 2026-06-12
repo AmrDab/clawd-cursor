@@ -54,7 +54,7 @@ process.on('unhandledRejection', (reason: any) => {
 
 import { Command } from 'commander';
 import { Agent } from '../core/agent';
-import { createUtilityServer, requireAuth, initServerToken, getServerLogBuffer, isLoopbackHost } from './http-utility';
+import { createUtilityServer, requireAuth, initServerToken, getServerLogBuffer, isLoopbackHost, mountJson404 } from './http-utility';
 import { DEFAULT_CONFIG } from '../types';
 import type { ClawdConfig } from '../types';
 import { VERSION } from './version';
@@ -254,6 +254,8 @@ interface AgentModeOpts {
   noLlm?: boolean;
   skipConsent?: boolean;
   compact?: boolean;
+  /** Commander `--no-banner` → false. Undefined = banner enabled (default). */
+  banner?: boolean;
 }
 
 async function runAgentMode(opts: AgentModeOpts): Promise<void> {
@@ -437,8 +439,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   }
 
   // ── HTTP utility surface (/, /health, /stop) + MCP transport at /mcp ──
-  const app = createUtilityServer({
-    host: config.server.host,
+  const serverShutdown = {
     onAbort: () => {
       agent?.abort();
     },
@@ -458,6 +459,26 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
         await agent?.waitForIdle(2000);
       } catch { /* non-fatal */ }
       agent?.disconnect();
+    },
+  };
+  const app = createUtilityServer({
+    host: config.server.host,
+    ...serverShutdown,
+  });
+
+  // ── On-screen control banner: double-click = the `clawdcursor stop` flow ──
+  // (same abort → graceful-stop → exit sequence as POST /stop, same grace
+  // window and hard-kill net). Disable with --no-banner / CLAWD_NO_BANNER=1.
+  const { controlBanner } = await import('../core/banner');
+  if (opts.banner === false) controlBanner.setEnabled(false);
+  controlBanner.configure({
+    onStopRequested: () => {
+      console.log(`\n${e('🛑', '[STOP]')} Control banner double-clicked — running the stop flow...`);
+      try { serverShutdown.onAbort(); } catch { /* non-fatal */ }
+      const grace = Promise.resolve().then(() => serverShutdown.onStop()).catch(() => {});
+      const cap = new Promise<void>(resolve => setTimeout(resolve, 2500));
+      void Promise.race([grace, cap]).then(() => process.exit(0));
+      setTimeout(() => process.exit(1), 6000); // hard-kill safety net
     },
   });
 
@@ -540,6 +561,9 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   } catch (err) {
     console.warn('MCP HTTP transport not loaded:', (err as Error).message);
   }
+
+  // LAST mount — JSON 404 for unmatched routes (must come after /mcp).
+  mountJson404(app);
 
   app.listen(config.server.port, config.server.host, async () => {
     const serverToken = initServerToken();
@@ -676,6 +700,7 @@ program
   .option('--skip-consent', 'Skip consent prompt (requires NODE_ENV=development)')
   .option('--compact', 'Expose the 6-compound MCP surface (computer/accessibility/window/system/browser/task) over HTTP /mcp instead of the 97 granular tools (also CLAWD_MCP_COMPACT=1)')
   .option('--allow-remote', 'Permit binding to a non-loopback server.host. DANGER: exposes full desktop control to the network; the Bearer token is the only protection')
+  .option('--no-banner', 'Disable the on-screen "desktop control in progress" banner (also CLAWD_NO_BANNER=1)')
   .action(async (opts) => {
     await runAgentMode(opts);
   });
@@ -696,6 +721,7 @@ program
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .option('--compact', 'Expose the 6-compound MCP surface over HTTP /mcp (also CLAWD_MCP_COMPACT=1)')
   .option('--allow-remote', 'Permit binding to a non-loopback server.host. DANGER: exposes full desktop control to the network; the Bearer token is the only protection')
+  .option('--no-banner', 'Disable the on-screen "desktop control in progress" banner (also CLAWD_NO_BANNER=1)')
   .action(async (opts) => {
     // v0.9 PR7.4 — `start` is now a thin deprecation alias for `agent`.
     // The legacy /task /favorites /execute REST surface was deleted; callers
@@ -1309,7 +1335,8 @@ program
   .command('mcp')
   .description('Run as MCP tool server over stdio (for Claude Code, Cursor, Windsurf, Zed)')
   .option('--compact', 'Expose 6 compound tools instead of 97 granular ones (Anthropic Computer-Use style — recommended for most agents)')
-  .action(async (opts: { compact?: boolean }) => {
+  .option('--no-banner', 'Disable the on-screen "desktop control in progress" banner (also CLAWD_NO_BANNER=1)')
+  .action(async (opts: { compact?: boolean; banner?: boolean }) => {
     // Single-instance guard (MCP servers can accumulate when editors restart them)
     const existingMcpPid = claimPidFile('mcp');
     if (existingMcpPid !== null) {
@@ -1376,6 +1403,19 @@ program
     };
     process.on('SIGINT', releaseMcp);
     process.on('SIGTERM', releaseMcp);
+
+    // On-screen control banner for EXTERNAL agents driving over stdio. The
+    // mcp-server tool wrapper touches it on every consequential call; a
+    // double-click is the human kill switch — exiting the server severs the
+    // editor's desktop control (the host respawns a fresh server on demand).
+    const { controlBanner } = await import('../core/banner');
+    if (opts.banner === false) controlBanner.setEnabled(false);
+    controlBanner.configure({
+      onStopRequested: () => {
+        process.stderr.write('\n[STOP] Control banner double-clicked — shutting down the MCP server.\n');
+        releaseMcp();
+      },
+    });
 
     // Parent-death detection (orphan teardown).
     //

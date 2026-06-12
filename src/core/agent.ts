@@ -14,6 +14,7 @@ import { OcrEngine } from '../platform/ocr-engine';
 import { loadPipelineConfig } from '../surface/doctor';
 import { runAgent } from './agent-loop/agent';
 import { getPlatform } from '../platform';
+import { controlBanner } from './banner';
 import type { ClawdConfig, AgentState, TaskResult, StepResult } from '../types';
 import type { ResolvedConfig } from '../llm/config';
 
@@ -113,6 +114,11 @@ export class Agent {
       }, Agent.TASK_TIMEOUT_MS);
     });
 
+    // Transparency: the on-screen banner stays up for the WHOLE task so a
+    // human at the machine always knows automation is live (and can
+    // double-click it to stop). Pin/unpin — tool-activity touches must not
+    // hide it mid-task.
+    controlBanner.pin();
     try {
       this.currentRun = this._executeTask(task, startTime);
       return await Promise.race([this.currentRun, timeoutPromise]);
@@ -120,6 +126,7 @@ export class Agent {
       if (timeoutHandle !== null) clearTimeout(timeoutHandle);
       this.taskExecutionLocked = false;
       this.currentRun = null;
+      controlBanner.unpin();
     }
   }
 

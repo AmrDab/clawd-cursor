@@ -25,6 +25,7 @@ import { VERSION } from './version';
 import type { ToolContext, ToolDefinition } from '../tools/registry';
 import { getAllTools, getCompactSurface } from '../tools/registry';
 import { evaluateToolCall } from '../tools/safety-gate';
+import { controlBanner } from '../core/banner';
 
 // ── Typed SDK boundary (#115) ────────────────────────────────────────────────
 //
@@ -185,6 +186,11 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
         if (safetyError) {
           return { content: [{ type: 'text', text: safetyError.text }], isError: true };
         }
+        // Transparency: any consequential (mutating) tool call from an
+        // EXTERNAL agent pokes the on-screen control banner — it shows on the
+        // first poke and auto-hides after ~30s of inactivity. Read-only
+        // perception (tier 0) stays silent.
+        if ((tool.safetyTier ?? 0) >= 1) controlBanner.touch();
         let result;
         try {
           result = await tool.handler(params, ctx);

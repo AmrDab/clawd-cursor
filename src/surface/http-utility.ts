@@ -337,3 +337,20 @@ export function createUtilityServer(options: UtilityServerOptions): express.Expr
 
   return app;
 }
+
+/**
+ * JSON 404 fallthrough — every consumer of this surface is a program;
+ * Express's default HTML error page is noise to them (endpoint smoke
+ * 2026-06-12). MUST be mounted LAST, after every real route — the daemon
+ * registers /mcp on the app AFTER createUtilityServer returns, so this
+ * cannot live inside it (middleware runs in registration order and would
+ * swallow /mcp).
+ */
+export function mountJson404(app: express.Express): void {
+  app.use((req, res) => {
+    res.status(404).json({
+      error: `No such endpoint: ${req.method} ${req.path}`,
+      endpoints: ['GET /', 'GET /health', 'POST /mcp', 'GET /mcp', 'POST /abort', 'POST /stop'],
+    });
+  });
+}
