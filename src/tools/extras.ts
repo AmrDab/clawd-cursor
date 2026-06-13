@@ -20,6 +20,8 @@
  */
 
 import type { ToolDefinition } from './types';
+import { promises as fsp } from 'node:fs';
+import { windowTextIncludes } from './window-text';
 
 function notSupported(tool: string): { text: string; isError: true } {
   return {
@@ -307,7 +309,9 @@ export function getExtraTools(): ToolDefinition[] {
       },
       category: 'window',
       compactGroup: 'window',
-      safetyTier: 2,
+      // Tier 1 (input): minimizing is reversible (restore_window). Was tier 2
+      // (confirm) by accident — see minimize_window in a11y.ts.
+      safetyTier: 1,
       handler: async ({ processName, processId, title }, ctx) => {
         await ctx.ensureInitialized();
         if (!ctx.platform) return needPlatform('minimize_window_to_taskbar');
@@ -506,16 +510,37 @@ export function getExtraTools(): ToolDefinition[] {
         // adapter handles shell: paths and Start-Process; macOS uses `open`;
         // Linux uses xdg-open fallback.
         const p = String(filePath);
+        // Leaf segment — for a directory this is the Explorer window title.
+        const leaf = p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '';
+        let isDir = false;
+        try { isDir = (await fsp.stat(p)).isDirectory(); } catch { /* unknown/missing — treat as file */ }
         try {
           if (ctx.platform.platform === 'darwin') {
             await ctx.platform.launchApp('open', { url: p });
-          } else if (ctx.platform.platform === 'linux') {
-            await ctx.platform.launchApp('xdg-open', { url: p });
-          } else {
-            // Windows: explorer handles files directly.
-            await ctx.platform.launchApp('explorer.exe', { url: p });
+            return { text: `Opened: ${p}` };
           }
-          return { text: `Opened: ${p}` };
+          if (ctx.platform.platform === 'linux') {
+            await ctx.platform.launchApp('xdg-open', { url: p });
+            return { text: `Opened: ${p}` };
+          }
+          // Windows: open the path in Explorer. For a DIRECTORY, VERIFY the
+          // right folder window actually surfaced — launchApp must not fall
+          // back to a Start-Menu search (which types "explorer" and opens
+          // File Explorer at Home), and a pre-existing window is not proof.
+          // Previously open_file returned "Opened" unconditionally even when
+          // it landed on Home (live bug 2026-06-12).
+          const res = await ctx.platform.launchApp('explorer.exe', { url: p, noStartMenuFallback: true });
+          if (isDir) {
+            const title = res?.title ?? '';
+            if (!leaf || !windowTextIncludes(title, leaf)) {
+              return {
+                text: `open_file: launched Explorer but could NOT confirm the folder "${leaf}" opened (window: "${title || 'none'}"). The path may not exist, or Explorer focused a different window. Verify with list_windows.`,
+                isError: true,
+              };
+            }
+            return { text: `Opened folder "${leaf}" (window: "${title}")` };
+          }
+          return { text: `Opened: ${p}${res?.title ? ` (window: "${res.title}")` : ''}` };
         } catch (err) {
           return {
             text: `open_file failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -636,9 +661,23 @@ export function getExtraTools(): ToolDefinition[] {
           // window. The reliable path is to resolve the registered handler
           // executable and invoke IT directly, then verify a new visible
           // top-level window actually appeared.
-          const { resolveSchemeHandlerExecutable, launchHandlerAndVerify } = await import('../platform/uri-handler');
+          const { resolveSchemeHandlerExecutable, launchHandlerAndVerify, isRegisteredUriScheme, shellDispatchUriAndVerify } = await import('../platform/uri-handler');
           const exe = await resolveSchemeHandlerExecutable(scheme);
           if (!exe) {
+            // No resolvable handler EXE — but some registered schemes route
+            // through a DelegateExecute COM handler with no shell\open\command
+            // (ms-settings:, ms-windows-store:, …). Only ShellExecute opens
+            // those, so fall back to a verified shell dispatch before failing.
+            if (await isRegisteredUriScheme(scheme)) {
+              const shell = await shellDispatchUriAndVerify(u, () => ctx.platform!.listWindows(), { waitMs: 5000 });
+              if (shell.windowOpened) {
+                return { text: `Opened ${scheme}: via the OS shell handler. New window: "${shell.title ?? '(untitled)'}". (URI: ${u.length > 120 ? u.slice(0, 120) + '…' : u})` };
+              }
+              return {
+                text: `open_uri: dispatched ${scheme}: via the OS shell but no new window appeared within 5s${shell.error ? ` (${shell.error})` : ''}. The handler may have routed into an existing window — verify with list_windows.`,
+                isError: true,
+              };
+            }
             return {
               text: `open_uri: no registered Windows handler found for "${scheme}:". URI was not dispatched.`,
               isError: true,

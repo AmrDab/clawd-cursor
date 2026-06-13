@@ -11,11 +11,18 @@ describe('direct tool safety gate', () => {
     expect(evaluateToolCall(tool!, {})).toBeNull();
   });
 
-  it('blocks dangerous key combos before handler execution', () => {
+  it('HARD-blocks lock/force-quit key combos before handler execution', () => {
+    const tool = getTool('key_press');
+    const result = evaluateToolCall(tool!, { key: 'ctrl+alt+delete' });
+    expect(result?.isError).toBe(true);
+    expect(result?.text).toContain('safety block');
+  });
+
+  it('CONFIRMS (not hard-blocks) consequential combos like alt+f4 (v1.6.0)', () => {
     const tool = getTool('key_press');
     const result = evaluateToolCall(tool!, { key: 'alt+f4' });
     expect(result?.isError).toBe(true);
-    expect(result?.text).toContain('safety block');
+    expect(result?.text).toContain('safety confirm');
   });
 
   it('fails closed for confirm-tier direct REST/MCP actions', () => {

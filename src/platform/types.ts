@@ -365,6 +365,14 @@ export interface PlatformAdapter {
      * `APP_ALIASES` provides a curated `searchTerm` per app for this.
      */
     searchTerm?: string;
+    /**
+     * Skip the Start-Menu / search-launcher fallback (Windows). When the
+     * direct launch doesn't surface a window, return `{}` instead of typing
+     * the name into the OS search box. Used by `open_file` for a path, where
+     * the fallback would type "explorer" and open File Explorer at **Home**
+     * instead of the requested folder — a false "Opened" with a side effect.
+     */
+    noStartMenuFallback?: boolean;
   }): Promise<{ pid?: number; title?: string; handle?: number | string }>;
 }
 

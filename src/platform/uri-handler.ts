@@ -137,6 +137,73 @@ function resolveKnownHandlerForScheme(scheme: string): string | null {
 }
 
 /**
+ * Is `scheme` a registered URI protocol in HKCR (has a `URL Protocol` value)?
+ * Some schemes (ms-settings:, ms-windows-store:, …) ARE registered but route
+ * through a `DelegateExecute` COM handler with an EMPTY shell\open\command — so
+ * resolveSchemeHandlerExecutable() returns null even though the OS can open
+ * them. Only ShellExecute (Start-Process) honors DelegateExecute. This lets the
+ * caller decide to fall back to a shell dispatch instead of failing outright.
+ */
+export async function isRegisteredUriScheme(scheme: string): Promise<boolean> {
+  if (process.platform !== 'win32') return false;
+  const s = scheme.toLowerCase().replace(/[^a-z0-9+.-]/g, ''); // defensive: scheme charset only
+  if (!s) return false;
+  try {
+    const { stdout } = await execFileAsync('reg', ['query', `HKCR\\${s}`, '/v', 'URL Protocol'], { timeout: 3000 });
+    return /URL Protocol/i.test(stdout);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Dispatch a URI via ShellExecute (PowerShell `Start-Process`) — the ONLY path
+ * that honors `DelegateExecute` COM handlers (ms-settings: et al.) — and verify
+ * a NEW visible top-level window appeared by diffing the full window list
+ * before/after. The handler process is unknown (SystemSettings.exe for
+ * ms-settings, etc.), so this diffs ALL windows rather than one process.
+ *
+ * The URI (agent-controlled) is passed via an ENV VAR, never interpolated into
+ * the command string — no shell-injection surface.
+ */
+export async function shellDispatchUriAndVerify(
+  uri: string,
+  listWindows: () => Promise<Array<{ title?: string; handle?: number | string }>>,
+  opts: { waitMs?: number } = {},
+): Promise<{ windowOpened: boolean; title?: string; error?: string }> {
+  if (process.platform !== 'win32') return { windowOpened: false, error: 'windows-only' };
+  const waitMs = opts.waitMs ?? 5000;
+  const snapshot = async (): Promise<Map<string, string>> => {
+    const m = new Map<string, string>();
+    try {
+      for (const w of await listWindows()) m.set(String(w.handle), w.title ?? '');
+    } catch { /* empty */ }
+    return m;
+  };
+  const before = await snapshot();
+  try {
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', 'Start-Process -FilePath $env:CLAWD_URI'],
+      { detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, CLAWD_URI: uri } },
+    );
+    child.unref();
+    child.on('error', () => { /* poll reports no-window */ });
+  } catch (err) {
+    return { windowOpened: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 300));
+    const after = await snapshot();
+    for (const [handle, title] of after) {
+      if (!before.has(handle)) return { windowOpened: true, title };
+    }
+  }
+  return { windowOpened: false };
+}
+
+/**
  * Snapshot all visible top-level windows belonging to the given process
  * name (case-insensitive). Returns a Set of HWND-like identifiers so the
  * caller can diff "before" vs "after" launching a handler.

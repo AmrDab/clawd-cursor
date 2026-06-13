@@ -944,6 +944,8 @@ export class WindowsAdapter implements PlatformAdapter {
        * binary name in Start Menu can surface the wrong app.
        */
       searchTerm?: string;
+      /** Skip the Start-Menu search fallback; return {} if no window surfaces. */
+      noStartMenuFallback?: boolean;
     },
   ): Promise<{ pid?: number; title?: string; handle?: number | string }> {
     // Reject control chars / backticks / $() that can escape PowerShell quoting
@@ -1001,6 +1003,7 @@ export class WindowsAdapter implements PlatformAdapter {
       // the router's strategy ladder.
       const uwpResult = await this.findLaunchedWindow(name, windowsBefore, 4_000);
       if (uwpResult.title) return this.foregroundLaunched(uwpResult);
+      if (opts?.noStartMenuFallback) return uwpResult; // {} — caller verifies
       return this.foregroundLaunched(await this.launchViaStartMenuSearch(name, opts?.searchTerm, windowsBefore));
     }
 
@@ -1030,6 +1033,7 @@ export class WindowsAdapter implements PlatformAdapter {
     // any binary not on PATH but Start-Menu-indexed will recover here.
     const direct = await this.findLaunchedWindow(name, windowsBefore, 4_000);
     if (direct.title) return this.foregroundLaunched(direct);
+    if (opts?.noStartMenuFallback) return direct; // {} — caller verifies (open_file)
 
     // Route 3: Start Menu search fallback — universal for any app indexed by
     // Windows. Press the Win key, type the app name, press Enter. This is

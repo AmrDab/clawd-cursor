@@ -26,49 +26,63 @@ export function normalizeCombo(combo: string): string {
   return flat.split('+').map(p => p === 'mod' ? PLATFORM_MOD_LOWER : p).join('+');
 }
 
-/** Base set stored in normalized form. */
-const RAW_BLOCK: string[] = [
-  // OS-level destructive
-  'alt+f4',              // Windows close window — harmless by itself, but never what an agent should do
-  'ctrl+alt+delete',
-  'ctrl+alt+del',
-  'cmd+q',               // macOS quit app (all windows); text-agent should close via menu explicitly
-  'cmd+opt+esc',         // macOS force-quit picker
-  'cmd+shift+q',         // macOS log-out
+// Two tiers (v1.6.0): the old single list HARD-blocked everything with NO
+// confirm path — even though `blockReason` promised "consent via Confirm-tier".
+// That dead-ended legitimate agent actions: win+d (show desktop), ctrl+w
+// (close a tab), win+r. Split by reversibility/intent:
+//   HARD   — locks the machine, force-quits, or fires a secure-attention /
+//            shutdown sequence. Never an agent action; no confirm path.
+//   CONFIRM — consequential but legitimate (close window/tab, show desktop,
+//            open a launcher). Routes through the normal confirm/allowConfirm
+//            gate so an authorized caller can proceed.
 
-  // Lock / switch-user
-  'win+l',               // Windows lock
-  'cmd+ctrl+q',          // macOS lock
-
-  // Run-arbitrary-command pickers
-  'win+r',               // Windows Run dialog — arbitrary command entry
-  'cmd+space',           // macOS Spotlight (not destructive but not an agent action)
-
-  // Show desktop / minimize everything
-  'win+d',
-  'cmd+f3',              // macOS Show Desktop
-  'f11',                 // Full-screen — rarely what an agent wants, often interferes with UIA
-
-  // Task manager / force quit escalation path
-  'ctrl+shift+esc',
-
-  // Shutdown combos some laptops map to
-  'fn+alt+f4',
-
-  // Close tab / window
-  'ctrl+w',              // close tab/window — can lose state silently
-  'cmd+w',
+/** Hard-blocked: no confirm path. */
+const HARD_BLOCK: string[] = [
+  'ctrl+alt+delete', 'ctrl+alt+del',  // secure attention sequence
+  'win+l', 'cmd+ctrl+q',              // lock the machine
+  'cmd+shift+q',                      // macOS log out
+  'cmd+opt+esc',                      // macOS force-quit picker
+  'ctrl+shift+esc',                   // task manager / force-quit escalation
+  'fn+alt+f4',                        // shutdown combo some laptops map to
 ];
 
-/** The read-only normalized blocklist. */
-export const BLOCKED_KEYS: ReadonlySet<string> = new Set(RAW_BLOCK.map(normalizeCombo));
+/** Confirm-tier: consequential but a legitimate agent action with approval. */
+const CONFIRM_BLOCK: string[] = [
+  'alt+f4', 'cmd+q',                  // close all windows / quit app (may lose unsaved work)
+  'ctrl+w', 'cmd+w',                  // close tab/window
+  'win+r', 'cmd+space',               // Run dialog / Spotlight launcher
+  'win+d', 'cmd+f3',                  // show desktop / minimize everything
+  'f11',                              // full-screen — often interferes with UIA
+];
 
-/** Is this combo blocked? */
-export function isBlockedKey(combo: string): boolean {
-  return BLOCKED_KEYS.has(normalizeCombo(combo));
+const HARD_BLOCK_SET: ReadonlySet<string> = new Set(HARD_BLOCK.map(normalizeCombo));
+const CONFIRM_BLOCK_SET: ReadonlySet<string> = new Set(CONFIRM_BLOCK.map(normalizeCombo));
+
+export type KeyBlockTier = 'block' | 'confirm' | null;
+
+/** Classify a combo: 'block' (hard, no path), 'confirm' (allowConfirm-able), or null (free). */
+export function keyBlockTier(combo: string): KeyBlockTier {
+  const n = normalizeCombo(combo);
+  if (HARD_BLOCK_SET.has(n)) return 'block';
+  if (CONFIRM_BLOCK_SET.has(n)) return 'confirm';
+  return null;
 }
 
-/** Reason string for a block — usable as an error message. */
+/** Truthful reason for the given tier. */
+export function keyBlockReason(combo: string, tier: 'block' | 'confirm'): string {
+  return tier === 'block'
+    ? `Key combo "${combo}" is hard-blocked — it locks the machine, force-quits, or fires a system/shutdown sequence an agent must never send.`
+    : `Key combo "${combo}" needs confirmation — it closes windows/tabs, shows the desktop, or opens a run/search launcher. If the user authorized it, re-issue inside batch({allowConfirm:true}).`;
+}
+
+// ── Back-compat: the old names now mean HARD blocks only ──
+/** The read-only normalized HARD-block set. */
+export const BLOCKED_KEYS: ReadonlySet<string> = HARD_BLOCK_SET;
+/** True only for HARD-blocked combos (no confirm path). */
+export function isBlockedKey(combo: string): boolean {
+  return HARD_BLOCK_SET.has(normalizeCombo(combo));
+}
+/** Reason string for a HARD block. */
 export function blockReason(combo: string): string {
-  return `Key combo "${combo}" is blocked — requires explicit user consent via Confirm-tier safety.`;
+  return keyBlockReason(combo, 'block');
 }

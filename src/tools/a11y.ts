@@ -514,7 +514,11 @@ export function getA11yTools(): ToolDefinition[] {
         title: { type: 'string', description: 'Window title substring to match', required: false },
       },
       category: 'window',
-      safetyTier: 2,
+      // Tier 1 (input), not 2 (confirm): minimizing is trivially reversible
+      // (restore_window exists) — the confirm-tier was accidental and diverged
+      // from TOOL_TIER('minimize_window')='input' and the compound window
+      // {action:'minimize'} surface, which allowed it freely.
+      safetyTier: 1,
       handler: async ({ processName, processId, title }, ctx) => {
         await ctx.ensureInitialized();
 

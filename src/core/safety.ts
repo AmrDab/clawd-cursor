@@ -19,7 +19,7 @@
  * Model-agnostic: no LLM calls. Pure rule engine.
  */
 
-import { isBlockedKey, blockReason } from '../tools/playbooks/keys-blocklist';
+import { keyBlockTier, keyBlockReason } from '../tools/playbooks/keys-blocklist';
 import { logger } from './observability/logger';
 import { getCorrelationId } from './observability/correlation';
 import { SENSITIVE_APPS_PATTERN as SENSITIVE_APPS } from './app-categories';
@@ -41,6 +41,9 @@ import { SENSITIVE_APPS_PATTERN as SENSITIVE_APPS } from './app-categories';
 const BENIGN_URI_SCHEMES = new Set<string>([
   'mailto', 'tel', 'sms', 'smsto', 'facetime', 'facetime-audio',
   'webcal', 'http', 'https', 'slack', 'spotify',
+  // ms-settings: NAVIGATES to a Settings page (like https) — opening the page
+  // changes nothing; the user still has to act. Unblocks "open <X> settings".
+  'ms-settings',
 ]);
 
 function uriSchemeOf(uri: unknown): string {
@@ -471,11 +474,19 @@ export function evaluate(ctx: EvaluationContext): Decision {
     ctx.tool === 'key_press' || ctx.tool === 'press' ||
     canonicalTool === 'key_press' || canonicalTool === 'key_down';
   if (isKeyboardSurface) {
-    if (typeof ctx.args.combo === 'string' && isBlockedKey(ctx.args.combo)) {
-      return emit({ decision: 'block', tier: 'destructive', reason: blockReason(ctx.args.combo) });
-    }
-    if (typeof ctx.args.key === 'string' && isBlockedKey(ctx.args.key)) {
-      return emit({ decision: 'block', tier: 'destructive', reason: blockReason(ctx.args.key) });
+    const combo = typeof ctx.args.combo === 'string' ? ctx.args.combo
+      : typeof ctx.args.key === 'string' ? ctx.args.key : undefined;
+    if (combo !== undefined) {
+      const tier = keyBlockTier(combo);
+      // HARD block (lock/force-quit/shutdown) has no path; consequential combos
+      // (close window/tab, show desktop, launchers) are confirm-able instead of
+      // dead-ended (v1.6.0 — the old list hard-blocked win+d/ctrl+w).
+      if (tier === 'block') {
+        return emit({ decision: 'block', tier: 'destructive', reason: keyBlockReason(combo, 'block') });
+      }
+      if (tier === 'confirm') {
+        return emit({ decision: 'confirm', tier: 'destructive', reason: keyBlockReason(combo, 'confirm') });
+      }
     }
   }
 

@@ -18,22 +18,40 @@ describe('SafetyLayer.evaluate', () => {
     );
   });
 
-  describe('blocked keys', () => {
-    it('blocks alt+F4 via key_press', () => {
-      const d = evaluate({ tool: 'key_press', args: { key: 'alt+f4' } });
-      expect(d.decision).toBe('block');
-    });
-    it('blocks cmd+Q via press (pipeline-internal alias)', () => {
-      const d = evaluate({ tool: 'press', args: { combo: 'cmd+q' } });
-      expect(d.decision).toBe('block');
-    });
-    it('blocks ctrl+alt+delete', () => {
+  describe('blocked keys (two-tier: HARD block vs CONFIRM)', () => {
+    it('HARD-blocks ctrl+alt+delete (secure attention sequence)', () => {
       const d = evaluate({ tool: 'key_press', args: { key: 'Ctrl+Alt+Delete' } });
       expect(d.decision).toBe('block');
+    });
+    it('HARD-blocks win+l (lock)', () => {
+      expect(evaluate({ tool: 'key_press', args: { key: 'win+l' } }).decision).toBe('block');
+    });
+    it('CONFIRMS (not hard-blocks) alt+F4 — closing a window is a legit, approvable action', () => {
+      const d = evaluate({ tool: 'key_press', args: { key: 'alt+f4' } });
+      expect(d.decision).toBe('confirm');
+    });
+    it('CONFIRMS cmd+Q via press (pipeline-internal alias)', () => {
+      expect(evaluate({ tool: 'press', args: { combo: 'cmd+q' } }).decision).toBe('confirm');
+    });
+    it('CONFIRMS win+d (show desktop) — was a dead-end hard block before v1.6.0', () => {
+      expect(evaluate({ tool: 'key_press', args: { key: 'win+d' } }).decision).toBe('confirm');
+    });
+    it('CONFIRMS ctrl+w (close tab)', () => {
+      expect(evaluate({ tool: 'key_press', args: { key: 'ctrl+w' } }).decision).toBe('confirm');
     });
     it('allows safe combos', () => {
       expect(evaluate({ tool: 'key_press', args: { key: 'mod+s' } }).decision).toBe('allow');
       expect(evaluate({ tool: 'press', args: { combo: 'Return' } }).decision).toBe('allow');
+    });
+  });
+
+  describe('minimize tier parity (granular == compound)', () => {
+    it('minimize is allowed (tier 1) on BOTH the granular tools and the window compound', () => {
+      // Was a divergence: granular minimize_window declared tier 2 (confirm)
+      // while the compound window{minimize} used TOOL_TIER=input (allow).
+      expect(evaluate({ tool: 'minimize_window', args: {} }).decision).toBe('allow');
+      expect(evaluate({ tool: 'minimize_window_to_taskbar', args: {} }).decision).toBe('allow');
+      expect(evaluate({ tool: 'window', args: { action: 'minimize' } }).decision).toBe('allow');
     });
   });
 

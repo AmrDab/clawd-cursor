@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PLAYBOOKS, matchPlaybook } from '../tools/playbooks/index';
 import { findReplace } from '../tools/playbooks/find-replace';
-import { isBlockedKey, normalizeCombo, BLOCKED_KEYS } from '../tools/playbooks/keys-blocklist';
+import { isBlockedKey, normalizeCombo, BLOCKED_KEYS, keyBlockTier } from '../tools/playbooks/keys-blocklist';
 import type { PlatformAdapter } from '../platform/types';
 
 function makeAdapter(platform: 'win32' | 'darwin' | 'linux' = 'win32'): { adapter: PlatformAdapter; calls: any[] } {
@@ -101,29 +101,31 @@ describe('find-replace', () => {
   });
 });
 
-describe('keys-blocklist', () => {
-  it('blocks alt+F4 regardless of casing/whitespace', () => {
-    expect(isBlockedKey('Alt+F4')).toBe(true);
-    expect(isBlockedKey('alt +f4')).toBe(true);
-    expect(isBlockedKey('ALT-F4')).toBe(true);
+describe('keys-blocklist (two-tier: HARD block vs CONFIRM, v1.6.0)', () => {
+  it('HARD-blocks lock/force-quit/shutdown sequences regardless of casing', () => {
+    expect(keyBlockTier('Ctrl+Alt+Delete')).toBe('block');
+    expect(keyBlockTier('win+l')).toBe('block');
+    expect(keyBlockTier('CMD-SHIFT-Q')).toBe('block');
+    expect(isBlockedKey('ctrl+alt+del')).toBe(true); // back-compat = HARD only
   });
-  it('blocks win+l, win+r, cmd+q, cmd+shift+q, ctrl+w, cmd+w', () => {
-    expect(isBlockedKey('win+l')).toBe(true);
-    expect(isBlockedKey('win+r')).toBe(true);
-    expect(isBlockedKey('cmd+q')).toBe(true);
-    expect(isBlockedKey('cmd+shift+q')).toBe(true);
-    expect(isBlockedKey('ctrl+w')).toBe(true);
-    expect(isBlockedKey('cmd+w')).toBe(true);
+  it('CONFIRMS (does not hard-block) consequential-but-legit combos', () => {
+    for (const c of ['Alt+F4', 'alt +f4', 'win+r', 'cmd+q', 'ctrl+w', 'cmd+w', 'win+d', 'f11']) {
+      expect(keyBlockTier(c)).toBe('confirm');
+      expect(isBlockedKey(c)).toBe(false); // no longer a HARD block → has a confirm path
+    }
   });
-  it('does not block safe combos', () => {
-    expect(isBlockedKey('mod+s')).toBe(false);
-    expect(isBlockedKey('Tab')).toBe(false);
-    expect(isBlockedKey('Return')).toBe(false);
+  it('does not gate safe combos', () => {
+    for (const c of ['mod+s', 'Tab', 'Return']) {
+      expect(keyBlockTier(c)).toBeNull();
+      expect(isBlockedKey(c)).toBe(false);
+    }
   });
   it('normalizes underscores and dashes', () => {
     expect(normalizeCombo('ctrl-alt-delete')).toBe('ctrl+alt+delete');
   });
-  it('has at least 15 entries (was 3 in v0.8.0)', () => {
-    expect(BLOCKED_KEYS.size).toBeGreaterThanOrEqual(15);
+  it('the HARD-block set is the lock/force-quit core (no dead-ended legit combos)', () => {
+    expect(BLOCKED_KEYS.size).toBeGreaterThanOrEqual(7);
+    expect(BLOCKED_KEYS.has('win+d')).toBe(false);   // moved to confirm
+    expect(BLOCKED_KEYS.has('ctrl+w')).toBe(false);  // moved to confirm
   });
 });
