@@ -2,7 +2,50 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
-## [Unreleased]
+## [1.5.2] - 2026-06-13 — reliability, honest verification, transparency
+
+The theme of this patch is **trust**: the cheap perception path works for
+external agents again, a task can no longer claim success it can't back, and a
+human at the machine always sees (and can stop) automation. Every fix came
+from driving real apps live; all are regression-tested.
+
+### Fixed — perception over MCP (the big ones)
+
+- **`read_screen` returned an empty tree for *every* app over MCP.** It didn't
+  default to the active window's pid, so the accessibility bridge built no
+  tree. It now resolves the foreground pid (parity with `find_element`) on
+  Windows, macOS, and Linux — the flagship cheap-perception path works again.
+- **Every "element not found" stalled ~20 seconds.** The PowerShell bridge
+  emitted nothing for an empty result (the array unrolled to zero objects), so
+  the call timed out; a single match also unwrapped to a bare object and was
+  dropped. Both fixed — a miss now returns in well under a second.
+- **`open_app` launched apps in the background**, so the next focused-window
+  action targeted the wrong window. It now brings the launched window to the
+  foreground.
+
+### Fixed — honest results (no false success)
+
+- **Verification integrity.** A task that changed the screen can no longer be
+  marked `done` on evidence that was already true before it acted (an ambient
+  clock, an already-open window). New `file_changed_since_start` assertion
+  proves a file was actually written during the task.
+- **`open_file` on a folder** no longer reports a bare "Opened" when Explorer
+  actually landed on Home — it verifies the folder window opened (and no
+  longer falls back to a Start-Menu search that types into the search box).
+- **`open_uri` now opens `ms-settings:` and similar** COM-handler schemes via a
+  ShellExecute fallback (they have no launchable executable), instead of
+  failing with "no registered handler".
+
+### Changed — safety calibration
+
+- **Key blocklist is now two-tier.** Genuinely dangerous combos
+  (Ctrl+Alt+Del, Win+L, force-quit, shutdown) stay hard-blocked; consequential
+  but legitimate ones (Win+D show-desktop, Ctrl+W close-tab, Alt+F4, Win+R…)
+  are now **confirm-tier** — usable with approval instead of dead-ended behind
+  a message that falsely promised a confirm path.
+- **`minimize_window` no longer asks for confirmation** (tier 1, not 2) — it's
+  reversible, and the granular tool now matches the compound `window`
+  `{minimize}` surface that already allowed it.
 
 ### Added — on-screen control banner (transparency)
 
@@ -17,9 +60,7 @@ All notable changes to Clawd Cursor will be documented in this file.
   adapters welcome — the controller is platform-neutral); disable with
   `--no-banner` or `CLAWD_NO_BANNER=1`.
 
-### Fixed
-
-- Unmatched HTTP routes now return JSON 404 with the endpoint list instead of
+- Unmatched HTTP routes now return a JSON 404 with the endpoint list instead of
   Express's default HTML error page.
 
 ## [1.5.1] - 2026-06-12 — bulletproofing patch (live-session bugs)

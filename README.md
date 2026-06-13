@@ -50,11 +50,18 @@ It's **model-agnostic** (Claude, GPT, Gemini, Llama, Kimi, Ollama, &hellip;), **
 
 ---
 
-## New in v1.5.0
+## New in v1.5.2 &mdash; reliability, honest verification, transparency
+
+- **Cheap perception works for any agent again.** `read_screen` returns a real accessibility tree over MCP for every app (it now scopes to the active window), and a missed lookup returns in milliseconds instead of stalling. Launched apps come to the foreground so the next action hits the right window.
+- **A task can't claim success it can't back.** Completion evidence that was already true before the agent acted (an ambient clock, an already-open window) is rejected; the new `file_changed_since_start` proof confirms a file was actually written. `open_file` verifies the folder really opened; `open_uri` now opens `ms-settings:`-style pages.
+- **You always see &mdash; and can stop &mdash; automation.** A topmost *"desktop control in progress"* banner with a blinking red dot appears whenever an agent drives the desktop; **double-click it to stop** (`--no-banner` to disable).
+- **Safety, re-tuned.** Genuinely dangerous key combos stay blocked; consequential-but-legitimate ones (show desktop, close tab) are now confirm-able instead of dead-ended. Minimizing a window no longer needs confirmation.
+
+## The engine &mdash; UI State Compiler (since v1.5.0)
 
 - **UI State Compiler.** `compile_ui` fuses the accessibility tree and OCR into one confidence-scored map of the screen, every element tagged with a stable `el_NN` id. Act on an element by `{element_id, snapshot_id}` instead of pixels &mdash; it's near-free in tokens and survives DPI, resize, and layout shifts. `find_button` / `find_field` locate a target by meaning and hand you the id.
 - **Reactive verification.** Pass `expect` on a consequential action and clawdcursor confirms the outcome (with a short settle window for async UIs), reporting a **DEVIATION** when the UI didn't obey instead of a hollow success.
-- **Honest cross-platform parity.** The compiler, secure-field redaction, and coordinate handling were brought to full parity on macOS; the external-agent (MCP) surface now resolves `el_NN` refs through the safety gate and discloses when it attached to your existing browser. No tools were renamed &mdash; existing permission allowlists keep working.
+- **Honest cross-platform parity.** The compiler, secure-field redaction, and coordinate handling run on Windows, macOS, and Linux; the external-agent (MCP) surface resolves `el_NN` refs through the safety gate and discloses when it attached to your existing browser. No tools were renamed &mdash; existing permission allowlists keep working.
 
 See the [changelog](CHANGELOG.md) for the full list.
 
