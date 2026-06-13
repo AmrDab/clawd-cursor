@@ -122,6 +122,15 @@ export interface AgentToolContext {
    *  `space`. The loop sets this to 'image' on VISION turns (the model is
    *  reading coords off the screenshot), else 'screen'. Undefined → 'screen'. */
   coordSpaceDefault?: 'screen' | 'image';
+  /** Epoch-ms timestamp of task start — feeds the `file_changed_since_start`
+   *  assertion at done-time. */
+  taskStartedAt?: number;
+  /** True once any screen-CHANGING tool actually moved the screen this task.
+   *  The `done` gate requires machine-checkable evidence when this is set. */
+  mutatedScreen?: boolean;
+  /** Cheap screen/window/clipboard snapshot captured at task start — lets the
+   *  `done` gate reject evidence that was ALREADY true before the task acted. */
+  taskBaseline?: import('../verify/assertions').TaskBaseline;
 }
 
 /**

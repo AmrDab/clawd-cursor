@@ -28,7 +28,7 @@ import { resolveSchemeHandlerExecutable, launchHandlerAndVerify } from '../../pl
 import type { InvokeAction } from '../../platform/types';
 import { OcrEngine, type OcrElement } from '../../platform/ocr-engine';
 import { getEdgePaths, getChromePaths } from '../../llm/browser-config';
-import { parseAssertions, checkAssertions, renderReport } from '../verify/assertions';
+import { parseAssertions, checkAssertions, renderReport, hasDiscriminatingEvidence } from '../verify/assertions';
 import { compileUIMap, defaultCompileDeps } from '../sense/ui-map';
 import { renderUIMap } from '../sense/ui-map-render';
 import { wrapUntrustedScreenContent } from './prompt';
@@ -469,7 +469,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
 
     {
       name: 'verify',
-      description: 'Deterministically check CURRENT state against machine-checkable assertions — the harness executes them, no guessing. Types: window_title_contains{value}, app_running{name}, element_exists{name}, element_value_contains{name,value}, clipboard_contains{value}, file_exists{path}, file_contains{path,value}, ocr_contains{value}. Cheaper and more reliable than a screenshot — use after a critical step or before done().',
+      description: 'Deterministically check CURRENT state against machine-checkable assertions — the harness executes them, no guessing. Types: window_title_contains{value}, app_running{name}, element_exists{name}, element_value_contains{name,value}, clipboard_contains{value}, file_exists{path}, file_contains{path,value}, ocr_contains{value}, file_changed_since_start{path} (proves a file was written during THIS task). Cheaper and more reliable than a screenshot — use after a critical step or before done().',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1746,7 +1746,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
     // ─── TERMINAL ACTIONS ──────────────────────────────────────
     {
       name: 'done',
-      description: 'Declare the task complete. Provide SPECIFIC screen evidence — a window title, a value visible in the document, a status bar message. Do NOT use hedging words ("should", "might", "probably", "I think", "I believe") — that means you are guessing. STRONGLY PREFERRED: also pass `assertions` (same types as the verify tool) — the harness re-checks them against the live screen and rejects done if any fail. If you can\'t see concrete evidence, take a screenshot or read_screen first.',
+      description: 'Declare the task complete. Provide SPECIFIC screen evidence — a window title, a value visible in the document, a status bar message. Do NOT use hedging words ("should", "might", "probably", "I think", "I believe") — that means you are guessing. If the task CHANGED anything you MUST pass `assertions` (same types as the verify tool, plus `file_changed_since_start` for a file you wrote) that prove the RESULT — and the proof must reflect your change, not state that was already there (an ambient clock, an already-open window). The harness re-checks them against the live screen and rejects done if any fail or none is discriminating. If you can\'t see concrete evidence, take a screenshot or read_screen first.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1799,6 +1799,19 @@ export function buildUnifiedTools(): UnifiedTool[] {
         // hallucinates a result (live Outlook run 2026-06-06: "verified" a
         // recipient that was never committed) gets caught HERE, at done-time,
         // instead of the task silently failing after the run ends.
+        const mutated = ctx.mutatedScreen === true;
+
+        // NB (P1): hard-requiring `assertions` for EVERY mutating task (the
+        // strictest anti-false-success gate) is intentionally NOT enforced here.
+        // It would force every screen-changing task to carry a discriminating
+        // proof — but real apps are frequently already open (the only cheap
+        // proofs, window_title/app_running, are then non-discriminating), so it
+        // both over-constrains agents and can't be satisfied against a static
+        // app. Left as STRONG guidance in the `done` description; flagged for
+        // Fable review as the stricter option (needs the run-agent suite to
+        // model post-action state). The discriminating gate below + the
+        // file_changed_since_start proof are the deployable 80%.
+
         if (args.assertions !== undefined) {
           const parsed = parseAssertions(args.assertions);
           if ('error' in parsed) {
@@ -1807,6 +1820,7 @@ export function buildUnifiedTools(): UnifiedTool[] {
           const report = await checkAssertions(parsed.assertions, {
             adapter: ctx.platform,
             ocrText: async () => (await getAgentOcr().recognizeScreen()).fullText ?? '',
+            taskStartedAt: ctx.taskStartedAt,
           });
           if (!report.ok) {
             return {
@@ -1815,6 +1829,19 @@ export function buildUnifiedTools(): UnifiedTool[] {
               text: `done rejected: ${report.failed} of ${report.outcomes.length} assertion(s) FAILED — the live screen does not back your claim:\n${renderReport(report)}\nFix the failing condition (the detail shows the actual state), or give_up with the reason.`,
             };
           }
+
+          // Guard 3b (P1): for a mutating task, at least one PASSING proof must
+          // be discriminating — not already true before the task acted.
+          // Otherwise the "proof" demonstrates nothing changed because of you
+          // (asserting an ambient clock / a window that was already open).
+          if (mutated && ctx.taskBaseline && !hasDiscriminatingEvidence(parsed.assertions, report, ctx.taskBaseline)) {
+            return {
+              success: false,
+              isError: true,
+              text: `done rejected: every proof you gave was ALREADY true before you acted — none of them shows your change:\n${renderReport(report)}\nAssert the NEW state your action produced (file_changed_since_start for a file you wrote, element_value_contains for text you typed, a window title that wasn't open before), or give_up.`,
+            };
+          }
+
           return {
             success: true,
             text: `done: ${evidence}\nVERIFIED:\n${renderReport(report)}`,
@@ -1916,10 +1943,10 @@ function buildWinQuery(args: Record<string, unknown>): { processName?: string; p
  */
 const EXPECT_SCHEMA = {
   type: 'array',
-  description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
+  description: 'Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.',
   items: {
     type: 'object',
-    properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains'] } },
+    properties: { type: { type: 'string', enum: ['window_title_contains', 'app_running', 'element_exists', 'element_value_contains', 'clipboard_contains', 'file_exists', 'file_contains', 'ocr_contains', 'file_changed_since_start'] } },
     required: ['type'],
   },
 } as const;

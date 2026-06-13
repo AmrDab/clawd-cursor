@@ -27,6 +27,7 @@ import { createHash } from 'node:crypto';
 import type { ScreenshotResult } from '../../platform/types';
 import { FingerprintHistory } from '../sense/fingerprint';
 import { captureSnapshot } from '../sense/snapshot';
+import { captureTaskBaseline } from '../verify/assertions';
 import { UIMapHolder } from '../sense/ui-map-holder';
 import { reactiveCheck } from '../sense/reactive-check';
 import { OcrEngine } from '../../platform/ocr-engine';
@@ -174,6 +175,10 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
    * waves; it does NOT abort the task). The runaway guard + max_turns are the
    * terminators.
    */
+  // P1 verification integrity: task-level flag — set once any screen-changing
+  // tool actually moved the screen. The `done` gate requires machine-checkable
+  // evidence (and rejects non-discriminating evidence) when this is true.
+  let taskMutated = false;
   let consecutiveStagnantTurns = 0;
   /**
    * Counts consecutive turns where the model produced no tool call.
@@ -194,6 +199,14 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
   // Cross-turn anchor continuity for compileUIMap. Hoisted above the turn-1
   // block so storeUIMap can be called there and update prevAnchors.
   let prevAnchors: UIMap['anchors'] | undefined = undefined;
+
+  // P1: cheap baseline snapshot at task start (window list + clipboard, NO
+  // extra OCR — the strong discriminating signals are window titles, clipboard,
+  // file mtime; an ambient clock changes regardless so baseline OCR buys little
+  // and would cost a screen capture every task). The `done` gate uses this to
+  // reject completion evidence that was ALREADY true before the task acted.
+  // Best-effort — never blocks the run.
+  const taskBaseline = await captureTaskBaseline(deps.adapter).catch(() => undefined);
 
   // Turn-1 perception — compiled UIMap (el_NN) so the agent acts on the same
   // vocabulary from its very first decision and el_NN refs resolve immediately.
@@ -640,6 +653,10 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
           cdp: deps.cdp ?? null,
           uiMaps: holder,
           coordSpaceDefault: imageInContext ? 'image' : 'screen',
+          // P1 verification integrity — the `done` gate reads these.
+          taskStartedAt: startedAt,
+          mutatedScreen: taskMutated,
+          taskBaseline,
         };
 
         let result: Awaited<ReturnType<UnifiedTool['execute']>>;
@@ -685,6 +702,7 @@ export async function runAgent(input: AgentInput, deps: AgentDeps): Promise<Agen
         // counter (audit 2026-06-10, findings A1/M3).
         if (tool.changesScreen && (result.success || fingerprintChanged)) {
           anyScreenChangingTool = true;
+          taskMutated = true; // P1: task-level — the `done` gate requires proof
           holder.invalidate();
         }
 

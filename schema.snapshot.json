@@ -943,7 +943,7 @@
           },
           "expect": {
             "type": "array",
-            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
             "items": {
               "type": "object",
               "properties": {
@@ -957,7 +957,8 @@
                     "clipboard_contains",
                     "file_exists",
                     "file_contains",
-                    "ocr_contains"
+                    "ocr_contains",
+                    "file_changed_since_start"
                   ]
                 }
               },
@@ -1005,7 +1006,7 @@
           },
           "expect": {
             "type": "array",
-            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
             "items": {
               "type": "object",
               "properties": {
@@ -1019,7 +1020,8 @@
                     "clipboard_contains",
                     "file_exists",
                     "file_contains",
-                    "ocr_contains"
+                    "ocr_contains",
+                    "file_changed_since_start"
                   ]
                 }
               },
@@ -1183,7 +1185,7 @@
           },
           "expect": {
             "type": "array",
-            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
             "items": {
               "type": "object",
               "properties": {
@@ -1197,7 +1199,8 @@
                     "clipboard_contains",
                     "file_exists",
                     "file_contains",
-                    "ocr_contains"
+                    "ocr_contains",
+                    "file_changed_since_start"
                   ]
                 }
               },
@@ -1309,7 +1312,7 @@
           },
           "expect": {
             "type": "array",
-            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
             "items": {
               "type": "object",
               "properties": {
@@ -1323,7 +1326,8 @@
                     "clipboard_contains",
                     "file_exists",
                     "file_contains",
-                    "ocr_contains"
+                    "ocr_contains",
+                    "file_changed_since_start"
                   ]
                 }
               },
@@ -1899,7 +1903,7 @@
           },
           "expect": {
             "type": "array",
-            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
             "items": {
               "type": "object",
               "properties": {
@@ -1913,7 +1917,8 @@
                     "clipboard_contains",
                     "file_exists",
                     "file_contains",
-                    "ocr_contains"
+                    "ocr_contains",
+                    "file_changed_since_start"
                   ]
                 }
               },
@@ -2165,7 +2170,7 @@
           },
           "expect": {
             "type": "array",
-            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
+            "description": "Optional post-conditions to verify after this action (same assertion types as the verify tool: window_title_contains, app_running, element_exists, element_value_contains, clipboard_contains, file_exists, file_contains, ocr_contains, file_changed_since_start). If any FAIL the action returns a DEVIATION and you must adapt. State an OUTCOME you can observe (a window title, a rendered element/chip, a status) — NOT the raw text you typed.",
             "items": {
               "type": "object",
               "properties": {
@@ -2179,7 +2184,8 @@
                     "clipboard_contains",
                     "file_exists",
                     "file_contains",
-                    "ocr_contains"
+                    "ocr_contains",
+                    "file_changed_since_start"
                   ]
                 }
               },
@@ -2207,7 +2213,7 @@
     },
     {
       "name": "verify",
-      "description": "Deterministically check CURRENT state against machine-checkable assertions — the harness executes them, no guessing. Types: window_title_contains{value}, app_running{name}, element_exists{name}, element_value_contains{name,value}, clipboard_contains{value}, file_exists{path}, file_contains{path,value}, ocr_contains{value}. Cheaper and more reliable than a screenshot — use after a critical step or before done().",
+      "description": "Deterministically check CURRENT state against machine-checkable assertions — the harness executes them, no guessing. Types: window_title_contains{value}, app_running{name}, element_exists{name}, element_value_contains{name,value}, clipboard_contains{value}, file_exists{path}, file_contains{path,value}, ocr_contains{value}, file_changed_since_start{path} (proves a file was written during THIS task). Cheaper and more reliable than a screenshot — use after a critical step or before done().",
       "category": "perception",
       "parameters": {
         "type": "object",
