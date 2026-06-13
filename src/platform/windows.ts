@@ -514,11 +514,22 @@ export class WindowsAdapter implements PlatformAdapter {
   // ─── ACCESSIBILITY ────────────────────────────────────────────────
 
   async getUiTree(processId?: number): Promise<UiElement[]> {
+    // Default to the foreground window's pid when the caller omits it — exactly
+    // as findElements does below. Without this, get-screen-context is called
+    // with focusedPid=0 and the bridge returns NO tree (Cmd-GetScreenContext
+    // only walks a window when focusedPid>0), so read_screen over MCP came back
+    // "(empty a11y tree)" for EVERY app — a regression once the pid-resolving
+    // System-A read_screen was projected away in favor of this path.
+    let pid = processId;
+    if (pid === undefined) {
+      const fg = await this.getActiveWindow().catch(() => null);
+      if (fg?.processId) pid = fg.processId;
+    }
     try {
       const result = await psRunner.run({
         cmd: 'get-screen-context',
         maxDepth: 8,
-        ...(processId !== undefined ? { focusedProcessId: processId } : {}),
+        ...(pid !== undefined ? { focusedProcessId: pid } : {}),
       }) as any;
       const tree = result?.uiTree;
       if (!tree) return [];
@@ -989,8 +1000,8 @@ export class WindowsAdapter implements PlatformAdapter {
       // fallback if shell:AppsFolder didn't surface a window — matches
       // the router's strategy ladder.
       const uwpResult = await this.findLaunchedWindow(name, windowsBefore, 4_000);
-      if (uwpResult.title) return uwpResult;
-      return this.launchViaStartMenuSearch(name, opts?.searchTerm, windowsBefore);
+      if (uwpResult.title) return this.foregroundLaunched(uwpResult);
+      return this.foregroundLaunched(await this.launchViaStartMenuSearch(name, opts?.searchTerm, windowsBefore));
     }
 
     // Route 2: classic Start-Process via PowerShell with safely quoted args.
@@ -1018,14 +1029,31 @@ export class WindowsAdapter implements PlatformAdapter {
     // time for the Start-Menu fallback if it returns empty. Edge / VS Code /
     // any binary not on PATH but Start-Menu-indexed will recover here.
     const direct = await this.findLaunchedWindow(name, windowsBefore, 4_000);
-    if (direct.title) return direct;
+    if (direct.title) return this.foregroundLaunched(direct);
 
     // Route 3: Start Menu search fallback — universal for any app indexed by
     // Windows. Press the Win key, type the app name, press Enter. This is
     // the same pattern the router's zero-LLM fast path uses; ported here so
     // every caller of launchApp (agent's open_app, MCP, REST) gets the
     // reliability without duplicating router logic.
-    return this.launchViaStartMenuSearch(name, opts?.searchTerm, windowsBefore);
+    return this.foregroundLaunched(await this.launchViaStartMenuSearch(name, opts?.searchTerm, windowsBefore));
+  }
+
+  /**
+   * Bring a freshly-launched window to the foreground. A detached spawn opens
+   * the app BEHIND the current foreground (Windows foreground-lock), so without
+   * this `open_app("calc")` left Calculator in the background and every
+   * subsequent focused-window op (read_screen, find_element) targeted the wrong
+   * window. The idempotency path already focuses; this gives fresh launches the
+   * same contract. Best-effort — never throws, the launch already succeeded.
+   */
+  private async foregroundLaunched(
+    result: { pid?: number; title?: string; handle?: number | string },
+  ): Promise<{ pid?: number; title?: string; handle?: number | string }> {
+    if (result?.pid) {
+      await this.focusWindow({ processId: result.pid, title: result.title }).catch(() => {});
+    }
+    return result;
   }
 
   /**

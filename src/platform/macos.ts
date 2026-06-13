@@ -456,7 +456,15 @@ export class MacOSAdapter implements PlatformAdapter {
       // (audit 2026-06-11, M4). The legacy AccessibilityManager already drives
       // this same script at depth 8.
       const scriptArgs = ['-MaxDepth', '8'];
-      if (processId !== undefined) scriptArgs.push('-FocusedProcessId', String(processId));
+      // Default to the frontmost app's pid when the caller omits it, so an
+      // unscoped read_screen targets the active window (parity with the Windows
+      // adapter) instead of relying on the script's default scope.
+      let pid = processId;
+      if (pid === undefined) {
+        const fg = await this.getActiveWindow().catch(() => null);
+        if (fg?.processId) pid = fg.processId;
+      }
+      if (pid !== undefined) scriptArgs.push('-FocusedProcessId', String(pid));
       args.push('--', ...scriptArgs);
       const { stdout } = await execFileAsync('osascript', args, { timeout: A11Y_TREE_TIMEOUT_MS });
       const data = JSON.parse(stdout);

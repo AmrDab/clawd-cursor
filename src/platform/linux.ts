@@ -568,7 +568,15 @@ export class LinuxAdapter implements PlatformAdapter {
     if (!this.atspiAvailable) return [];
     try {
       const args = ['--cmd', 'get-tree'];
-      if (typeof processId === 'number') args.push('--process-id', String(processId));
+      // Default to the active window's pid when the caller omits it, so an
+      // unscoped read_screen targets the focused app (parity with the Windows
+      // adapter) instead of walking the whole desktop tree.
+      let pid = processId;
+      if (typeof pid !== 'number') {
+        const fg = await this.getActiveWindow().catch(() => null);
+        if (fg?.processId) pid = fg.processId;
+      }
+      if (typeof pid === 'number') args.push('--process-id', String(pid));
       const { stdout } = await execFileAsync('python3', [this.atspiScript, ...args], {
         timeout: A11Y_TIMEOUT_MS,
       });

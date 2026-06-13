@@ -816,9 +816,15 @@ while ($true) {
             "ping"                  { @{ pong=$true } }
             default                 { @{ error="Unknown command: $($cmd.cmd)" } }
         }
-        [Console]::Out.WriteLine(($result | ConvertTo-Json -Depth 50 -Compress))
+        # -InputObject (NOT pipe): piping an EMPTY array sends zero objects to
+        # ConvertTo-Json, which then writes nothing → the bridge never answers
+        # and PSRunner stalls for its full 20s timeout (every element MISS paid
+        # this; it poisoned wait_for_element / element_exists / the reactive
+        # settle-poll). -InputObject serializes @() as "[]" and also preserves
+        # single-element arrays instead of unwrapping them to a bare object.
+        [Console]::Out.WriteLine((ConvertTo-Json -InputObject $result -Depth 50 -Compress))
     } catch {
-        [Console]::Out.WriteLine((@{ error=$_.Exception.Message } | ConvertTo-Json -Compress))
+        [Console]::Out.WriteLine((ConvertTo-Json -InputObject @{ error=$_.Exception.Message } -Compress))
     }
     [Console]::Out.Flush()
 }
