@@ -21,7 +21,7 @@ function methodBody(src: string, header: string): string {
   const start = src.indexOf(header);
   if (start === -1) return '';
   const after = src.slice(start + header.length);
-  const next = after.search(/\n  (?:async |private |public |function |get )/);
+  const next = after.search(/\n {2}(?:async |private |public |function |get )/);
   return next === -1 ? after : after.slice(0, next);
 }
 
