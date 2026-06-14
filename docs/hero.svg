@@ -23,7 +23,7 @@
   <text x="129" y="112" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#94a3b8">Safe desktop control for any AI agent &#183; local &#183; cross-OS</text>
   <text x="70" y="188" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="46" font-weight="800" fill="url(#grad)">It sees. It acts. It verifies.</text>
   <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#cbd5e1">
-    <text x="70" y="232">&#9679; reads the accessibility tree, not screenshots</text>
+    <text x="70" y="232">&#9679; accessibility tree first &#183; screenshots as fallback</text>
     <text x="70" y="258">&#9679; verifies its own actions &#183; one safety gate &#183; no cloud</text>
   </g>
   <g transform="translate(560,210)">

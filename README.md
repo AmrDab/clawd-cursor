@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>The local desktop-control layer for any AI agent.</strong><br>
-  Reads the screen through the accessibility tree &mdash; not screenshots &mdash; <strong>verifies its own actions</strong>,<br>
+  Reads the screen through the accessibility tree first &mdash; screenshots only as a fallback &mdash; <strong>verifies its own actions</strong>,<br>
   and routes every action through one safety gate. Any model. Any app. No cloud.
 </p>
 
@@ -38,7 +38,7 @@
 
   <p align="center">
     <img src="docs/demo.gif" width="760" alt="clawdcursor driving a desktop app">
-    <br><em>Opening an app, finding a field by name, typing, and verifying the result — locally, no screenshots.</em>
+    <br><em>Opening an app, finding a field by name, typing, and verifying the result — accessibility-first, locally.</em>
   </p>
 ─────────────────────────────────────────────────────────────────────────── -->
 
@@ -56,7 +56,7 @@ Most "let an agent use the computer" tools take a screenshot and feed it to a vi
 
 ## Why it's different
 
-The desktop-agent space is crowded. Here's the honest comparison &mdash; what Clawd Cursor actually does that the popular options don't:
+The desktop-agent space is crowded. The closest **install-and-go** peers are [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) and [Terminator](https://t8r.tech/) (desktop MCP servers); browser-only tools (browser-use, Playwright MCP) are adjacent; and [OmniParser](https://github.com/microsoft/OmniParser) / [UI-TARS](https://github.com/bytedance/UI-TARS-desktop) are vision-centric *parsing approaches* you'd build an agent around, not products you install. Here's the honest comparison across those approaches &mdash; what Clawd Cursor does that the popular options don't:
 
 |                                          | **Clawd Cursor**        | browser-use | Playwright MCP | OmniParser / UI-TARS | computer-use |
 |------------------------------------------|:-----------------------:|:-----------:|:--------------:|:--------------------:|:------------:|
