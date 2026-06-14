@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/hero.png" width="900" alt="clawdcursor — It sees. It acts. It verifies.">
-</p>
+<h1 align="center">Clawd Cursor</h1>
 
 <p align="center">
   <strong>Safe desktop control for any AI agent.</strong> Reads the screen through the accessibility tree (screenshots as fallback),<br>
