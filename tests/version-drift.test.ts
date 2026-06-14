@@ -53,9 +53,9 @@ describe('version drift guard', () => {
     expect(skillMatch?.[1], 'SKILL.md frontmatter version drifted; run `npm run sync-version`').toBe(needle);
 
     const indexHtml = readFileSync(join(ROOT, 'docs', 'index.html'), 'utf-8');
-    const titleMatch = indexHtml.match(/<title>Clawd Cursor v(\d+\.\d+\.\d+)/);
-    expect(titleMatch?.[1], 'docs/index.html <title> drifted; run `npm run sync-version`').toBe(needle);
-
+    // The <title>, meta description, and og:title are intentionally version-FREE
+    // (clean branding, 2026-06-14 reframe). The visible version lives in the
+    // hero badge (checked below), the agent-summary header, and the footer.
     const heroBadgeMatch = indexHtml.match(/<div class="hero-badge"><div class="pulse"><\/div>\s*v(\d+\.\d+\.\d+)/);
     expect(heroBadgeMatch?.[1], 'docs/index.html hero badge drifted; run `npm run sync-version`').toBe(needle);
 

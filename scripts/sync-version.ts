@@ -74,24 +74,9 @@ const TARGETS: SyncTarget[] = [
     replacement: `$1${VERSION}$2`,
     desc: 'index.html agent-readable summary header',
   },
-  {
-    file: 'docs/index.html',
-    pattern: /(<title>Clawd Cursor v)\d+\.\d+\.\d+/,
-    replacement: `$1${VERSION}`,
-    desc: 'index.html <title>',
-  },
-  {
-    file: 'docs/index.html',
-    pattern: /(<meta name="description"[^>]*?Clawd Cursor v)\d+\.\d+\.\d+/,
-    replacement: `$1${VERSION}`,
-    desc: 'index.html meta description',
-  },
-  {
-    file: 'docs/index.html',
-    pattern: /(property="og:title"\s*content="Clawd Cursor v)\d+\.\d+\.\d+/,
-    replacement: `$1${VERSION}`,
-    desc: 'index.html og:title',
-  },
+  // NOTE: the <title>, meta description, and og:title are intentionally
+  // VERSION-FREE (clean branding, 2026-06-14 reframe) — the visible version
+  // lives in the hero badge / footer / agent-summary, which ARE synced below.
   {
     file: 'docs/index.html',
     pattern: /(<div class="hero-badge"><div class="pulse"><\/div>\s*v)\d+\.\d+\.\d+/,
