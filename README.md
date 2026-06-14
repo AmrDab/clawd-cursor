@@ -1,13 +1,10 @@
 <p align="center">
-  <img src="docs/hero.svg" width="820" alt="Clawd Cursor — It sees. It acts. It verifies.">
+  <img src="docs/hero.png" width="900" alt="clawdcursor — It sees. It acts. It verifies.">
 </p>
 
-<h1 align="center">Clawd Cursor</h1>
-
 <p align="center">
-  <strong>The local desktop-control layer for any AI agent.</strong><br>
-  Reads the screen through the accessibility tree first &mdash; screenshots only as a fallback &mdash; <strong>verifies its own actions</strong>,<br>
-  and routes every action through one safety gate. Any model. Any app. No cloud.
+  <strong>Safe desktop control for any AI agent.</strong> Reads the screen through the accessibility tree (screenshots as fallback),<br>
+  <strong>verifies its own actions</strong>, and gates everything through one safety checkpoint. Local &middot; cross-OS &middot; any model.
 </p>
 
 <p align="center">

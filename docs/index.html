@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clawd Cursor v1.5.2 — the local MCP server for safe desktop control</title>
-  <meta name="description" content="Clawd Cursor v1.5.2 — the local MCP server that gives any agent safe desktop control. 7 compact compound tools (computer, accessibility, window, system, browser, task, batch), MCP stdio + HTTP, single safety.evaluate() chokepoint, no telemetry, Windows + macOS + Linux.">
-  <meta property="og:title" content="Clawd Cursor v1.5.2">
-  <meta property="og:description" content="The local MCP server that gives any agent safe desktop control. Any model. Any app. One MCP entry. Local-only. 7 compact tools, single safety chokepoint, no telemetry.">
-
+  <title>clawdcursor — safe desktop control for any AI agent</title>
+  <meta name="description" content="Local MCP server that gives any AI agent safe desktop control. Reads the screen through the accessibility tree (screenshots as fallback), verifies its own actions, routes everything through one safety gate. Windows · macOS · Linux. No cloud.">
+  <meta property="og:title" content="clawdcursor — It sees. It acts. It verifies.">
+  <meta property="og:description" content="Safe desktop control for any AI agent. Accessibility-first, verifies its own actions, one safety gate. Local · cross-OS · any model.">
+  <meta property="og:image" content="https://clawdcursor.com/hero.png">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://clawdcursor.com/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://clawdcursor.com/hero.png">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta name="theme-color" content="#09090b">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -438,7 +440,7 @@
   <div class="hero">
     <div class="hero-badge"><div class="pulse"></div> v1.5.2 — latest stable</div>
     <h1>It sees. It acts. It verifies.<br><span class="gr">Desktop control for any AI agent</span></h1>
-    <p>Any model. Any app. One MCP entry. Local-only. clawdcursor compiles the screen into a map of stable element ids your agent acts on symbolically &mdash; no pixel guessing &mdash; then confirms every consequential action actually took. 7 compact tools, one safety chokepoint, no telemetry.</p>
+    <p>Reads the screen through the accessibility tree &mdash; screenshots only as a fallback &mdash; verifies every action actually took, and routes everything through one safety gate. Any model, any app, local, no telemetry.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -728,7 +730,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 <span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
     </div>
 
-    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Works on macOS, Linux, and Windows. <code style="font-size:0.95em">npm i -g clawdcursor</code> is the recommended install (Node 20+ required). After any install run <code style="font-size:0.95em">clawdcursor consent --accept</code> — and on macOS <code style="font-size:0.95em">clawdcursor grant</code> (the native helper builds automatically when Xcode Command Line Tools are present). <strong>That's the whole setup when your own agent drives clawdcursor over MCP.</strong> <code style="font-size:0.95em">clawdcursor doctor</code> is only for the autonomous <code style="font-size:0.95em">agent</code> mode, where clawdcursor brings its own LLM.</p>
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Any OS, Node 20+. Run <code style="font-size:0.95em">clawdcursor consent --accept</code> &mdash; and on macOS <code style="font-size:0.95em">clawdcursor grant</code>. That's the whole setup for driving over MCP; <code style="font-size:0.95em">doctor</code> is only for the autonomous <code style="font-size:0.95em">agent</code> mode.</p>
   </section>
 
 </div>
