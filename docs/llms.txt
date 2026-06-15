@@ -1,0 +1,73 @@
+# clawdcursor
+
+> The local MCP server that gives any tool-calling agent safe control of the real
+> desktop — clicks, types, reads the screen, opens apps, drives any GUI. Local-only
+> (binds 127.0.0.1, bearer-token auth on HTTP, no telemetry by default), cross-OS
+> (Windows / macOS / Linux), works with any model.
+
+How it works: clawdcursor compiles the screen into one fused, confidence-scored UI
+map (accessibility tree + OCR) with stable element ids, and acts on elements by
+name/id — not pixel coordinates. It drops to a screenshot (vision) only as a last
+resort, verifies each consequential action (reports a DEVIATION instead of a hollow
+"success"), and routes every call through a single safety gate (allow / confirm /
+block). This is the fallback/last-mile layer: prefer a native API, a CLI, direct
+file edits, or existing browser automation when those exist; reach for clawdcursor
+when the only remaining surface is a GUI (a legacy app, a canvas, an app with no
+public API).
+
+## Install
+
+- Recommended (any OS): `npm i -g clawdcursor`  (requires Node.js 20+)
+- Windows one-liner: `powershell -c "irm https://clawdcursor.com/install.ps1 | iex"`
+- macOS / Linux one-liner: `curl -fsSL https://clawdcursor.com/install.sh | bash`
+- One-time, always required: `clawdcursor consent --accept`
+- macOS only, after install: `clawdcursor grant`  (approve Accessibility + Screen Recording)
+
+## Use as an MCP server (your editor or agent brings the model)
+
+Add to your editor's MCP config — if clawdcursor is installed globally:
+
+    { "mcpServers": { "clawdcursor": { "command": "clawdcursor", "args": ["mcp", "--compact"] } } }
+
+Or, with no global install (npx fetches it on demand, uses a global install if present):
+
+    { "mcpServers": { "clawdcursor": { "command": "npx", "args": ["-y", "clawdcursor", "mcp", "--compact"] } } }
+
+Claude Code: install the plugin instead of editing config — it registers the MCP
+server (via npx) and bundles the usage skill in one step. Note: `clawdcursor doctor`
+is NOT needed for MCP use; it only configures the optional autonomous daemon.
+
+## Use as an autonomous daemon (clawdcursor brings the model)
+
+    clawdcursor doctor    # configure the built-in LLM (13 providers supported)
+    clawdcursor agent     # HTTP + MCP daemon on 127.0.0.1:3847
+
+`clawdcursor agent --no-llm` exposes the HTTP tool surface only (your agent supplies the brain).
+
+## Tool surface (compact — recommended, ~1500 tokens of catalog)
+
+- computer — mouse, keyboard, screenshot (raw I/O)
+- accessibility — drive UI by element name; compile a fused el_NN UI map and act on {element_id, snapshot_id} (survives layout shifts)
+- window — launch, focus, resize apps
+- system — clipboard, OCR, shortcuts, webview detection
+- browser — Chrome DevTools Protocol for Electron / WebView2 apps
+- task — hand a whole task to the built-in autonomous loop
+- batch — run a guarded, safety-gated sequence of the above in one call
+
+98 granular tools (one schema per verb) are available via the `--granular` flag or
+`tools/list` on either transport, if your runtime needs every primitive as a
+top-level tool.
+
+## Safety
+
+Every tool call routes through one `safety.evaluate()` chokepoint regardless of
+transport (stdio or HTTP). Sensitive actions auto-elevate to Confirm. HTTP requires
+a bearer token. Local-only by default. An on-screen "desktop control in progress"
+indicator shows whenever an agent is driving — double-click it to stop.
+
+## Links
+
+- Site: https://clawdcursor.com
+- Source: https://github.com/AmrDab/clawdcursor
+- npm: https://www.npmjs.com/package/clawdcursor
+- Changelog: https://github.com/AmrDab/clawdcursor/blob/main/CHANGELOG.md

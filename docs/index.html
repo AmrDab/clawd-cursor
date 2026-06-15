@@ -34,7 +34,7 @@
       task          — hand off a full task to the built-in autonomous loop
       batch         — run a guarded, safety-gated sequence of the above in one call
 
-    ── WHAT'S NEW IN v1.5.0 ─────────────────────────────────────────────────────
+    ── FLAGSHIP CAPABILITIES ─────────────────────────────────────────────────────
     UI State Compiler — one fused, confidence-scored map of the screen
       (accessibility + OCR) with stable el_NN ids. Act symbolically, not by pixel.
     Reactive verification — pass `expect` on a consequential action and the call
@@ -66,6 +66,11 @@
                           on demand. Add this JSON to the editor's MCP config:
                             { "mcpServers": { "clawdcursor":
                               { "command": "clawdcursor", "args": ["mcp", "--compact"] } } }
+                          No global install? Swap "command" to "npx" with args
+                          ["-y","clawdcursor","mcp","--compact"] — fetched on demand.
+                          Claude Code: skip the JSON entirely — install the plugin
+                          (.claude-plugin/plugin.json); it registers this server via
+                          npx and bundles the usage skill. One step, no config.
 
     `clawdcursor agent` — HTTP MCP daemon on 127.0.0.1:3847/mcp. Use when
                           clawdcursor brings its own LLM brain (configured via
