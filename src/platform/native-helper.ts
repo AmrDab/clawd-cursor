@@ -581,7 +581,9 @@ export async function captureScreenViaHelper(outputPath?: string): Promise<{ pat
   }
 
   const helperPath = getNativeHelperPath('screenshot-helper');
-  const tmpPath = outputPath || path.join(os.tmpdir(), `.clawdcursor-cap-${Date.now()}.png`);
+  // Unpredictable name (not Date.now()) so a co-tenant can't pre-create/symlink
+  // the path the helper writes to, and rapid captures can't collide (CWE-377).
+  const tmpPath = outputPath || path.join(os.tmpdir(), `.clawdcursor-cap-${crypto.randomUUID()}.png`);
 
   return new Promise((resolve, reject) => {
     const proc = spawn(helperPath, ['--fullscreen', tmpPath]);

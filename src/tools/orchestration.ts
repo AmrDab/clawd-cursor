@@ -6,6 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import type { ToolDefinition } from './types';
 import { DEFAULT_CDP_PORT } from '../llm/browser-config';
 import { resolveAlias } from '../core/router/aliases';
@@ -241,6 +242,14 @@ export function getOrchestrationTools(): ToolDefinition[] {
             if (uwpId) {
               await execFileAsync('explorer.exe', [`shell:AppsFolder\\${uwpId}`], { timeout: 10000 });
             } else {
+              // Defense-in-depth: `exe` (a caller-supplied app name) is interpolated
+              // into a PowerShell -Command string. Inside a double-quoted PS string,
+              // `"`, backtick, and `$(...)` can break out and run arbitrary code.
+              // Reject those metacharacters — real executable names/paths never
+              // contain them (spaces and parens, e.g. "Program Files (x86)", are fine).
+              if (/["`$\r\n]/.test(exe)) {
+                return { text: `Refusing to launch "${rawName}": unsafe characters in target name`, isError: true };
+              }
               await execFileAsync('powershell.exe', ['-NoProfile', '-Command', `Start-Process "${exe}"`], { timeout: 10000 });
             }
           } else if (process.platform === 'darwin') {
@@ -286,7 +295,7 @@ export function getOrchestrationTools(): ToolDefinition[] {
           } catch { /* fall through */ }
         }
         try {
-          const userDataDir = path.join(process.env.TEMP || process.env.TMPDIR || '/tmp', 'clawdcursor-edge');
+          const userDataDir = path.join(os.tmpdir(), 'clawdcursor-edge');
           if (process.platform === 'win32') {
             // Direct exec instead of `powershell -Command "Start-Process …"`:
             // the previous form interpolated `url` into a PowerShell string,

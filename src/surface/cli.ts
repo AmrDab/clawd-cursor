@@ -1055,7 +1055,11 @@ done
         // Write temp PS1 and open in new Windows Terminal / PowerShell window
         const fs = await import('fs');
         const path = await import('path');
-        const tmpScript = path.join(os.tmpdir(), `clawdcursor-task-${Date.now()}.ps1`);
+        // Private 0700 temp dir (mkdtemp, unguessable suffix) — this script is
+        // EXECUTED, so a predictable tmpdir/clawdcursor-task-<time>.ps1 name was a
+        // symlink/race window (CWE-377). The dir persists for the spawned terminal.
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawdcursor-task-'));
+        const tmpScript = path.join(tmpDir, 'task.ps1');
         fs.writeFileSync(tmpScript, scriptContent);
         spawnExec('powershell.exe', [
           '-Command', `Start-Process powershell -ArgumentList '-NoExit','-ExecutionPolicy','Bypass','-File','${tmpScript}'`
@@ -1063,14 +1067,16 @@ done
       } else if (platform === 'darwin') {
         const fs = await import('fs');
         const path = await import('path');
-        const tmpScript = path.join(os.tmpdir(), `clawdcursor-task-${Date.now()}.sh`);
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawdcursor-task-'));
+        const tmpScript = path.join(tmpDir, 'task.sh');
         fs.writeFileSync(tmpScript, scriptContent, { mode: 0o755 });
         spawnExec('open', ['-a', 'Terminal', tmpScript], { detached: true, stdio: 'ignore' } as any);
       } else {
         // Linux fallback
         const fs = await import('fs');
         const path = await import('path');
-        const tmpScript = path.join(os.tmpdir(), `clawdcursor-task-${Date.now()}.sh`);
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawdcursor-task-'));
+        const tmpScript = path.join(tmpDir, 'task.sh');
         fs.writeFileSync(tmpScript, scriptContent, { mode: 0o755 });
         // $TERMINAL may be set with surrounding quotes on some distros — strip them before use.
         const termEnv = (process.env.TERMINAL || '').replace(/^["']|["']$/g, '').trim();
