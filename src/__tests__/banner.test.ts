@@ -137,4 +137,13 @@ describe('controlBanner', () => {
     spawned[0].emit('exit', 0);          // pill dies on its own
     expect(glowSpawned[0].killed).toBe(true);
   });
+
+  it('on a non-Windows platform nothing spawns — pill OR glow (OS-safe no-op)', () => {
+    controlBanner.__setPlatformEnabledForTests(false); // simulate macOS/Linux runtime
+    controlBanner.pin();
+    controlBanner.touch();
+    expect(spawned.length).toBe(0);
+    expect(glowSpawned.length).toBe(0);
+    expect(controlBanner.isVisible()).toBe(false);
+  });
 });

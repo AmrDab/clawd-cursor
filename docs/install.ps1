@@ -1,6 +1,6 @@
 # Clawd Cursor Installer for Windows
 # Usage: powershell -c "irm https://clawdcursor.com/install.ps1 | iex"
-# Specify version: $env:VERSION='v1.5.2'; irm https://clawdcursor.com/install.ps1 | iex
+# Specify version: $env:VERSION='v1.5.3'; irm https://clawdcursor.com/install.ps1 | iex
 
 $ErrorActionPreference = "Continue"
 $VERSION = if ($env:VERSION) { $env:VERSION } else { "main" }

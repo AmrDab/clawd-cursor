@@ -2,6 +2,35 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.3] - 2026-06-14 — edge-glow indicator + security hardening
+
+### Added
+
+- **Screen-edge "task in progress" glow.** A full-screen, click-through amber
+  glow pulses (dim ↔ bright) on all four screen edges whenever an agent is
+  driving the desktop — ambient, at-a-glance awareness that automation is live.
+  It rides the same lifecycle as the control-banner pill (shown together,
+  hidden together) and never steals focus or intercepts input: a per-pixel-alpha
+  layered window with `WS_EX_NOACTIVATE | WS_EX_TRANSPARENT`. Opt out of just the
+  glow with `CLAWD_NO_GLOW=1` — the pill (and its double-click-to-stop) stays.
+  Windows-only today, like the banner; the API is platform-neutral so
+  macOS/Linux overlays can land later. (`scripts/edge-glow.ps1`)
+
+### Security / hardening
+
+- **Insecure temp files (CWE-377).** The `agent console` terminal scripts were
+  written to a predictable `tmpdir/clawdcursor-task-<time>.{ps1,sh}` path and
+  then executed; they now use a private `fs.mkdtemp()` directory. The macOS
+  screenshot temp moved from `Date.now()` to `crypto.randomUUID()`. A
+  source-invariant guard test keeps predictable temp-file names from returning.
+- **Browser user-data dir** used a `/tmp` fallback that is wrong on Windows —
+  now `os.tmpdir()`. The unreachable pre-adapter launch fallback gained a
+  metacharacter guard so a crafted app name can't escape the PowerShell command.
+- **Code-scanning sweep.** Closed the real CodeQL alerts and documented the
+  false positives (the snapshot fingerprint SHA-1 is a non-credential checksum;
+  an assertion `fs.open` is read-only). The transitive `file-type` advisory was
+  assessed unreachable (the vulnerable ASF path never runs) and dismissed.
+
 ## [1.5.2] - 2026-06-13 — reliability, honest verification, transparency
 
 The theme of this patch is **trust**: the cheap perception path works for
