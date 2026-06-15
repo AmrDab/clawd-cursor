@@ -67,6 +67,16 @@ const TARGETS: SyncTarget[] = [
     desc: 'server.json registry manifest versions (server + npm package)',
   },
 
+  // .claude-plugin/plugin.json — the Claude Code plugin manifest. Wraps the
+  // same npm release; a stale version here makes the plugin advertise the
+  // wrong version to plugin hosts.
+  {
+    file: '.claude-plugin/plugin.json',
+    pattern: /("version":\s*")\d+\.\d+\.\d+(")/,
+    replacement: `$1${VERSION}$2`,
+    desc: 'Claude Code plugin manifest version',
+  },
+
   // docs/index.html — marketing site. Several places, all distinct contexts.
   {
     file: 'docs/index.html',

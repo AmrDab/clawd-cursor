@@ -44,13 +44,18 @@ describe('version drift guard', () => {
   // release. If any of them drifts, fail the build and tell the dev to run
   // the sync. Keeps `npm version <bump>` honest even if its lifecycle hook
   // is bypassed (e.g. someone hand-edits package.json).
-  it('SKILL.md + docs/ + install scripts match package.json version', () => {
+  it('SKILL.md + docs/ + install scripts + plugin.json match package.json version', () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')) as { version: string };
     const needle = pkg.version;
 
     const skill = readFileSync(join(ROOT, 'SKILL.md'), 'utf-8');
     const skillMatch = skill.match(/^version:\s*(\d+\.\d+\.\d+)/m);
     expect(skillMatch?.[1], 'SKILL.md frontmatter version drifted; run `npm run sync-version`').toBe(needle);
+
+    // .claude-plugin/plugin.json — synced by sync-version; guard it like the rest.
+    const plugin = readFileSync(join(ROOT, '.claude-plugin', 'plugin.json'), 'utf-8');
+    const pluginMatch = plugin.match(/"version":\s*"(\d+\.\d+\.\d+)"/);
+    expect(pluginMatch?.[1], '.claude-plugin/plugin.json version drifted; run `npm run sync-version`').toBe(needle);
 
     const indexHtml = readFileSync(join(ROOT, 'docs', 'index.html'), 'utf-8');
     // The <title>, meta description, and og:title are intentionally version-FREE

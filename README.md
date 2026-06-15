@@ -119,6 +119,29 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 > **Editor permission allowlists:** use the server-level wildcard `"mcp__clawdcursor"` rather than per-tool entries &mdash; it covers every tool and survives tool renames across versions.
 
+### Or install the Claude Code plugin (no hand-edited config)
+
+If you use **Claude Code**, you can skip the manual `mcpServers` block above. This
+repo ships a plugin (`.claude-plugin/plugin.json`) that registers the MCP server
+**and** bundles the usage skill in one step. It launches the server with
+`npx -y clawdcursor mcp --compact`, so there's **nothing to install first** &mdash;
+npx fetches clawdcursor on demand (or uses your global install if you have one), and
+because it resolves the package's `bin` (never a hard-coded `dist/` path) it can't be
+broken by an entry-point change on upgrade.
+
+```bash
+# load the plugin for one session straight from a checkout…
+claude --plugin-dir /path/to/clawdcursor
+# …or add this repo to a plugin marketplace for a persistent install.
+
+# one-time desktop-control consent (npx fetches the bin if you don't have it):
+npx -y clawdcursor consent --accept
+```
+
+> **Requires Node.js 20+** (for `npx`, which ships with Node). The first launch
+> downloads clawdcursor into npx's cache; later launches reuse it &mdash; no global
+> install and no `PATH` shim to resolve.
+
 ---
 
 ## The engine
