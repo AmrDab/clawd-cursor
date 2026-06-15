@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findActionButton, findInputField, associateLabel, MATCH_THRESHOLD, AMBIGUITY_MARGIN, MAX_CANDIDATES } from '../core/sense/ui-map-find';
+import { findActionButton, findInputField, associateLabel, MAX_CANDIDATES } from '../core/sense/ui-map-find';
 import type { UIElement } from '../core/sense/ui-map-types';
 
 const btn = (over: Partial<UIElement> & Pick<UIElement, 'id' | 'normalized_text'>): UIElement => ({

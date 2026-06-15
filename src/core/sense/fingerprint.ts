@@ -14,6 +14,14 @@
 import * as crypto from 'crypto';
 import type { SnapshotElement } from './types';
 
+// NOTE on the SHA-1 below: these are NON-credential state checksums for
+// stagnation detection — not password/credential storage. The digests are
+// truncated, held only in-memory for the duration of one task run, and never
+// persisted or transmitted. Secure fields are already excluded upstream
+// (value === undefined). CodeQL's js/insufficient-password-hash flags the
+// `e.value` → SHA-1 flow as a "password hash"; that is a false positive here
+// (a KDF like bcrypt/scrypt would be the wrong tool for a per-frame checksum).
+
 /**
  * Produce a deterministic short hash of the screen state.
  *

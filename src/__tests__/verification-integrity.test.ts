@@ -21,9 +21,20 @@ import type { AgentToolContext } from '../core/agent-loop/types';
 
 // ── file_changed_since_start (the proof a file was actually written) ──
 describe('file_changed_since_start assertion', () => {
-  const fp = join(tmpdir(), `clawd-p1-${process.pid}.txt`);
-  beforeAll(async () => { await fs.writeFile(fp, 'hi'); });
-  afterAll(async () => { await fs.rm(fp, { force: true }); });
+  // Use a private, randomly-named temp DIR (mkdtemp → 0700, unguessable suffix)
+  // instead of a predictable `tmpdir/clawd-p1-<pid>.txt`. A fixed name in the
+  // world-writable temp dir is a symlink/race window (CWE-377, CodeQL
+  // js/insecure-temporary-file). Everything the suite touches lives inside it.
+  let dir: string;
+  let fp: string;
+  let missing: string;
+  beforeAll(async () => {
+    dir = await fs.mkdtemp(join(tmpdir(), 'clawd-p1-'));
+    fp = join(dir, 'probe.txt');
+    missing = join(dir, 'nope.xyz');
+    await fs.writeFile(fp, 'hi');
+  });
+  afterAll(async () => { await fs.rm(dir, { recursive: true, force: true }); });
 
   const deps = (taskStartedAt?: number) => ({ adapter: {} as any, taskStartedAt });
 
@@ -41,7 +52,7 @@ describe('file_changed_since_start assertion', () => {
   });
 
   it('fails for a missing file', async () => {
-    const r = await checkAssertions([{ type: 'file_changed_since_start', path: join(tmpdir(), 'clawd-nope.xyz') }], deps(Date.now()));
+    const r = await checkAssertions([{ type: 'file_changed_since_start', path: missing }], deps(Date.now()));
     expect(r.ok).toBe(false);
   });
 
