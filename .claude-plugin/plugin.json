@@ -2,7 +2,7 @@
   "name": "clawdcursor",
   "displayName": "clawdcursor — safe desktop control",
   "version": "1.5.3",
-  "description": "Safe cross-OS desktop & browser control for Claude Code — the fallback execution layer for when APIs, CLIs, and direct integrations aren't available. Registers the clawdcursor MCP server in compact mode and bundles its usage skill (the SKILL.md at the repo root). Prerequisite: the clawdcursor binary must be on PATH (npm i -g clawdcursor).",
+  "description": "Safe cross-OS desktop & browser control for Claude Code — the fallback execution layer for when APIs, CLIs, and direct integrations aren't available. Registers the clawdcursor MCP server in compact mode and bundles its usage skill (the SKILL.md at the repo root). Requires Node.js 20+; the MCP server launches via npx, which fetches clawdcursor on demand (or uses your global install if present) — no separate install step.",
   "author": {
     "name": "Amr Dabbas"
   },
@@ -19,8 +19,8 @@
   ],
   "mcpServers": {
     "clawdcursor": {
-      "command": "clawdcursor",
-      "args": ["mcp", "--compact"]
+      "command": "npx",
+      "args": ["-y", "clawdcursor", "mcp", "--compact"]
     }
   }
 }

@@ -123,23 +123,24 @@ That's it. Ask your agent to *"open Outlook and reply to the latest email from S
 
 If you use **Claude Code**, you can skip the manual `mcpServers` block above. This
 repo ships a plugin (`.claude-plugin/plugin.json`) that registers the MCP server
-**and** bundles the usage skill in one step &mdash; and because it launches the
-`clawdcursor` bin by name (never a hard-coded `dist/` path), it can't be broken by
-an entry-point change on the next `npm i -g clawdcursor` upgrade.
+**and** bundles the usage skill in one step. It launches the server with
+`npx -y clawdcursor mcp --compact`, so there's **nothing to install first** &mdash;
+npx fetches clawdcursor on demand (or uses your global install if you have one), and
+because it resolves the package's `bin` (never a hard-coded `dist/` path) it can't be
+broken by an entry-point change on upgrade.
 
 ```bash
-npm i -g clawdcursor          # prerequisite: the bin must be on PATH
-clawdcursor consent --accept  # one-time desktop-control consent
-
 # load the plugin for one session straight from a checkout…
 claude --plugin-dir /path/to/clawdcursor
 # …or add this repo to a plugin marketplace for a persistent install.
+
+# one-time desktop-control consent (npx fetches the bin if you don't have it):
+npx -y clawdcursor consent --accept
 ```
 
-> **Windows note:** the plugin spawns the global `clawdcursor` bin. If your Claude
-> Code build can't resolve the `.cmd` shim on `PATH`, fall back to the explicit
-> `node` form &mdash; point it at the bin entry **or** the back-compat shim
-> (`node "%APPDATA%/npm/node_modules/clawdcursor/dist/surface/cli.js" mcp --compact`).
+> **Requires Node.js 20+** (for `npx`, which ships with Node). The first launch
+> downloads clawdcursor into npx's cache; later launches reuse it &mdash; no global
+> install and no `PATH` shim to resolve.
 
 ---
 
