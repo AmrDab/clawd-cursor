@@ -2,6 +2,35 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Installer is now `npm i -g`, not a git-clone-and-build.** The
+  `curl … | bash` / `irm … | iex` one-liners previously cloned the repo and ran
+  `npm install` + `npm run build` on the user's machine — requiring git and a
+  full build toolchain, and diverging from the `npm i -g clawdcursor` the README
+  advertises. They now install the published package globally. macOS still gets
+  a working native helper because the package's `postinstall` builds and
+  ad-hoc-signs it (ad-hoc is `build.sh`'s default). `VERSION=vX.Y.Z` still pins,
+  now via `clawdcursor@X.Y.Z`.
+- **New Claude Code plugin** (`.claude-plugin/plugin.json`) registers the MCP
+  server (compact mode, by bin name) and bundles the root `SKILL.md` — a
+  one-step, config-free install for Claude Code. Manifest version auto-syncs via
+  `scripts/sync-version.ts`.
+
+### Fixed
+
+- **Back-compat entry point at `dist/index.js`.** v0.x shipped the CLI there;
+  v1.0 moved it to `dist/surface/cli.js`. Hosts that had hard-pinned
+  `node <pkg>/dist/index.js …` (e.g. a hand-written MCP entry in Claude Code's
+  `.claude.json`) silently broke on a routine `npm i -g clawdcursor` upgrade —
+  the MCP server just failed to start with no clear cause. A thin re-export
+  shim (`src/index.ts` → `dist/index.js`) now forwards to the real CLI, so those
+  pinned paths keep working across the move. New configs should still launch the
+  `clawdcursor` bin directly or use the Claude Code plugin, neither of which
+  pins a deep dist path.
+
 ## [1.5.3] - 2026-06-14 — edge-glow indicator + security hardening
 
 ### Added
