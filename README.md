@@ -66,7 +66,7 @@ The desktop-agent space is crowded. The closest **install-and-go** peers are [Wi
 
 Three things here are genuinely rare:
 
-1. **Cheapest-tier-first perception, fully local.** Accessibility tree (free) → OCR (cheap) → screenshot (medium) → vision (expensive). The agent climbs only when it must, so token cost tracks task difficulty &mdash; and with a local model, nothing leaves the machine. Vision-centric agents (OmniParser, UI-TARS) need a model in the loop for *every* observation.
+1. **Cheapest-tier-first perception, fully local.** Accessibility tree (free) → OCR (cheap) → screenshot (expensive — the *only* tier that puts pixels in the model's context; "screenshot" and "vision" are the same step). The agent climbs only when it must, so token cost tracks task difficulty &mdash; and with a local model, nothing leaves the machine. Vision-centric agents (OmniParser, UI-TARS) need a screenshot in the model for *every* observation.
 2. **It verifies.** Pass `expect` on a consequential action and Clawd Cursor re-checks the live screen (with a short settle window for async UIs) and reports a **DEVIATION** instead of a hollow "success." A completed task can't be marked done on evidence that was already true before it acted.
 3. **One safety gate.** Every call &mdash; from an editor over stdio, an external agent over HTTP, or the built-in loop &mdash; routes through a single `safety.evaluate()` chokepoint (allow / confirm / block) before it touches the desktop. The agent cannot bypass it.
 
@@ -148,7 +148,7 @@ See the [changelog](CHANGELOG.md) for the full release history (latest: **v1.5.2
 
 ### The loop
 
-Read the a11y tree (cheap) → act on named targets → verify from fresh observations → escalate perception only when needed (OCR → screenshot → vision). Sparse a11y tree? `system.detect_webview` switches Electron/WebView2 apps to `browser.*` over CDP. Canvas-only (Paint, Figma, games)? Screenshot + coordinate click.
+Read the a11y tree (cheap) → act on named targets → verify from fresh observations → escalate perception only when needed (OCR → screenshot, the one tier that sends pixels to the model). Sparse a11y tree? `system.detect_webview` switches Electron/WebView2 apps to `browser.*` over CDP. Canvas-only (Paint, Figma, games)? Screenshot + coordinate click.
 
 ```mermaid
 flowchart TB
@@ -223,9 +223,9 @@ Every observation has a cost. Start at the cheapest rung that works; climb only 
 | Tier | Badge | Cost | Source | When |
 |---|---|---|---|---|
 | **T1** structured | `obs·a11y` | ~free | `accessibility.*`, `window.*`, `browser.read_text`, clipboard | Default. Text + bounds, no image, no vision LLM. |
-| **T2** OCR | `obs·ocr` | cheap | `system.ocr` | A11y tree empty/sparse. OS-level text, no vision LLM. |
+| **T2** OCR | `obs·ocr` | cheap | `system.ocr`, `smart_read` / `smart_click` / `smart_type` | A11y tree empty/sparse. OS-level text out, no image bytes. |
 | **T3** DOM | `obs·dom` | medium | `browser.read_text` / `page_context` (CDP) | WebView / Electron / Chrome content. |
-| **T4** vision | `obs·vision` | expensive | `computer.screenshot`, `smart_*` | Canvas-only apps or spatial reasoning. Last resort. |
+| **T4** screenshot (vision) | `obs·vision` | expensive | `computer.screenshot` | The only tier that puts pixels in the model's context. Canvas-only apps or spatial reasoning. Last resort. |
 
 Acting tools log `act`. Watching `obs·a11y → act → obs·a11y` on a normal turn &mdash; and the rare climb to `obs·vision` &mdash; is the whole efficiency model, visible.
 
