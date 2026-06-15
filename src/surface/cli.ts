@@ -1261,7 +1261,17 @@ program
     }
 
     console.log(`\n${e('🐾', '>')} ${failed.length > 0 ? 'Uninstall finished with warnings' : 'Fully uninstalled'}. To remove the source code, delete:`);
-    console.log(`   ${clawdRoot}\n`);
+    console.log(`   ${clawdRoot}`);
+
+    // Closing the reinstall dead-end: this command just removed the global
+    // `clawdcursor` shim, so `clawdcursor install` can't work afterwards — and
+    // the natural next step shouldn't be a guess. Point the user at the package
+    // manager (works everywhere) plus the turnkey one-liner for their OS.
+    const reinstallOneLiner = process.platform === 'win32'
+      ? 'irm https://clawdcursor.com/install.ps1 | iex'
+      : 'curl -fsSL https://clawdcursor.com/install.sh | bash';
+    console.log(`\n${e('📦', '>')} To reinstall:  npm i -g clawdcursor`);
+    console.log(`   or:           ${reinstallOneLiner}\n`);
   });
 
 // ── Shared subsystem initialization (used by mcp + serve) ──

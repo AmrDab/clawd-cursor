@@ -2,7 +2,7 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
-## [Unreleased]
+## [1.5.4] - 2026-06-15 — install & distribution hardening
 
 ### Changed
 
@@ -15,9 +15,12 @@ All notable changes to Clawd Cursor will be documented in this file.
   ad-hoc-signs it (ad-hoc is `build.sh`'s default). `VERSION=vX.Y.Z` still pins,
   now via `clawdcursor@X.Y.Z`.
 - **New Claude Code plugin** (`.claude-plugin/plugin.json`) registers the MCP
-  server (compact mode, by bin name) and bundles the root `SKILL.md` — a
-  one-step, config-free install for Claude Code. Manifest version auto-syncs via
-  `scripts/sync-version.ts`.
+  server in compact mode — launched via `npx -y clawdcursor` so there's **no
+  global install to do first** (npx fetches on demand, or uses a global install
+  if present), while still resolving the package `bin` so it survives entry-path
+  refactors — and bundles the root `SKILL.md`. A one-step, config-free install
+  for Claude Code. Manifest version auto-syncs via `scripts/sync-version.ts`
+  (and is guarded by the version-drift test).
 
 ### Fixed
 
@@ -30,6 +33,11 @@ All notable changes to Clawd Cursor will be documented in this file.
   pinned paths keep working across the move. New configs should still launch the
   `clawdcursor` bin directly or use the Claude Code plugin, neither of which
   pins a deep dist path.
+- **`uninstall` no longer dead-ends.** It removes the global `clawdcursor`
+  command, so `clawdcursor install` can't follow it — and the old success
+  message only said how to delete *more*. Uninstall now prints the reinstall
+  one-liner (`npm i -g clawdcursor`, plus the OS turnkey installer), so there's
+  always an obvious way back.
 
 ## [1.5.3] - 2026-06-14 — edge-glow indicator + security hardening
 
