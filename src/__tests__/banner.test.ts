@@ -6,6 +6,8 @@
  *   - touch while pinned never schedules a hide
  *   - BANNER_STOP on the child's stdout fires onStopRequested
  *   - disabled state spawns nothing
+ *   - the edge glow (2026-06-14) rides the same lifecycle as the pill, can be
+ *     disabled independently (CLAWD_NO_GLOW), and dies with the pill
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -23,16 +25,23 @@ class FakeChild extends EventEmitter {
   }
 }
 
-let spawned: FakeChild[];
+let spawned: FakeChild[];      // pill processes
+let glowSpawned: FakeChild[];  // edge-glow processes
 
 beforeEach(() => {
   vi.useFakeTimers();
   spawned = [];
+  glowSpawned = [];
   controlBanner.__resetForTests();
   controlBanner.__setPlatformEnabledForTests(true);
   controlBanner.__setSpawnerForTests(() => {
     const c = new FakeChild();
     spawned.push(c);
+    return c as unknown as ChildProcess;
+  });
+  controlBanner.__setGlowSpawnerForTests(() => {
+    const c = new FakeChild();
+    glowSpawned.push(c);
     return c as unknown as ChildProcess;
   });
 });
@@ -43,13 +52,15 @@ afterEach(() => {
 });
 
 describe('controlBanner', () => {
-  it('pin shows exactly one child; repeated pins are idempotent; unpin kills it', () => {
+  it('pin shows exactly one pill + one glow; repeated pins are idempotent; unpin kills both', () => {
     controlBanner.pin();
     controlBanner.pin();
     expect(spawned.length).toBe(1);
+    expect(glowSpawned.length).toBe(1);
     expect(controlBanner.isVisible()).toBe(true);
     controlBanner.unpin();
     expect(spawned[0].killed).toBe(true);
+    expect(glowSpawned[0].killed).toBe(true);
     expect(controlBanner.isVisible()).toBe(false);
   });
 
@@ -102,6 +113,7 @@ describe('controlBanner', () => {
     controlBanner.pin();
     controlBanner.touch();
     expect(spawned.length).toBe(0);
+    expect(glowSpawned.length).toBe(0);
     expect(controlBanner.isVisible()).toBe(false);
   });
 
@@ -109,5 +121,20 @@ describe('controlBanner', () => {
     controlBanner.pin();
     spawned[0].emit('exit', 0);
     expect(controlBanner.isVisible()).toBe(false);
+  });
+
+  it('CLAWD_NO_GLOW disables the glow but keeps the pill (and its stop affordance)', () => {
+    controlBanner.__setGlowEnabledForTests(false);
+    controlBanner.pin();
+    expect(spawned.length).toBe(1);      // pill still shows
+    expect(glowSpawned.length).toBe(0);  // glow suppressed
+    expect(controlBanner.isVisible()).toBe(true);
+  });
+
+  it('when the pill exits, the glow is torn down too (never desync)', () => {
+    controlBanner.pin();
+    expect(glowSpawned.length).toBe(1);
+    spawned[0].emit('exit', 0);          // pill dies on its own
+    expect(glowSpawned[0].killed).toBe(true);
   });
 });

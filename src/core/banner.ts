@@ -1,6 +1,10 @@
 /**
- * Control banner — the on-screen "ClawdCursor — desktop control in progress"
- * indicator (scripts/banner.ps1: topmost, no-activate, blinking red dot).
+ * Control banner — the on-screen "desktop control in progress" indicators:
+ *   - scripts/banner.ps1: topmost, no-activate pill with a blinking red dot;
+ *     carries the double-click → stop affordance.
+ *   - scripts/edge-glow.ps1: a full-screen, click-through amber glow that pulses
+ *     on all four screen edges. Pure ambient signal; spawned/killed in lockstep
+ *     with the pill so the two are always in sync. Opt out via CLAWD_NO_GLOW=1.
  *
  * Transparency contract: whenever an agent is actively driving this desktop,
  * a human at the machine sees it — and can kill it (double-click → the parent
@@ -28,16 +32,27 @@ const IDLE_HIDE_MS = 30_000;
 type Spawner = () => ChildProcess;
 
 class ControlBanner {
-  private child: ChildProcess | null = null;
+  private child: ChildProcess | null = null;        // the pill (carries BANNER_STOP)
+  private glowChild: ChildProcess | null = null;    // the screen-edge glow overlay
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private pinned = false;
   private enabled = process.platform === 'win32' && process.env.CLAWD_NO_BANNER !== '1';
+  // The edge glow rides the same lifecycle as the pill but is independently
+  // opt-out-able (some users find ambient pulsing distracting) without losing
+  // the pill's double-click-to-stop affordance.
+  private glowEnabled = process.env.CLAWD_NO_GLOW !== '1';
   private onStopRequested: (() => void) | undefined;
   private spawner: Spawner = () => {
     const script = path.join(getPackageRoot(), 'scripts', 'banner.ps1');
     return spawn('powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script],
       { stdio: ['ignore', 'pipe', 'ignore'] });
+  };
+  private glowSpawner: Spawner = () => {
+    const script = path.join(getPackageRoot(), 'scripts', 'edge-glow.ps1');
+    return spawn('powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script],
+      { stdio: ['ignore', 'ignore', 'ignore'] }); // click-through visual only — no stdout contract
   };
 
   /** Wire the double-click → stop callback (the `clawdcursor stop` flow). */
@@ -88,7 +103,15 @@ class ControlBanner {
   private exitHookInstalled = false;
 
   private show(): void {
-    if (!this.enabled || this.child) return;
+    if (!this.enabled) return;
+    this.installExitHook();
+    this.spawnPill();
+    this.spawnGlow();
+  }
+
+  /** The "control in progress" pill — also the BANNER_STOP / kill-switch source. */
+  private spawnPill(): void {
+    if (this.child) return;
     let child: ChildProcess;
     try {
       child = this.spawner();
@@ -96,13 +119,6 @@ class ControlBanner {
       return; // cosmetic feature — never let it break control
     }
     this.child = child;
-    // The banner must never outlive its owner — an orphaned "control in
-    // progress" pill after the daemon stopped would be a lie on screen.
-    // kill() is a sync syscall, safe inside an 'exit' handler.
-    if (!this.exitHookInstalled) {
-      this.exitHookInstalled = true;
-      process.on('exit', () => { try { this.child?.kill(); } catch { /* gone */ } });
-    }
     if (child.stdout) {
       const rl = readline.createInterface({ input: child.stdout });
       rl.on('line', line => {
@@ -112,7 +128,43 @@ class ControlBanner {
       });
     }
     child.on('error', () => { if (this.child === child) this.child = null; });
-    child.on('exit', () => { if (this.child === child) this.child = null; });
+    // If the pill dies, take the glow down with it so the two never desync
+    // into a half-on state (glow without the stop affordance).
+    child.on('exit', () => { if (this.child === child) { this.child = null; this.killGlow(); } });
+  }
+
+  /** The ambient screen-edge glow — pure visual, click-through, no stdout. */
+  private spawnGlow(): void {
+    if (!this.glowEnabled || this.glowChild) return;
+    let child: ChildProcess;
+    try {
+      child = this.glowSpawner();
+    } catch {
+      return; // cosmetic — never let it break control
+    }
+    this.glowChild = child;
+    child.on('error', () => { if (this.glowChild === child) this.glowChild = null; });
+    child.on('exit', () => { if (this.glowChild === child) this.glowChild = null; });
+  }
+
+  // Neither overlay may outlive its owner — an orphaned "control in progress"
+  // pill or glow after the daemon stopped would be a lie on screen. kill() is a
+  // sync syscall, safe inside an 'exit' handler.
+  private installExitHook(): void {
+    if (this.exitHookInstalled) return;
+    this.exitHookInstalled = true;
+    process.on('exit', () => {
+      try { this.child?.kill(); } catch { /* gone */ }
+      try { this.glowChild?.kill(); } catch { /* gone */ }
+    });
+  }
+
+  private killGlow(): void {
+    const g = this.glowChild;
+    this.glowChild = null;
+    if (g) {
+      try { g.kill(); } catch { /* already gone */ }
+    }
   }
 
   private forceHide(): void {
@@ -122,6 +174,7 @@ class ControlBanner {
     if (c) {
       try { c.kill(); } catch { /* already gone */ }
     }
+    this.killGlow();
   }
 
   private clearIdleTimer(): void {
@@ -133,10 +186,13 @@ class ControlBanner {
 
   // ── test hooks ──
   __setSpawnerForTests(s: Spawner): void { this.spawner = s; }
+  __setGlowSpawnerForTests(s: Spawner): void { this.glowSpawner = s; }
   __setPlatformEnabledForTests(v: boolean): void { this.enabled = v; }
+  __setGlowEnabledForTests(v: boolean): void { this.glowEnabled = v; }
   __resetForTests(): void {
     this.forceHide();
     this.pinned = false;
+    this.glowEnabled = true;
     this.onStopRequested = undefined;
   }
 }
