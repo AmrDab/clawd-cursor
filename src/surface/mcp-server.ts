@@ -139,7 +139,14 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
       'and use the `task` tool — it runs a local cheap-model pipeline instead of your model. ' +
       '`task` waits up to 45s; longer tasks return {status:"running"} and CONTINUE in the ' +
       'background — re-call with the same instruction to keep waiting, task {action:"status"} ' +
-      'to poll, task {action:"abort"} to stop. A timeout on your side is NOT a task failure.';
+      'to poll, task {action:"abort"} to stop. A timeout on your side is NOT a task failure. ' +
+      'Drive UI symbolically: compile_ui / find_button / find_field return a stable ' +
+      '{element_id, snapshot_id} you pass to invoke/set_value — it survives layout shifts, so ' +
+      'prefer it over pixel coordinates. Pass `expect` on consequential actions so a failed one ' +
+      'reports a DEVIATION instead of a hollow success. clawdcursor is a FALLBACK layer — prefer ' +
+      'a native API, CLI, or direct file edit when one exists; reach for it when the only surface ' +
+      'is a GUI. Full usage guide: the `clawdcursor` skill registered in your agent, or ' +
+      'https://clawdcursor.com/llms.txt.';
 
   const server = new McpServer({ name: 'clawdcursor', version: VERSION }, { instructions });
   const tools = compact ? getCompactSurface() : getAllTools();

@@ -2,6 +2,29 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.5] - 2026-06-16 — the skill follows the install (cross-framework)
+
+### Fixed
+
+- **MCP-direct installs got the tools but not the skill.** The cross-framework
+  skill registration (Claude Code, OpenClaw, Codex, Cursor) lived *only* inside
+  `clawdcursor doctor` — which the MCP-first onboarding explicitly tells people to
+  skip. So an agent connected over MCP saw bare tools with none of the "how to use
+  me" knowledge (fallback positioning, the el_NN UI map, sustainable/autonomous
+  execution via the daemon + `task`), and clawdcursor stopped appearing as a skill.
+  Registration is now extracted into a shared module and runs on **`consent`** (the
+  always-required step) and via a new **`clawdcursor register-skill`** command, so
+  the skill installs into every detected agent framework regardless of install path.
+
+### Changed
+
+- **Richer MCP server `instructions`.** Even an agent with no skill file (a host
+  that doesn't support skills) now learns the essentials on connect: drive UI
+  symbolically (`compile_ui` / `find_button` / `find_field` → `{element_id,
+  snapshot_id}`, survives layout shifts), verify with `expect`, the fallback-only
+  positioning, and where to find the full guide (the registered skill or
+  `clawdcursor.com/llms.txt`).
+
 ## [1.5.4] - 2026-06-15 — install & distribution hardening
 
 ### Changed

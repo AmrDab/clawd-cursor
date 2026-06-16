@@ -23,6 +23,10 @@ public API).
 - One-time, always required: `clawdcursor consent --accept`
 - macOS only, after install: `clawdcursor grant`  (approve Accessibility + Screen Recording)
 
+`consent` also registers clawdcursor as a Skill in every agent framework it detects
+(Claude Code, OpenClaw, Codex, Cursor) — so you get this usage guide as a loadable
+skill, not just raw tools. Re-run any time with `clawdcursor register-skill`.
+
 ## Use as an MCP server (your editor or agent brings the model)
 
 Add to your editor's MCP config — if clawdcursor is installed globally:

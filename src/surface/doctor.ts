@@ -1272,108 +1272,16 @@ function printSummary(results: DiagResult[], pipeline: PipelineConfig): void {
 }
 
 /**
- * Register Clawd Cursor as a skill in detected external platforms (OpenClaw, Codex, etc.).
- * Purely optional — skips silently if no platforms are installed.
+ * Register Clawd Cursor as a skill in detected external platforms (Claude Code,
+ * OpenClaw, Codex, Cursor). Delegates to the shared, install-path-agnostic
+ * implementation in ./skill-register so `consent` and `register-skill` register
+ * the skill the same way doctor does (the logic used to live ONLY here, which is
+ * why MCP-direct users — told to skip doctor — never got the skill).
  */
 async function registerExternalSkills(results: DiagResult[]): Promise<void> {
-  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-  if (!homeDir) return;
-
-  const clawdCursorRoot = getPackageRoot();
-  const skillSource = path.join(clawdCursorRoot, 'SKILL.md');
-  if (!fs.existsSync(skillSource)) {
-    // No SKILL.md to register — log and exit cleanly. This shouldn't
-    // happen in a normal install but guards against partial / corrupt
-    // package trees.
-    results.push({ name: 'Skill registration', ok: false, detail: 'SKILL.md not found at package root' });
-    return;
-  }
-
-  // Each entry: [platform name, skills directory path, target folder name,
-  //              registryStyle] where `flat` puts SKILL.md directly in the
-  //              directory (Claude Code's `~/.claude/skills/<name>/SKILL.md`
-  //              shape) and `nested` keeps the legacy folder-per-skill shape.
-  type RegistryStyle = 'flat' | 'nested';
-  const platforms: [string, string, string, RegistryStyle][] = [
-    // Claude Code — primary modern registry. Skills live at
-    // ~/.claude/skills/<name>/SKILL.md. Discoverable by the Skill tool +
-    // /<skill> slash commands.
-    ['Claude Code', path.join(homeDir, '.claude', 'skills'), 'clawdcursor', 'flat'],
-
-    // OpenClaw — the original target for clawdcursor.
-    ['OpenClaw', path.join(homeDir, '.openclaw', 'workspace', 'skills'), 'clawdcursor', 'flat'],
-    ['OpenClaw (dev)', path.join(homeDir, '.openclaw-dev', 'workspace', 'skills'), 'clawdcursor', 'flat'],
-    ['OpenClaw (flat)', path.join(homeDir, '.openclaw', 'skills'), 'clawdcursor', 'flat'],
-
-    // Codex — also exposes a skills registry under ~/.codex/skills.
-    ['Codex', path.join(homeDir, '.codex', 'skills'), 'clawdcursor', 'flat'],
-
-    // Cursor — uses ~/.cursor/skills as the convention. Only present if
-    // the user has Cursor's skill plugin installed.
-    ['Cursor', path.join(homeDir, '.cursor', 'skills'), 'clawdcursor', 'flat'],
-  ];
-
-  let registered = 0;
-  for (const [name, skillsDir, folderName] of platforms) {
-    if (!fs.existsSync(skillsDir)) continue; // host platform not installed → silently skip
-
-    const skillTarget = path.join(skillsDir, folderName);
-    const targetSkillFile = path.join(skillTarget, 'SKILL.md');
-
-    // Already registered? Skip — but refresh the SKILL.md if our version
-    // is newer, so a re-`doctor` after an upgrade propagates the new
-    // skill metadata (description tweaks, version bump, fallback ordering).
-    if (fs.existsSync(skillTarget)) {
-      try {
-        if (fs.existsSync(targetSkillFile)) {
-          const srcMtime = fs.statSync(skillSource).mtimeMs;
-          const dstMtime = fs.statSync(targetSkillFile).mtimeMs;
-          if (srcMtime > dstMtime) {
-            fs.copyFileSync(skillSource, targetSkillFile);
-            results.push({ name: `${name} skill`, ok: true, detail: 'Refreshed (SKILL.md updated)' });
-          } else {
-            results.push({ name: `${name} skill`, ok: true, detail: 'Registered (up to date)' });
-          }
-        } else {
-          // Target dir exists but no SKILL.md inside — write one.
-          fs.copyFileSync(skillSource, targetSkillFile);
-          results.push({ name: `${name} skill`, ok: true, detail: 'Registered (SKILL.md copied)' });
-        }
-        registered++;
-      } catch {
-        // non-critical — registration is best-effort
-      }
-      continue;
-    }
-
-    // Fresh registration: prefer a symlink to the whole package root (so
-    // any path SKILL.md references — scripts/, knowledge/, etc. — is
-    // reachable). Fall back to a plain copy if the OS / permissions
-    // block symlink creation.
-    try {
-      fs.symlinkSync(clawdCursorRoot, skillTarget, process.platform === 'win32' ? 'junction' : 'dir');
-      results.push({ name: `${name} skill`, ok: true, detail: 'Registered (symlink)' });
-      registered++;
-    } catch {
-      try {
-        fs.mkdirSync(skillTarget, { recursive: true });
-        fs.copyFileSync(skillSource, targetSkillFile);
-        results.push({ name: `${name} skill`, ok: true, detail: 'Registered (SKILL.md copied)' });
-        registered++;
-      } catch { /* non-critical — log nothing, doctor keeps going */ }
-    }
-  }
-
-  if (registered === 0) {
-    // No host platforms detected — clawdcursor still works standalone
-    // via MCP / HTTP. Surface this so the user knows the skill ISN'T
-    // discoverable from any host registry yet (useful when debugging
-    // "why doesn't Claude Code see clawdcursor as a skill?").
-    results.push({
-      name: 'Skill registration',
-      ok: true,
-      detail: 'No host registry found (Claude Code, OpenClaw, Codex, Cursor) — clawdcursor still works standalone via MCP',
-    });
+  const { registerSkills } = await import('./skill-register');
+  for (const r of registerSkills().results) {
+    results.push({ name: r.name, ok: r.ok, detail: r.detail });
   }
 }
 

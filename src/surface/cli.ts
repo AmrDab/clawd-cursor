@@ -1528,6 +1528,7 @@ program
     if (opts.accept) {
       writeConsentFile();
       console.log('  Consent accepted. clawdcursor can now control your desktop.');
+      await autoRegisterSkill();
       printPostConsentNextSteps();
       return;
     }
@@ -1535,6 +1536,7 @@ program
     // Interactive flow
     const accepted = await runOnboarding('consent');
     if (accepted) {
+      await autoRegisterSkill();
       printPostConsentNextSteps();
     } else {
       process.exit(1);
@@ -1555,5 +1557,40 @@ function printPostConsentNextSteps(): void {
   console.log(`       No daemon, no API key — your editor spawns clawdcursor on demand.`);
   console.log('');
 }
+
+/** Register the skill into every detected agent framework (best-effort). Runs on
+ *  consent so MCP-direct users get clawdcursor's skill without needing `doctor`
+ *  — the skill carries the "how to use me sustainably" knowledge the bare MCP
+ *  tools don't (fallback positioning, the el_NN UI map, the autonomous daemon). */
+async function autoRegisterSkill(): Promise<void> {
+  try {
+    const { registerSkills } = await import('./skill-register');
+    const { registered, results } = registerSkills();
+    if (registered > 0) {
+      const hosts = results
+        .filter(r => r.ok && r.name.endsWith(' skill'))
+        .map(r => r.name.replace(/ skill$/, ''))
+        .join(', ');
+      console.log(`  ${e('🧩', '[OK]')}  Registered clawdcursor as a skill in: ${hosts}`);
+    }
+  } catch { /* best-effort — never block consent */ }
+}
+
+program
+  .command('register-skill')
+  .description('(Re)register clawdcursor as a skill in your AI agents (Claude Code, OpenClaw, Codex, Cursor)')
+  .action(async () => {
+    const { registerSkills } = await import('./skill-register');
+    const { registered, results } = registerSkills();
+    for (const r of results) {
+      console.log(`  ${r.ok ? e('✅', '[OK]') : e('❌', '[ERR]')}  ${r.name}: ${r.detail}`);
+    }
+    console.log('');
+    if (registered > 0) {
+      console.log(`  ${e('🐾', '>')} Registered into ${registered} agent skill registr${registered === 1 ? 'y' : 'ies'}. Restart the agent to pick it up.`);
+    } else {
+      console.log(`  ${e('ℹ️', '[i]')}  No agent framework detected (Claude Code, OpenClaw, Codex, Cursor). clawdcursor still works via MCP.`);
+    }
+  });
 
 program.parse();

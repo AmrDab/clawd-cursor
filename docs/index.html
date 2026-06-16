@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
-    AGENT-READABLE SUMMARY (v1.5.4)
+    AGENT-READABLE SUMMARY (v1.5.5)
     clawdcursor: the local MCP server that gives any agent safe desktop control.
 
     ── WHAT IT IS ──────────────────────────────────────────────────────────────
@@ -53,6 +53,9 @@
 
     After install — pick your path:
       clawdcursor consent --accept   # one-time desktop-control authorization (always required)
+                                     #   ALSO registers clawdcursor as a Skill in detected agents
+                                     #   (Claude Code, OpenClaw, Codex, Cursor) — re-run anytime:
+                                     #   clawdcursor register-skill
       clawdcursor grant              # macOS only — approve Accessibility + Screen Recording
       ── Editor-hosted agent (Claude Code/Cursor/…): that's ALL the setup.
          Add the MCP entry below; your editor spawns `clawdcursor mcp` itself.
@@ -440,7 +443,7 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v1.5.4 — latest stable</div>
+    <div class="hero-badge"><div class="pulse"></div> v1.5.5 — latest stable</div>
     <h1>It sees. It acts. It verifies.<br><span class="gr">Desktop control for any AI agent</span></h1>
     <p>Reads the screen through the accessibility tree &mdash; screenshots only as a fallback &mdash; verifies every action actually took, and routes everything through one safety gate. Any model, any app, local, no telemetry.</p>
     <div class="hero-btns">
@@ -750,7 +753,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 </div>
 
 <footer>
-  <p>clawd<strong>cursor</strong> v1.5.4 · localhost only · MIT ·
+  <p>clawd<strong>cursor</strong> v1.5.5 · localhost only · MIT ·
     <a href="https://clawdcursor.com">Home</a> ·
     <a href="https://github.com/AmrDab/clawdcursor">GitHub</a> ·
     <a href="https://github.com/AmrDab/clawdcursor/blob/main/CHANGELOG.md">Changelog</a> ·

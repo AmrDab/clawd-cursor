@@ -98,7 +98,9 @@ curl -fsSL https://clawdcursor.com/install.sh | bash
 **Set up &mdash; this is the whole thing for the common case** (your agent drives over MCP):
 
 ```bash
-clawdcursor consent --accept   # one-time desktop-control consent (required)
+clawdcursor consent --accept   # one-time consent (required) — also registers the
+                               # clawdcursor *skill* in your agents (Claude Code,
+                               # OpenClaw, Codex, Cursor); re-run: clawdcursor register-skill
 clawdcursor grant              # macOS only — approve Accessibility + Screen Recording
 ```
 
