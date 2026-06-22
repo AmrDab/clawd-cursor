@@ -19,9 +19,16 @@
  * This module fixes (1) by recording process start time alongside the PID
  * and verifying both before treating a lockfile as live. Recycled PIDs
  * always have a later start time than the original, so the mismatch is
- * unambiguous. Fix (2) lives at the call site — see the stdin-EOF handler
- * in the `mcp` command in cli.ts, which releases the lock and exits when
- * the host parent's stdio pipe closes.
+ * unambiguous.
+ *
+ * Fix (2) is two-layered and deterministic — stdin-EOF alone is NOT reliable
+ * when the host is a GUI app (quitting the Claude desktop app on Windows does
+ * not deliver stdin EOF to the child):
+ *   - the lock holder runs a parent-PID watchdog (see the `mcp` command in
+ *     cli.ts) and self-exits when its host process dies; and
+ *   - this module records the holder's parent PID (`ppid`) so a later claimant
+ *     can detect a holder whose parent is dead — a confirmed orphan — and reap
+ *     it instead of refusing to start (see claimPidFile).
  *
  * Backwards compat: a legacy bare-integer lockfile cannot be verified for
  * identity (no recorded start time), so it is treated as stale and
@@ -52,6 +59,11 @@ interface LockData {
   pid: number;
   startTime: number;
   mode: LockMode;
+  /** PID of the process that spawned the lock holder (its host editor).
+   *  Lets a later claimant detect an ORPHANED holder — one whose parent has
+   *  died — and reap it instead of refusing to start. Optional for back-compat
+   *  with locks written before this field existed. */
+  ppid?: number;
 }
 
 export function pidFilePath(mode: LockMode): string {
@@ -169,8 +181,19 @@ export function claimPidFile(mode: LockMode): number | null {
         actualStart !== null &&
         Math.abs(actualStart - existing.startTime) <= START_TIME_TOLERANCE_MS
       ) {
-        // Same PID, same start time — this is a real live duplicate.
-        return existing.pid;
+        // Same PID, same start time — a real live holder. But it may be an
+        // ORPHAN: a host editor (Claude desktop, etc.) that quit without
+        // reaping its MCP child leaves a live-but-unusable holder that would
+        // otherwise block every reconnect forever. If we recorded the holder's
+        // parent PID and that parent is now dead, the holder is orphaned — reap
+        // it and take over. (No recorded ppid → can't prove orphan → stay
+        // conservative and treat it as a live duplicate.)
+        if (existing.ppid && existing.ppid > 1 && !isProcessAlive(existing.ppid)) {
+          try { process.kill(existing.pid); } catch { /* already gone */ }
+          // Fall through to overwrite — we are taking the lock.
+        } else {
+          return existing.pid;
+        }
       }
       // PID is alive but doesn't match the recorded start time, OR the
       // start time can't be determined — either way the lockfile no longer
@@ -183,6 +206,7 @@ export function claimPidFile(mode: LockMode): number | null {
       pid: process.pid,
       startTime: ourStart,
       mode,
+      ppid: process.ppid,
     };
     fs.writeFileSync(pidFilePath(mode), JSON.stringify(data), {
       encoding: 'utf-8',
