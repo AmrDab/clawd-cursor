@@ -1,0 +1,29 @@
+{
+  "name": "clawdcursor",
+  "owner": {
+    "name": "Amr Dabbas",
+    "url": "https://github.com/AmrDab"
+  },
+  "metadata": {
+    "description": "Safe cross-OS desktop & browser control for AI agents — the fallback execution layer for when APIs, CLIs, and direct integrations aren't available.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "clawdcursor",
+      "source": "./",
+      "description": "Safe cross-OS desktop & browser control — the fallback execution layer for when APIs, CLIs, and direct integrations aren't available. Registers the clawdcursor MCP server (compact tool surface) and bundles its usage skill. Launches via npx, so no separate install step is required.",
+      "version": "1.5.5",
+      "homepage": "https://clawdcursor.com",
+      "license": "MIT",
+      "keywords": [
+        "mcp",
+        "desktop-automation",
+        "computer-use",
+        "gui-automation",
+        "accessibility",
+        "fallback"
+      ]
+    }
+  ]
+}
