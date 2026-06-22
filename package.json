@@ -90,7 +90,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.0.0",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
