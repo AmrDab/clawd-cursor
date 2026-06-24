@@ -26,6 +26,7 @@ import type { ToolContext, ToolDefinition } from '../tools/registry';
 import { getAllTools, getCompactSurface } from '../tools/registry';
 import { evaluateToolCall } from '../tools/safety-gate';
 import { controlBanner } from '../core/banner';
+import { hasConsent } from './onboarding';
 
 // ── Typed SDK boundary (#115) ────────────────────────────────────────────────
 //
@@ -187,6 +188,20 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
       description,
       hasParams ? zodParams : {},
       async (params: Record<string, unknown>): Promise<McpToolResult> => {
+        // Consent gate (non-fatal): until the user accepts one-time consent,
+        // every tool returns a clear, host-VISIBLE prompt instead of the server
+        // dying with an opaque "failed". Re-checked per call so `clawdcursor
+        // consent --accept` takes effect immediately, with no restart.
+        if (!hasConsent()) {
+          return {
+            content: [{ type: 'text', text:
+              'clawdcursor needs one-time consent before it can control the desktop. ' +
+              'Run `clawdcursor consent --accept` in a terminal once, then retry — no restart needed. ' +
+              '(This grants the agent full mouse/keyboard/screen control of this machine.)'
+            }],
+            isError: true,
+          };
+        }
         // Pass the holder so el_NN refs resolve to their element label for
         // the destructive-label rule (Send/Delete/Pay) on the MCP route too.
         const safetyError = evaluateToolCall(tool, params ?? {}, { uiMaps: ctx.uiMaps });
