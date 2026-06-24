@@ -74,16 +74,64 @@ Plus: an on-screen **"desktop control in progress" banner** with a blinking red 
 
 ---
 
-## 60-second Quickstart
+## Install
 
-**Install (any OS):**
+clawdcursor is an MCP server published to npm — install it into **any** MCP-capable
+agent (Claude Code, Claude Desktop, Cursor, Windsurf, Zed, OpenAI Codex, or your own
+loop) the same way you install any other MCP server.
+
+### 1 — Install the engine + grant consent (once)
 
 ```bash
 npm i -g clawdcursor
+clawdcursor consent --accept    # one-time desktop-control consent (required)
+clawdcursor grant               # macOS only — approve Accessibility + Screen Recording
+```
+
+> Zero-install also works: any snippet below can swap `clawdcursor` for
+> `npx -y clawdcursor`, and npx fetches it on demand. A global install is recommended
+> because clawdcursor has native dependencies that are slow to build on the first
+> `npx` run. Requires **Node.js 20+**.
+
+### 2 — Add it to your agent (pick your host)
+
+**Claude Code**
+```bash
+claude mcp add clawdcursor -s user -- clawdcursor mcp --compact
+```
+
+**OpenAI Codex** — add to `~/.codex/config.toml`:
+```toml
+[mcp_servers.clawdcursor]
+command = "clawdcursor"
+args = ["mcp", "--compact"]
+```
+
+**Cursor / Windsurf / Zed / Claude Desktop** — add to the host's MCP config:
+```json
+{
+  "mcpServers": {
+    "clawdcursor": { "command": "clawdcursor", "args": ["mcp", "--compact"] }
+  }
+}
+```
+
+That's the whole setup. Ask your agent: *"open Outlook and reply to the latest email
+from Sarah."*
+
+### Or: one-command plugin (Claude Code)
+
+Skip the manual config — this repo ships a plugin that registers the tools **and**
+bundles the usage skill in one step. It resolves the package's `bin` (never a
+hard-coded `dist/` path), so an upgrade can't break it:
+
+```bash
+claude plugin marketplace add AmrDab/clawdcursor
+claude plugin install clawdcursor@clawdcursor
 ```
 
 <details>
-<summary>Or one line per OS (clones, builds, handles the macOS native build)</summary>
+<summary>One-line installers (clone + build; handles the macOS native build)</summary>
 
 ```powershell
 # Windows (PowerShell)
@@ -95,54 +143,12 @@ curl -fsSL https://clawdcursor.com/install.sh | bash
 ```
 </details>
 
-**Set up &mdash; this is the whole thing for the common case** (your agent drives over MCP):
-
-```bash
-clawdcursor consent --accept   # one-time consent (required) — also registers the
-                               # clawdcursor *skill* in your agents (Claude Code,
-                               # OpenClaw, Codex, Cursor); re-run: clawdcursor register-skill
-clawdcursor grant              # macOS only — approve Accessibility + Screen Recording
-```
-
-**Wire it into your editor** (Claude Code, Cursor, Windsurf, Zed):
-
-```jsonc
-// ~/.claude/settings.json  (or your editor's MCP config)
-{
-  "mcpServers": {
-    "clawdcursor": { "command": "clawdcursor", "args": ["mcp", "--compact"] }
-  }
-}
-```
-
-That's it. Ask your agent to *"open Outlook and reply to the latest email from Sarah"* and watch it run.
-
-> **You never run `clawdcursor mcp` yourself** &mdash; the editor spawns it over stdio on demand. `clawdcursor doctor` is **not** part of MCP setup; it only configures the built-in LLM for the autonomous `agent` daemon. On macOS, **Accessibility is required** (the primary control path); **Screen Recording is optional** (only the vision fallback needs it).
-
-> **Editor permission allowlists:** use the server-level wildcard `"mcp__clawdcursor"` rather than per-tool entries &mdash; it covers every tool and survives tool renames across versions.
-
-### Or install the Claude Code plugin (no hand-edited config)
-
-If you use **Claude Code**, you can skip the manual `mcpServers` block above. This
-repo ships a plugin (`.claude-plugin/plugin.json`) that registers the MCP server
-**and** bundles the usage skill in one step. It launches the server with
-`npx -y clawdcursor mcp --compact`, so there's **nothing to install first** &mdash;
-npx fetches clawdcursor on demand (or uses your global install if you have one), and
-because it resolves the package's `bin` (never a hard-coded `dist/` path) it can't be
-broken by an entry-point change on upgrade.
-
-```bash
-# load the plugin for one session straight from a checkout…
-claude --plugin-dir /path/to/clawdcursor
-# …or add this repo to a plugin marketplace for a persistent install.
-
-# one-time desktop-control consent (npx fetches the bin if you don't have it):
-npx -y clawdcursor consent --accept
-```
-
-> **Requires Node.js 20+** (for `npx`, which ships with Node). The first launch
-> downloads clawdcursor into npx's cache; later launches reuse it &mdash; no global
-> install and no `PATH` shim to resolve.
+> **Notes.** You never run `clawdcursor mcp` yourself — the host spawns it over stdio
+> on demand. `clawdcursor doctor` is **not** part of MCP setup; it only configures the
+> built-in LLM for the autonomous `agent` daemon. On macOS, **Accessibility is
+> required** (primary control path); **Screen Recording is optional** (vision fallback
+> only). For editor permission allowlists, use the server-level wildcard
+> `mcp__clawdcursor` rather than per-tool entries — it survives tool renames.
 
 ---
 

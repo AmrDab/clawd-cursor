@@ -14,7 +14,11 @@
       "version": "1.5.5",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "packageArguments": [
+        { "type": "positional", "value": "mcp", "valueHint": "command" },
+        { "type": "named", "name": "--compact" }
+      ]
     }
   ]
 }
