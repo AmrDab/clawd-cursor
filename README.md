@@ -88,10 +88,18 @@ clawdcursor consent --accept    # one-time desktop-control consent (required)
 clawdcursor grant               # macOS only — approve Accessibility + Screen Recording
 ```
 
-> Zero-install also works: any snippet below can swap `clawdcursor` for
-> `npx -y clawdcursor`, and npx fetches it on demand. A global install is recommended
-> because clawdcursor has native dependencies that are slow to build on the first
-> `npx` run. Requires **Node.js 20+**.
+> **Zero-install** also works — swap `clawdcursor` for `npx -y clawdcursor` in any
+> snippet below and npx fetches it on demand. A **global install is recommended**
+> anyway: it's pinnable and inspectable on disk (safer for a tool with full desktop
+> control than auto-fetching `latest` every run), and it's the path on which the macOS
+> native helper builds at install time. Requires **Node.js 20+**.
+
+> **Per-OS prerequisites.** **Windows** installs clean — `sharp` and `@nut-tree-fork/nut-js`
+> ship prebuilt binaries, so no C++/Python build tools are needed. **macOS** needs Xcode
+> Command Line Tools (`xcode-select --install`) for screenshots / vision; core
+> accessibility-driven control still works without them. **Linux** needs a few system
+> packages npm can't install: `tesseract-ocr` (OCR), `python3-gi` + `gir1.2-atspi-2.0`
+> (accessibility tree), and — on Wayland — `ydotool` (synthetic input).
 
 ### 2 — Add it to your agent (pick your host)
 
