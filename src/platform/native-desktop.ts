@@ -515,6 +515,12 @@ export class NativeDesktop extends EventEmitter {
    * while screen.grab() returns physical pixels. This method bridges the gap.
    */
   physicalToMouse(x: number, y: number): { x: number; y: number } {
+    // macOS: callers already pass LOGICAL coords. The compact tools map image→logical
+    // via mouseScaleFactor (cli.ts, the #154 fix) and nut-js on macOS consumes logical
+    // points. Dividing by dpiRatio here would double-convert and re-introduce #154
+    // (every click lands ~2× off on a Retina panel). nut-js drives PHYSICAL only on
+    // Windows/Linux-X11 (DPI-unaware process), so the division belongs there alone.
+    if (process.platform === 'darwin') return { x, y };
     if (this.dpiRatio <= 1) return { x, y };
     return {
       x: Math.round(x / this.dpiRatio),
