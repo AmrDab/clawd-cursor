@@ -515,6 +515,12 @@ export class NativeDesktop extends EventEmitter {
    * while screen.grab() returns physical pixels. This method bridges the gap.
    */
   physicalToMouse(x: number, y: number): { x: number; y: number } {
+    // macOS: callers already pass LOGICAL coords. The compact tools map image→logical
+    // via mouseScaleFactor (cli.ts, the #154 fix) and nut-js on macOS consumes logical
+    // points. Dividing by dpiRatio here would double-convert and re-introduce #154
+    // (every click lands ~2× off on a Retina panel). nut-js drives PHYSICAL only on
+    // Windows/Linux-X11 (DPI-unaware process), so the division belongs there alone.
+    if (process.platform === 'darwin') return { x, y };
     if (this.dpiRatio <= 1) return { x, y };
     return {
       x: Math.round(x / this.dpiRatio),
@@ -563,7 +569,12 @@ export class NativeDesktop extends EventEmitter {
     if (!this.connected) throw new Error('Not connected');
     // On macOS: skip the Swift helper (CGEvent blocked by TCC), use nut-js directly.
     // nut-js mouse events ARE delivered on macOS (unlike CGEvent from child processes).
-    await mouse.setPosition(new Point(x, y));
+    // physicalToMouse: callers pass PHYSICAL coords (image×imageScale / a11y / OCR);
+    // nut-js drives in LOGICAL coords in this DPI-unaware process, so /dpiRatio. Without
+    // this, clicks on a scaled display land dpiRatio× off-target (and activate-at-point
+    // resolves the wrong window -> foreground theft).
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
     await this.delay(50);
     const btn = this.mapButton(button);
     await mouse.click(btn);
@@ -571,7 +582,8 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseDoubleClick(x: number, y: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
-    await mouse.setPosition(new Point(x, y));
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
     await this.delay(50);
     await mouse.doubleClick(Button.LEFT);
     console.log(`   🖱️  Double-click at (${x}, ${y})`);
@@ -579,19 +591,22 @@ export class NativeDesktop extends EventEmitter {
 
   async mouseRightClick(x: number, y: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
-    await mouse.setPosition(new Point(x, y));
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
     await this.delay(50);
     await mouse.rightClick();
   }
 
   async mouseMove(x: number, y: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
-    await mouse.setPosition(new Point(x, y));
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
   }
 
   async mouseScroll(x: number, y: number, delta: number): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
-    await mouse.setPosition(new Point(x, y));
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
     await this.delay(30);
     const steps = Math.abs(Math.round(delta));
     for (let i = 0; i < steps; i++) {
@@ -840,7 +855,8 @@ export class NativeDesktop extends EventEmitter {
   async mouseDown(x: number, y: number, button: number = 1): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
     console.log(`   🖱️  Mouse down at (${x}, ${y})`);
-    await mouse.setPosition(new Point(x, y));
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
     const btn = this.mapButton(button);
     await mouse.pressButton(btn);
   }
@@ -848,7 +864,8 @@ export class NativeDesktop extends EventEmitter {
   async mouseUp(x: number, y: number, button: number = 1): Promise<void> {
     if (!this.connected) throw new Error('Not connected');
     console.log(`   🖱️  Mouse up at (${x}, ${y})`);
-    await mouse.setPosition(new Point(x, y));
+    const m = this.physicalToMouse(x, y);
+    await mouse.setPosition(new Point(m.x, m.y));
     const btn = this.mapButton(button);
     await mouse.releaseButton(btn);
   }
@@ -858,17 +875,20 @@ export class NativeDesktop extends EventEmitter {
     // nut-js drag works on all platforms including macOS
     console.log(`   🖱️  Drag (${sx},${sy}) → (${ex},${ey})`);
 
-    await mouse.setPosition(new Point(sx, sy));
+    // Convert both endpoints PHYSICAL->LOGICAL up front, interpolate in logical space.
+    const a = this.physicalToMouse(sx, sy);
+    const b = this.physicalToMouse(ex, ey);
+    await mouse.setPosition(new Point(a.x, a.y));
     await this.delay(50);
     await mouse.pressButton(Button.LEFT);
     await this.delay(100);
 
     // Interpolate intermediate points for smoother drag
-    const steps = Math.max(5, Math.floor(Math.hypot(ex - sx, ey - sy) / 20));
+    const steps = Math.max(5, Math.floor(Math.hypot(b.x - a.x, b.y - a.y) / 20));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const ix = Math.round(sx + (ex - sx) * t);
-      const iy = Math.round(sy + (ey - sy) * t);
+      const ix = Math.round(a.x + (b.x - a.x) * t);
+      const iy = Math.round(a.y + (b.y - a.y) * t);
       await mouse.setPosition(new Point(ix, iy));
       await this.delay(15);
     }
