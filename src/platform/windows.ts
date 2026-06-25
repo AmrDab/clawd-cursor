@@ -203,7 +203,11 @@ export class WindowsAdapter implements PlatformAdapter {
     let srcWidth = img.width;
     let srcHeight = img.height;
     let rgba = img.data as Buffer;
-    let pipeline: sharp.Sharp;
+    // ReturnType<typeof sharp> instead of the `sharp.Sharp` namespace type:
+    // sharp 0.35 reshaped its type exports and the default-import namespace
+    // access (`sharp.Sharp`) stopped resolving. The instance type is exactly
+    // what sharp() returns, so this is version-agnostic.
+    let pipeline: ReturnType<typeof sharp>;
 
     if (opts?.displayIndex !== undefined && opts.displayIndex > 0) {
       const displays = await this.listDisplays();
