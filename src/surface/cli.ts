@@ -1367,17 +1367,20 @@ program
     console.warn = (...args: any[]) => stderrWrite('[WARN] ', args);
     console.error = (...args: any[]) => stderrWrite('[ERROR] ', args);
 
-    // Consent gate — must be accepted before MCP tools become active
+    // Consent gate — REQUIRED before any tool runs, but NON-FATAL to startup.
+    // Exiting here made the host show an opaque "MCP server failed" with no
+    // reason: the message only goes to stderr, which most editor hosts hide.
+    // Instead we start the server normally so the requirement surfaces as a
+    // VISIBLE consent prompt on every tool call (enforced in mcp-server.ts) —
+    // and it takes effect the moment `clawdcursor consent --accept` runs, with
+    // no restart needed.
     const { hasConsent } = await import('./onboarding');
     if (!hasConsent()) {
       process.stderr.write(
-        `\nERROR: clawdcursor requires one-time consent before use.\n` +
-        `This tool gives AI models full control of your desktop.\n\n` +
-        `Run one of the following, then retry:\n` +
-        `  clawdcursor consent          # interactive consent prompt\n` +
-        `  clawdcursor consent --accept # non-interactive (CI/scripts)\n\n`
+        `\n[clawdcursor] One-time consent not yet accepted. The server will start, but\n` +
+        `every tool call returns a consent prompt until you run:\n` +
+        `  clawdcursor consent --accept   # this tool gives AI full control of your desktop\n\n`
       );
-      process.exit(1);
     }
 
     const mode = opts.compact ? 'compact' : 'granular';
