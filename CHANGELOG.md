@@ -2,6 +2,39 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.6] - 2026-06-25 — straight-line cross-OS onboarding + HiDPI clicks
+
+The theme is **an agent can install clawdcursor and actually take control** — the
+two things that were blocking that, plus a frictionless install path.
+
+### Fixed
+
+- **HiDPI clicks land on target (Windows/Linux-X11).** On a scaled display every
+  coordinate click/drag landed ~`dpiRatio`× off and stole foreground to the wrong
+  window. `NativeDesktop` mouse ops now convert physical→logical (`÷dpiRatio`), so
+  clicks hit where intended. macOS is explicitly exempt (callers already pass
+  logical there — avoids re-introducing the #154 Retina double-convert). (#170)
+- **No more opaque "MCP server failed."** A missing one-time consent used to
+  `process.exit(1)` the `mcp` server, and the reason went only to stderr (which
+  editor hosts hide). Consent is now non-fatal and **visible**: every tool call
+  returns a clear `clawdcursor consent --accept` prompt until consent is given,
+  re-checked per call (takes effect with no restart). (#169)
+
+### Added
+
+- **One-paste install into any MCP host.** A Claude Code plugin marketplace
+  (`.claude-plugin/marketplace.json`), `server.json` registry launch args
+  (`mcp --compact` via npx), and per-host README snippets — install the way every
+  other MCP server is distributed. The plugin's skill is single-sourced from the
+  root `SKILL.md` (auto-copied + drift-guarded). (#168)
+
+### Security / maintenance
+
+- **hono → 4.12.26** — fixes a HIGH `serve-static` path-traversal advisory on
+  Windows (`%5C`). (#167)
+- Dependency bumps: `@types/node` 26, `eslint` 10.5 + `@typescript-eslint` 8.62,
+  `@vitest/coverage-v8` 4.1.9, `sharp` 0.35, `playwright` 1.61, `form-data` 4.0.6.
+
 ## [1.5.5] - 2026-06-16 — the skill follows the install (cross-framework)
 
 ### Fixed
