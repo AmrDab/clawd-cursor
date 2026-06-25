@@ -69,5 +69,25 @@ describe('version drift guard', () => {
       const m = text.match(/# Specify version: \$?(?:env:)?VERSION=?'?(?:v)(\d+\.\d+\.\d+)'?/);
       expect(m?.[1], `docs/${installer} pin example drifted; run \`npm run sync-version\``).toBe(needle);
     }
+
+    // skills/clawdcursor/SKILL.md must be byte-identical to root SKILL.md.
+    // The copy is maintained by sync-version.ts (fs.copyFileSync). If this
+    // assertion fails, the two files have drifted — run `npm run sync-version`.
+    const rootSkill = readFileSync(join(ROOT, 'SKILL.md'));
+    const pluginSkill = readFileSync(join(ROOT, 'skills', 'clawdcursor', 'SKILL.md'));
+    expect(
+      pluginSkill.equals(rootSkill),
+      'skills/clawdcursor/SKILL.md is not byte-identical to root SKILL.md; run `npm run sync-version`',
+    ).toBe(true);
+
+    // .claude-plugin/marketplace.json plugins[0].version must track package.json.
+    // metadata.version ("1.0.0") is the marketplace-format version and is NOT checked here.
+    const marketplace = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'marketplace.json'), 'utf-8')) as {
+      plugins: Array<{ version: string }>;
+    };
+    expect(
+      marketplace.plugins[0]?.version,
+      '.claude-plugin/marketplace.json plugins[0].version drifted; run `npm run sync-version`',
+    ).toBe(needle);
   });
 });
