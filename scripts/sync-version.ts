@@ -134,6 +134,18 @@ const TARGETS: SyncTarget[] = [
     replacement: `$1${VERSION}$2`,
     desc: 'install.ps1 header pin example',
   },
+
+  // .claude-plugin/marketplace.json — plugin marketplace manifest. Has TWO
+  // version fields: metadata.version ("1.0.0", the marketplace-format version,
+  // intentionally NOT touched) and plugins[0].version (the clawdcursor release
+  // version, synced here). The regex is anchored to the plugin's `"source": "./"
+  // line so it only rewrites the plugin-entry version, never metadata.version.
+  {
+    file: '.claude-plugin/marketplace.json',
+    pattern: /("source":\s*"\.\/",[\s\S]*?"version":\s*")\d+\.\d+\.\d+(")/,
+    replacement: `$1${VERSION}$2`,
+    desc: 'marketplace.json plugins[0].version',
+  },
 ];
 
 let changed = 0;
@@ -161,6 +173,26 @@ for (const t of TARGETS) {
   changed++;
   touchedFiles.add(t.file);
   console.log(`  ✓ ${t.desc}  →  ${t.file}`);
+}
+
+// Copy root SKILL.md → skills/clawdcursor/SKILL.md.
+// This runs AFTER the regex loop so the root already carries the new version.
+// We only write if the destination differs to avoid churning mtime.
+{
+  const srcSkill = path.join(REPO_ROOT, 'SKILL.md');
+  const dstSkill = path.join(REPO_ROOT, 'skills', 'clawdcursor', 'SKILL.md');
+  if (!fs.existsSync(srcSkill)) {
+    errors.push('✗ missing file: SKILL.md (skill copy source)');
+  } else {
+    const srcContent = fs.readFileSync(srcSkill);
+    const dstContent = fs.existsSync(dstSkill) ? fs.readFileSync(dstSkill) : null;
+    if (!dstContent || !srcContent.equals(dstContent)) {
+      fs.copyFileSync(srcSkill, dstSkill);
+      changed++;
+      touchedFiles.add('skills/clawdcursor/SKILL.md');
+      console.log(`  ✓ skills/clawdcursor/SKILL.md copied from root SKILL.md  →  skills/clawdcursor/SKILL.md`);
+    }
+  }
 }
 
 if (errors.length > 0) {
