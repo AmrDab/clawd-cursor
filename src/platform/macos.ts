@@ -808,6 +808,7 @@ export class MacOSAdapter implements PlatformAdapter {
     void opts?.uwpAppId;
     // Reject shell-metachar input even though we use execFile (no shell expansion).
     // Keeps parity with Windows' stricter validator and avoids surprising `open`.
+    // eslint-disable-next-line no-control-regex -- intentional: reject control chars that could escape shell quoting
     if (/[\r\n\t\x00-\x1f]/.test(name)) {
       throw new Error('launchApp: illegal characters in app name');
     }

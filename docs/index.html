@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>clawdcursor — safe desktop control for any AI agent</title>
-  <meta name="description" content="Local MCP server that gives any AI agent safe desktop control. Reads the screen through the accessibility tree (screenshots as fallback), verifies its own actions, routes everything through one safety gate. Windows · macOS · Linux. No cloud.">
+  <meta name="description" content="Local MCP server that gives any AI agent safe desktop control. Compiles the screen into a UI map (a11y tree + OCR) with stable element ids, acts by id not by pixel, verifies its own actions, routes everything through one safety gate. Windows · macOS · Linux. No cloud.">
   <meta property="og:title" content="clawdcursor — It sees. It acts. It verifies.">
-  <meta property="og:description" content="Safe desktop control for any AI agent. Accessibility-first, verifies its own actions, one safety gate. Local · cross-OS · any model.">
+  <meta property="og:description" content="Safe desktop control for any AI agent. Compiles the screen into a UI map, acts on stable element ids, verifies its own actions, one safety gate. Local · cross-OS · any model.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://clawdcursor.com/">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
-    AGENT-READABLE SUMMARY (v1.5.6)
+    AGENT-READABLE SUMMARY (v1.5.7)
     clawdcursor: the local MCP server that gives any agent safe desktop control.
 
     ── WHAT IT IS ──────────────────────────────────────────────────────────────
@@ -443,9 +443,9 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge"><div class="pulse"></div> v1.5.6 — latest stable</div>
+    <div class="hero-badge"><div class="pulse"></div> v1.5.7 — latest stable</div>
     <h1>It sees. It acts. It verifies.<br><span class="gr">Desktop control for any AI agent</span></h1>
-    <p>Reads the screen through the accessibility tree &mdash; screenshots only as a fallback &mdash; verifies every action actually took, and routes everything through one safety gate. Any model, any app, local, no telemetry.</p>
+    <p>Compiles the screen into one fused UI map (accessibility tree + OCR) and acts on stable element ids that survive layout shifts &mdash; dropping to screenshot/vision only for canvas-only apps. Verifies every action actually took, and routes everything through one safety gate. Any model, any app, local, no telemetry.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -553,8 +553,8 @@
     <div class="pipe-flow">
       <div class="pipe-step router">
         <h4><span class="pipe-num">1</span> Compile the screen</h4>
-        <span class="pipe-tag">Zero pixels</span>
-        <p>Fuse the a11y tree (+ OCR) into one el_NN map. Act on an element by id — no image bytes to the LLM; screenshots stay a fallback.</p>
+        <span class="pipe-tag">No vision model</span>
+        <p>Fuse the a11y tree + OCR into one confidence-scored el_NN map. Act on an element by stable id — no image bytes to the model. The screenshot/vision tier is last resort only.</p>
       </div>
       <div class="pipe-arrow" aria-hidden="true">→</div>
       <div class="pipe-step agent">
@@ -753,7 +753,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
 </div>
 
 <footer>
-  <p>clawd<strong>cursor</strong> v1.5.6 · localhost only · MIT ·
+  <p>clawd<strong>cursor</strong> v1.5.7 · localhost only · MIT ·
     <a href="https://clawdcursor.com">Home</a> ·
     <a href="https://github.com/AmrDab/clawdcursor">GitHub</a> ·
     <a href="https://github.com/AmrDab/clawdcursor/blob/main/CHANGELOG.md">Changelog</a> ·

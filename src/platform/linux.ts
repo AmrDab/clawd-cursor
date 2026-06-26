@@ -1053,6 +1053,7 @@ export class LinuxAdapter implements PlatformAdapter {
     // by DE), so we simply accept it for interface parity.
     void opts?.uwpAppId;
     void opts?.searchTerm;
+    // eslint-disable-next-line no-control-regex -- intentional: reject control chars that could escape shell quoting
     if (/[\r\n\t\x00-\x1f]/.test(name)) {
       throw new Error('launchApp: illegal characters in app name');
     }

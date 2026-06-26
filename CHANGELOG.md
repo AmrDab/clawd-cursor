@@ -2,6 +2,34 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.7] - 2026-06-26 — accuracy + repo polish
+
+Documentation-and-hygiene release; no runtime behavior change.
+
+### Changed
+
+- **Reframed the perception story around the UI State Compiler.** README, website
+  (`docs/index.html` + `llms.txt`), and `SKILL.md` now say what clawdcursor
+  actually does: it **compiles the screen into one fused UI map** (accessibility
+  tree + OCR, elements with stable `el_NN` ids) and acts on elements **by id** —
+  dropping to the **screenshot/vision tier** (live pixel coords off the current
+  frame) only as a last resort, for canvas-only or custom-drawn UIs. Replaces the
+  old "reads the a11y tree, screenshots as fallback" framing.
+- **Fixed a cost-tier inaccuracy in `SKILL.md`:** "screenshot" and "vision" were
+  listed as two tiers (they're one — the only tier that puts pixels in the model),
+  and `smart_read`/`smart_click`/`smart_type` were mis-filed under vision when
+  they're OCR-backed. Now a correct 3-tier ladder (structured → OCR → screenshot).
+
+### Repo hygiene
+
+- ESLint is now **0 warnings** (was 16): removed dead imports + stale
+  `eslint-disable` directives, fixed useless escapes, and documented the
+  intentional control-char sanitisers at source.
+- Added `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), `.editorconfig`, and
+  `.gitattributes` (`eol=lf` — line-ending hygiene for a cross-OS project).
+- CI (`cross-platform.yml`): added a `concurrency` group (cancel in-progress PR
+  runs) and a 30-minute job timeout; dropped the dead `master` push trigger.
+
 ## [1.5.6] - 2026-06-25 — straight-line cross-OS onboarding + HiDPI clicks
 
 The theme is **an agent can install clawdcursor and actually take control** — the

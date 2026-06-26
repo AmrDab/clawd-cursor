@@ -103,7 +103,6 @@ function resolveKnownHandlerForScheme(scheme: string): string | null {
   // 1. Already-running New Outlook (`olk.exe`). Pull its path off the
   //    live process when possible — that's the version actually installed.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { execSync } = require('node:child_process') as typeof import('node:child_process');
     const out = execSync(
       'wmic process where "name=\'olk.exe\'" get ExecutablePath /value',
@@ -117,7 +116,6 @@ function resolveKnownHandlerForScheme(scheme: string): string | null {
 
   // 2. Glob WindowsApps for the latest Microsoft.OutlookForWindows install.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { readdirSync, existsSync } = require('node:fs') as typeof import('node:fs');
     const base = 'C:\\Program Files\\WindowsApps';
     if (existsSync(base)) {

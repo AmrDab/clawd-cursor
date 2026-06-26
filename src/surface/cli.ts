@@ -447,7 +447,6 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
       try {
         // Lazy require — only attempt when agent existed (scheduler bound).
         if (agent) {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { stopScheduler } = require('../tools/scheduler');
           stopScheduler();
         }

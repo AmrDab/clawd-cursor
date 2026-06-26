@@ -1,6 +1,6 @@
 ---
 name: clawdcursor
-version: 1.5.6
+version: 1.5.7
 description: >
   FALLBACK ONLY — do not invoke unless you have already ruled out (1) a
   native API (Gmail API, GitHub API, Slack API …), (2) a CLI (git, gh,
@@ -111,10 +111,9 @@ than the granular surface - so small models (Haiku, Kimi, Ollama) stay focused.
 
 | Tier | Label | Cost | Use when |
 |---|---|---|---|
-| T1 | **structured** | ~free | Default. `accessibility.*`, `window.*`, `browser.read_text`, clipboard. Returns structured text - no image, no vision LLM. |
-| T2 | **ocr** | cheap | A11y tree is empty or sparse. `system({"action":"ocr"})` - OS-level OCR, text out, no LLM vision. |
-| T3 | **screenshot** | medium | OCR isn't enough and you need pixel context. `computer({"action":"screenshot"})` - sends an image into the LLM context. Use sparingly. |
-| T4 | **vision** | expensive | Screen is canvas-only (Paint, Figma, games) or the task requires spatial reasoning that text cannot express. `smart_click`, `smart_read`, `smart_type`. Last resort. |
+| T1 | **structured** | ~free | Default. `accessibility.*`, `window.*`, `browser.read_text`, clipboard. Returns structured text — no image, no vision model. |
+| T2 | **OCR** | cheap | A11y tree is empty or sparse. `system({"action":"ocr"})`, plus `smart_read` / `smart_click` / `smart_type` — all OCR-backed (text out, no image into the model). |
+| T3 | **screenshot / vision** | expensive | Canvas-only apps (Paint, Figma, games) or a task needing spatial reasoning text can't express. `computer({"action":"screenshot"})` puts the current frame into the model's context; you then act on live pixel coords off that frame. "Screenshot" and "vision" are the same tier — the only one that sends pixels to the model. Last resort. |
 
 **Rule: start at T1. Escalate to the next tier only when the current one fails.** Apply this logic when calling compound tools directly; the built-in agent loop (via `task({...})`) follows the same discipline.
 
@@ -263,7 +262,7 @@ clawdcursor agent
 
 ### Autonomous-agent mode
 
-Configure an LLM via `clawdcursor doctor`, then use `submit_task` / `agent_status` / `abort_task` on the granular surface (or `task({...})` on the compact surface) to hand off a plain-English task. The built-in loop perceives the desktop (a11y → OCR → screenshot), acts, and iterates until done or the turn budget is exhausted. See the Modes table above.
+Configure an LLM via `clawdcursor doctor`, then use `submit_task` / `agent_status` / `abort_task` on the granular surface (or `task({...})` on the compact surface) to hand off a plain-English task. The built-in loop compiles the screen (a11y tree + OCR, with screenshot/vision only as last resort), acts on stable element ids, and iterates until done or the turn budget is exhausted. See the Modes table above.
 
 ---
 

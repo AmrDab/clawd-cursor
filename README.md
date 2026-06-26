@@ -1,7 +1,7 @@
 <h1 align="center">Clawd Cursor</h1>
 
 <p align="center">
-  <strong>Safe desktop control for any AI agent.</strong> Reads the screen through the accessibility tree (screenshots as fallback),<br>
+  <strong>Safe desktop control for any AI agent.</strong> Compiles the screen into a UI map and acts on elements by stable id (screenshot/vision only as a last resort),<br>
   <strong>verifies its own actions</strong>, and gates everything through one safety checkpoint. Local &middot; cross-OS &middot; any model.
 </p>
 
@@ -43,7 +43,7 @@
 
 Clawd Cursor is a **local MCP server** that gives any tool-calling agent &mdash; Claude Code, Cursor, Windsurf, OpenClaw, the Claude Agent SDK, or your own loop &mdash; safe control of the **real desktop**. It clicks, types, reads the screen, opens apps, and drives any GUI the way a human would: native apps, the browser, even a canvas.
 
-Most "let an agent use the computer" tools take a screenshot and feed it to a vision model &mdash; slow, expensive, and brittle. Clawd Cursor reads the **accessibility tree** first (structured text, near-free, no vision model), falls back to OCR, and only reaches for pixels as a last resort. The result is cheaper, faster, private, and &mdash; uniquely &mdash; it **checks that each action actually did what it claimed**.
+Most "let an agent use the computer" tools take a screenshot and feed it to a vision model &mdash; slow, expensive, and brittle. Clawd Cursor **compiles the screen into one UI map**: it fuses the accessibility tree and OCR into a confidence-scored set of elements, each tagged with a stable `el_NN` id, and acts on elements by id &mdash; not pixel coordinates. Coordinates appear only in the last-resort screenshot/vision tier (live pixels off the current frame), for canvas-only apps or tasks that genuinely need spatial reasoning. The result is cheaper, faster, private, and &mdash; uniquely &mdash; it **checks that each action actually did what it claimed**.
 
 > **If a human can do it on a screen, your agent can too.** No API, no integration, no problem &mdash; only the right sequence of reads, clicks, keys, and waits. Use it as the **last-mile fallback**: native API exists? Use it. CLI? Use it. Clawd Cursor is for the click, the legacy app, the GUI with no public surface.
 
@@ -57,7 +57,7 @@ The desktop-agent space is crowded. The closest **install-and-go** peers are [Wi
 |------------------------------------------|:-----------------------:|:-----------:|:--------------:|:--------------------:|:------------:|
 | Any desktop app, not just the web        | ✅                      | web only    | web only       | ✅                    | ✅           |
 | Cross-OS (Windows + macOS + Linux)       | ✅                      | &mdash;     | &mdash;        | varies               | sandbox      |
-| Perception **without a vision model**    | ✅ a11y → OCR → vision  | DOM         | a11y tree      | ❌ vision-centric     | ❌ vision    |
+| Perception **without a vision model**    | ✅ compiled a11y + OCR map | DOM      | a11y tree      | ❌ vision-centric     | ❌ vision    |
 | **Verifies its own actions** (deviation) | ✅                      | &mdash;     | &mdash;        | &mdash;              | &mdash;      |
 | Single safety chokepoint (allow/confirm/block) | ✅                | &mdash;     | &mdash;        | &mdash;              | &mdash;      |
 | Any model / vendor                       | ✅                      | ✅          | not an agent   | model-specific       | Claude only  |
@@ -170,7 +170,7 @@ The perception + verification core (the **UI State Compiler**, since v1.5.0):
 
 > Set-of-Mark-style element IDs and a11y/OCR fusion aren't new ideas on their own &mdash; what's rare is doing them **locally, a11y-first (no vision model required), with a built-in verification gate and one safety chokepoint**, across three operating systems, behind a single MCP config.
 
-See the [changelog](CHANGELOG.md) for the full release history (latest: **v1.5.2** &mdash; perception reliability, honest verification, the control banner).
+See the [changelog](CHANGELOG.md) for the full release history, or the [latest release](https://github.com/AmrDab/clawdcursor/releases/latest).
 
 ---
 
