@@ -7,8 +7,9 @@
 
 How it works: clawdcursor compiles the screen into one fused, confidence-scored UI
 map (accessibility tree + OCR) with stable element ids, and acts on elements by
-name/id — not pixel coordinates. It drops to a screenshot (vision) only as a last
-resort, verifies each consequential action (reports a DEVIATION instead of a hollow
+name/id in the cheap tiers — dropping to screenshot/vision (which DOES use live
+pixel coords off the current frame) only as a last resort for canvas-only or
+custom-drawn UIs. It verifies each consequential action (reports a DEVIATION instead of a hollow
 "success"), and routes every call through a single safety gate (allow / confirm /
 block). This is the fallback/last-mile layer: prefer a native API, a CLI, direct
 file edits, or existing browser automation when those exist; reach for clawdcursor

@@ -19,7 +19,7 @@
  * rank-before-truncate sense layer surface its buttons.
  */
 
-import type { UnifiedTool, UnifiedToolResult, AgentToolContext } from './types';
+import type { UnifiedTool, AgentToolContext } from './types';
 import { buildBatchTool } from './batch-tool';
 import { imageScale, scaleCoord, screenCenter } from './coord-scale';
 import { ensureTargetForeground } from './focus-guard';

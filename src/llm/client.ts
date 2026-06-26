@@ -205,7 +205,6 @@ async function _callText(opts: InternalCallOptions): Promise<string> {
   const {
     baseUrl,
     model,
-    apiKey: _apiKey,
     isAnthropic,
     authHeaders,
     system,

@@ -266,6 +266,7 @@ export class OcrEngine {
 
     // Sanitize control characters that PowerShell's ConvertTo-Json may leave unescaped
     // (e.g. bell \x07 from OCR'd icons). Keep \t, \n, \r which are valid in JSON.
+    // eslint-disable-next-line no-control-regex -- intentional: sanitize control chars that PowerShell's ConvertTo-Json may leave unescaped
     const sanitized = trimmed.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
     const data = JSON.parse(sanitized);

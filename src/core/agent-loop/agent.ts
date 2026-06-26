@@ -43,7 +43,6 @@ import {
   type LLMToolTurn,
   type LLMUserBlock,
   type ToolUseResult,
-  type LLMAssistantBlock,
 } from '../../llm/client';
 import { buildSystemPrompt, renderSnapshot, renderHistory, wrapUntrustedScreenContent } from './prompt';
 import { LLM_TARGET_WIDTH } from './coord-scale';

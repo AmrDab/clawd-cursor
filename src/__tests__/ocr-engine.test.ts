@@ -62,11 +62,11 @@ vi.mock('child_process', async () => {
     try {
       const result = mockExecFile();
       if (typeof cb === 'function') {
-        (cb as Function)(null, result?.stdout ?? '', result?.stderr ?? '');
+        (cb as (...args: unknown[]) => unknown)(null, result?.stdout ?? '', result?.stderr ?? '');
       }
     } catch (err) {
       if (typeof cb === 'function') {
-        (cb as Function)(err);
+        (cb as (...args: unknown[]) => unknown)(err);
       }
     }
   };

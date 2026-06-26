@@ -954,6 +954,7 @@ export class WindowsAdapter implements PlatformAdapter {
   ): Promise<{ pid?: number; title?: string; handle?: number | string }> {
     // Reject control chars / backticks / $() that can escape PowerShell quoting
     // regardless of how we serialize.
+    // eslint-disable-next-line no-control-regex -- intentional: reject control chars that could escape PowerShell quoting
     if (/[\r\n\t\x00-\x1f]/.test(name) || /[`$]/.test(name)) {
       throw new Error('launchApp: illegal characters in app name');
     }
@@ -991,7 +992,7 @@ export class WindowsAdapter implements PlatformAdapter {
       // App ID format is `<PackageFamily>_<Hash>!<AppId>`. Valid characters are
       // alphanumerics, dots, underscores, hyphens, and a single `!`. Reject anything
       // else to keep the shell: path from interpreting metacharacters.
-      if (!/^[A-Za-z0-9_.\-]+![A-Za-z0-9_.\-]+$/.test(id)) {
+      if (!/^[A-Za-z0-9_.-]+![A-Za-z0-9_.-]+$/.test(id)) {
         throw new Error(`launchApp: illegal uwpAppId "${id}"`);
       }
       try {
@@ -1015,9 +1016,11 @@ export class WindowsAdapter implements PlatformAdapter {
     const args = ['-NoProfile', '-Command'];
     const cmdParts: string[] = ['Start-Process'];
     cmdParts.push('-FilePath', this.psQuote(name));
+    // eslint-disable-next-line no-control-regex -- intentional: reject control chars that could escape PowerShell quoting
     if (opts?.url && !/[\r\n\t\x00-\x1f"'`$]/.test(opts.url)) {
       cmdParts.push('-ArgumentList', this.psQuote(opts.url));
     }
+    // eslint-disable-next-line no-control-regex -- intentional: reject control chars that could escape PowerShell quoting
     if (opts?.cwd && !/[\r\n\t\x00-\x1f"'`$]/.test(opts.cwd)) {
       cmdParts.push('-WorkingDirectory', this.psQuote(opts.cwd));
     }
