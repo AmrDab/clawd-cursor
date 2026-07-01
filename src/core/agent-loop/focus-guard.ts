@@ -31,10 +31,17 @@ export async function ensureTargetForeground(
   ctx: AgentToolContext,
   foreground: { processName?: string } | null,
 ): Promise<string> {
-  const t = ctx.targetWindow;
-  if (!t || !t.processName) return '';
-  if (foreground && sameProcess(foreground.processName, t.processName)) return '';
-  const ok = await ctx.platform.focusWindow({ processName: t.processName }).catch(() => false);
+  // Prefer the explicit subtask anchor; fall back to the app the agent is
+  // currently working in (activeApp, refreshed from each step's snapshot).
+  // Without the fallback, a fresh delegated task (no anchor — e.g. "open Outlook
+  // and click New mail") got NO pre-click raise, so the click could land on an
+  // overlapping window (a fullscreen Claude/editor sitting over the just-opened
+  // target), which point-based activate-at-point then foregrounds. Raising the
+  // working app first puts it topmost so the click lands where the agent reasoned.
+  const targetProc = ctx.targetWindow?.processName ?? ctx.activeApp;
+  if (!targetProc) return '';
+  if (foreground && sameProcess(foreground.processName, targetProc)) return '';
+  const ok = await ctx.platform.focusWindow({ processName: targetProc }).catch(() => false);
   await sleep(120);
-  return ok ? ` ·raised ${t.processName}` : '';
+  return ok ? ` ·raised ${targetProc}` : '';
 }
