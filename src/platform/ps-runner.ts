@@ -65,7 +65,7 @@ export class PSRunner {
         '-NonInteractive',
         '-ExecutionPolicy', 'Bypass',
         '-File', BRIDGE_SCRIPT,
-      ], { stdio: ['pipe', 'pipe', 'pipe'] });
+      ], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
 
       this.rl = readline.createInterface({ input: this.proc.stdout! });
 
