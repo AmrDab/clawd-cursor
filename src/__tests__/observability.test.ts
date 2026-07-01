@@ -124,8 +124,8 @@ describe('cost-meter', () => {
   });
 
   it('priceFor matches by prefix for versioned models', () => {
-    // "claude-sonnet-4-20250514" is in the table; any suffix variant should match.
-    const p = priceFor('claude-sonnet-4-20250514-beta-flavor');
+    // "claude-sonnet-4-6" is in the table; any suffix variant should match.
+    const p = priceFor('claude-sonnet-4-6-beta-flavor');
     expect(p.inputPerM).toBe(3.0);
     expect(p.outputPerM).toBe(15.0);
   });
