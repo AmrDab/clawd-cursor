@@ -55,6 +55,12 @@ export class WindowsAdapter implements PlatformAdapter {
 
   private screenSize: ScreenSize | null = null;
 
+  // Cached physical/logical ratio, populated by getScreenSize(). nut-js mouse
+  // input and the (DPI-unaware) WindowFromPoint bridge both live in LOGICAL
+  // space on Windows, but callers hand us PHYSICAL coords (a11y/OCR/screenshot).
+  // Every mouse entry point divides by this before touching nut-js. See #170.
+  private dpiRatio = 1;
+
   async init(): Promise<void> {
     // Configure nut-js for snappy input; same tuning as native-desktop.ts.
     mouse.config.mouseSpeed = 2000;
@@ -126,6 +132,7 @@ export class WindowsAdapter implements PlatformAdapter {
     if (!physicalHeight) physicalHeight = logicalHeight;
 
     const dpiRatio = physicalWidth > logicalWidth ? physicalWidth / logicalWidth : 1;
+    this.dpiRatio = dpiRatio;
 
     this.screenSize = {
       physicalWidth,
@@ -706,16 +713,33 @@ export class WindowsAdapter implements PlatformAdapter {
     return Button.LEFT;
   }
 
+  /**
+   * Convert PHYSICAL pixel coords (a11y/OCR/screenshot space) to the LOGICAL
+   * coords nut-js and WindowFromPoint expect on Windows. This process is
+   * DPI-unaware, so the OS virtualises both the mouse driver and the bridge's
+   * WindowFromPoint to logical (96-DPI) space; feeding physical coords lands
+   * clicks dpiRatio× off AND makes activate-at-point resolve the wrong window
+   * (foreground theft). No-op at ratio ≤ 1 (100% scale / detection fallback).
+   */
+  private physicalToLogical(x: number, y: number): { x: number; y: number } {
+    if (this.dpiRatio <= 1) return { x, y };
+    return { x: Math.round(x / this.dpiRatio), y: Math.round(y / this.dpiRatio) };
+  }
+
   async mouseClick(x: number, y: number, opts?: { button?: MouseButton; count?: number }): Promise<FocusActivation | void> {
-    // Bring the window at (x, y) to the foreground before sending any
+    // Convert ONCE, then feed the same logical point to both the foreground
+    // check and the cursor move — they must agree or activate-at-point promotes
+    // a different window than the click lands on.
+    const p = this.physicalToLogical(x, y);
+    // Bring the window at the target to the foreground before sending any
     // button events. Without this, a click intended for a Save As dialog
     // can land on a background Explorer window when the dialog lost focus
     // between the screenshot and the click (z-order / activation race).
     // The activation verdict flows back to the caller so a FAILED raise
     // (foreground-lock) is visible instead of a silent wrong-window click.
-    const activation = await this.ensureForegroundAtPoint(x, y);
-    await mouse.setPosition(new Point(x, y));
-    this.lastCursor = { x, y };
+    const activation = await this.ensureForegroundAtPoint(p.x, p.y);
+    await mouse.setPosition(new Point(p.x, p.y));
+    this.lastCursor = { x: p.x, y: p.y };
     await this.delay(40);
     const count = opts?.count ?? 1;
     const btn = this.toNutButton(opts?.button);
@@ -736,11 +760,15 @@ export class WindowsAdapter implements PlatformAdapter {
   }
 
   async mouseMove(x: number, y: number): Promise<void> {
-    await mouse.setPosition(new Point(x, y));
-    this.lastCursor = { x, y };
+    const p = this.physicalToLogical(x, y);
+    await mouse.setPosition(new Point(p.x, p.y));
+    this.lastCursor = { x: p.x, y: p.y };
   }
 
   async mouseMoveRelative(dx: number, dy: number): Promise<void> {
+    // NOTE: dx/dy are relative deltas whose coordinate space (image vs physical)
+    // is caller-dependent and not part of the #170 physical→logical fix, so we
+    // intentionally do NOT scale them here. getPosition() returns logical.
     // nut-js `getPosition()` works reliably on Windows — prefer that over
     // the cache. Fall back to the cache if the query fails.
     try {
@@ -760,16 +788,20 @@ export class WindowsAdapter implements PlatformAdapter {
   }
 
   async mouseDrag(x1: number, y1: number, x2: number, y2: number): Promise<void> {
-    await mouse.setPosition(new Point(x1, y1));
-    this.lastCursor = { x: x1, y: y1 };
+    // Convert both endpoints to logical FIRST, then interpolate in logical
+    // space so every waypoint is correct (not just the endpoints).
+    const a = this.physicalToLogical(x1, y1);
+    const b = this.physicalToLogical(x2, y2);
+    await mouse.setPosition(new Point(a.x, a.y));
+    this.lastCursor = { x: a.x, y: a.y };
     await this.delay(50);
     await mouse.pressButton(Button.LEFT);
     await this.delay(80);
-    const steps = Math.max(8, Math.floor(Math.hypot(x2 - x1, y2 - y1) / 18));
+    const steps = Math.max(8, Math.floor(Math.hypot(b.x - a.x, b.y - a.y) / 18));
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const nx = Math.round(x1 + (x2 - x1) * t);
-      const ny = Math.round(y1 + (y2 - y1) * t);
+      const nx = Math.round(a.x + (b.x - a.x) * t);
+      const ny = Math.round(a.y + (b.y - a.y) * t);
       await mouse.setPosition(new Point(nx, ny));
       this.lastCursor = { x: nx, y: ny };
       await this.delay(10);
@@ -778,8 +810,9 @@ export class WindowsAdapter implements PlatformAdapter {
   }
 
   async mouseScroll(x: number, y: number, direction: ScrollDirection, amount: number = 3): Promise<void> {
-    await mouse.setPosition(new Point(x, y));
-    this.lastCursor = { x, y };
+    const p = this.physicalToLogical(x, y);
+    await mouse.setPosition(new Point(p.x, p.y));
+    this.lastCursor = { x: p.x, y: p.y };
     await this.delay(30);
     // nut-js only exposes scrollUp/scrollDown natively. For horizontal,
     // fall back to Shift+scroll which most apps interpret as horizontal.
