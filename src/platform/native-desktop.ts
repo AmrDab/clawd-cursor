@@ -529,6 +529,21 @@ export class NativeDesktop extends EventEmitter {
   }
 
   /**
+   * Read the current cursor position in SCREEN coordinates — the same space
+   * a11y/OCR/screenshot coordinates use, i.e. what callers pass to mouseClick.
+   * Exact inverse of physicalToMouse: nut-js reports the driver space (logical
+   * on Windows/Linux-X11 in this DPI-unaware process; already caller-space on
+   * macOS), so multiply back by dpiRatio off-darwin. Computer-use parity:
+   * Anthropic's computer tool exposes cursor_position; agents porting those
+   * loops expect a pointer-state read.
+   */
+  async getCursorPosition(): Promise<{ x: number; y: number }> {
+    const p = await mouse.getPosition();
+    if (process.platform === 'darwin' || this.dpiRatio <= 1) return { x: p.x, y: p.y };
+    return { x: Math.round(p.x * this.dpiRatio), y: Math.round(p.y * this.dpiRatio) };
+  }
+
+  /**
    * Process a raw RGBA buffer into the configured output format.
    * nut-js screen.grab() returns RGBA data directly — no BGRA swap needed.
    */

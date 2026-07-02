@@ -63,10 +63,10 @@ metadata:
 > - MCP stdio (editor host): add `"args": ["mcp", "--compact"]` to your config.
 > - MCP over HTTP (daemon mode): start the daemon with `--compact` (or set
 >   `CLAWD_MCP_COMPACT=1`) so `/mcp` serves the 7 compound tools (incl. `batch`). The surface is
->   fixed at startup — a daemon serves EITHER the compact tools OR the 94
+>   fixed at startup — a daemon serves EITHER the compact tools OR the 98
 >   granular ones, not both. Default (no flag) is granular.
 >
-> Granular mode's 94 tools are kept for back-compat. Compact's tools are much smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
+> Granular mode's 98 tools are kept for back-compat. Compact's tools are much smaller and reduce mis-tool-selection. Use granular only if your runtime MUST have every primitive as its own top-level schema.
 
 If you connect via MCP with `--compact`, you get a single tool that takes the
 whole task:
@@ -207,7 +207,7 @@ In `mcp` (stdio) and tools-only `agent` (HTTP): **you reason, clawdcursor acts.*
 }
 ```
 
-**Granular - 94 individual tools (power-user, back-compat, larger prompt budget):**
+**Granular - 98 individual tools (power-user, back-compat, larger prompt budget):**
 ```json
 {
   "mcpServers": {

@@ -58,6 +58,7 @@ export const COST_CLASS_BY_TOOL: Readonly<Record<string, ToolCostClass>> = {
 
   // ── inspect ── cheap structured read. ≤2K tok.
   get_screen_size: 'inspect', get_system_time: 'inspect', wait_for_element: 'inspect',
+  cursor_position: 'inspect',
   a11y_get_element: 'inspect', a11y_get_value: 'inspect', get_element_state: 'inspect',
   // verify runs only read primitives (window list, UIA value, clipboard, fs);
   // ocr_contains is the lone pricier path and is opt-in per assertion.

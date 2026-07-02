@@ -59,9 +59,9 @@ is NOT needed for MCP use; it only configures the optional autonomous daemon.
 - task — hand a whole task to the built-in autonomous loop
 - batch — run a guarded, safety-gated sequence of the above in one call
 
-98 granular tools (one schema per verb) are available via the `--granular` flag or
-`tools/list` on either transport, if your runtime needs every primitive as a
-top-level tool.
+98 granular tools (one schema per verb) are available by omitting `--compact`
+(granular is the default surface) — enumerate them with `tools/list` on either
+transport, if your runtime needs every primitive as a top-level tool.
 
 ## Safety
 

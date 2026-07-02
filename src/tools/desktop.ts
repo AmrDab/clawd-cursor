@@ -192,6 +192,26 @@ export function getDesktopTools(): ToolDefinition[] {
     },
 
     {
+      name: 'cursor_position',
+      description: 'Read the current mouse cursor position in image-space coordinates (the same space the mouse_* tools accept — a cursor_position read round-trips with mouse_hover). Computer-use parity: pointer-state read, no side effects.',
+      parameters: {},
+      category: 'mouse',
+      compactGroup: 'computer',
+      safetyTier: 0,
+      handler: async (_args, ctx) => {
+        await ctx.ensureInitialized();
+        // getCursorPosition returns the space callers pass to the desktop mouse
+        // fns; dividing by the SAME factor the click tools multiply by makes the
+        // read the exact inverse of the write on every OS (msf ≠ screenshot
+        // factor on Retina — using the wrong one halves coords on macOS).
+        const pos = await ctx.desktop.getCursorPosition();
+        const sf = ctx.getMouseScaleFactor() || 1;
+        const img = { x: Math.round(pos.x / sf), y: Math.round(pos.y / sf) };
+        return { text: `Cursor at (${img.x}, ${img.y}) in image-space.` };
+      },
+    },
+
+    {
       name: 'mouse_scroll',
       description: 'Scroll the mouse wheel at the given image-space coordinates.',
       parameters: {
