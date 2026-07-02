@@ -382,7 +382,10 @@ export async function runDoctor(opts: {
     // Offer to add a provider interactively
     if (process.stdin.isTTY && process.stdout.isTTY) {
       const rlSetup = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const ask = (q: string) => new Promise<string>(resolve => rlSetup.question(q, resolve));
+      // Route through askQuestion so this prompt gets the same idle-timeout —
+      // this no-keys-found setup flow is the FIRST prompt a fresh install hits,
+      // so it's the most likely place for an unattended doctor to orphan.
+      const ask = (q: string) => askQuestion(rlSetup, q);
 
       // Step 1: Pick a provider
       const providerList = [
@@ -1046,8 +1049,26 @@ async function promptCategoryChoice(
   return { providerKey: selected.providerKey, model: selected.model };
 }
 
+// A live TTY doesn't guarantee a human is actually there to answer — an
+// automated/scripted shell (CI, an agent's tool-call shell) can allocate a
+// pty that passes process.stdin.isTTY without anyone present, and a human
+// can simply get distracted mid-wizard. Either way the process orphans
+// indefinitely (with its ps-bridge child) since rl.question() never times
+// out on its own. Auto-exit after a period of no input instead of hanging.
+const DOCTOR_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
 function askQuestion(rl: readline.Interface, prompt: string): Promise<string> {
-  return new Promise(resolve => rl.question(prompt, resolve));
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      console.log(`\n\n⏱️  No response in ${DOCTOR_IDLE_TIMEOUT_MS / 60000} minutes — exiting rather than sit as an orphaned process. Run \`clawdcursor doctor\` again when you're ready.`);
+      rl.close();
+      process.exit(1);
+    }, DOCTOR_IDLE_TIMEOUT_MS);
+    rl.question(prompt, answer => {
+      clearTimeout(timer);
+      resolve(answer);
+    });
+  });
 }
 
 /**

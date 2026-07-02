@@ -50,7 +50,7 @@ export const PROVIDERS: Record<string, ProviderProfile> = {
       'anthropic-version': '2023-06-01',
     }),
     textModel: 'claude-haiku-4-5',
-    visionModel: 'claude-sonnet-4-20250514',
+    visionModel: 'claude-sonnet-4-6',
     textContextWindow: 200000,
     openaiCompat: false,
     computerUse: true,

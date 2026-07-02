@@ -134,6 +134,10 @@ export interface FocusActivation {
   title?: string;
   processName?: string;
   reason?: string;
+  /** 'skipped-self-window' when the resolved window was a denylisted self/host
+   *  window (agent hub, clawdcursor's own console) and was deliberately NOT
+   *  raised — a stable code to branch on, vs. matching free-text `reason`. */
+  action?: string;
 }
 
 /**

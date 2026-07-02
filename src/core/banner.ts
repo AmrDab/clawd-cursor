@@ -46,13 +46,15 @@ class ControlBanner {
     const script = path.join(getPackageRoot(), 'scripts', 'banner.ps1');
     return spawn('powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script],
-      { stdio: ['ignore', 'pipe', 'ignore'] });
+      // windowsHide: suppress the console/csc.exe compile flash so the pill spawn
+      // can't briefly steal foreground from the app the agent is driving.
+      { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
   };
   private glowSpawner: Spawner = () => {
     const script = path.join(getPackageRoot(), 'scripts', 'edge-glow.ps1');
     return spawn('powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', script],
-      { stdio: ['ignore', 'ignore', 'ignore'] }); // click-through visual only — no stdout contract
+      { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true }); // click-through visual only — no stdout contract
   };
 
   /** Wire the double-click → stop callback (the `clawdcursor stop` flow). */
