@@ -152,6 +152,30 @@ interface StoredConfigFields {
   disableVerifier?: boolean;
 }
 
+/**
+ * Model ids that no longer exist upstream (API returns 404), mapped to their
+ * live replacement. Persisted configs OUTLIVE code defaults — auto-detect
+ * writes the then-current id to disk, and per the precedence ladder that
+ * saved value silently overrides any later code fix. Without this heal,
+ * every install that ever saved a now-retired id keeps 404-ing after
+ * upgrading (the agent runs fine on the text model, then dies on the first
+ * turn that needs the retired one — which reads like a credits/auth failure).
+ */
+const RETIRED_MODEL_IDS: Record<string, string> = {
+  'claude-sonnet-4-20250514': 'claude-sonnet-4-6',
+};
+
+function healRetiredModel(id: string | undefined): string | undefined {
+  if (!id) return id;
+  const replacement = RETIRED_MODEL_IDS[id];
+  if (!replacement) return id;
+  console.warn(
+    `[clawdcursor] Saved config pins retired model "${id}" (API returns 404) — using "${replacement}" instead. ` +
+    `Run \`clawdcursor doctor\` to refresh the saved config.`,
+  );
+  return replacement;
+}
+
 function parseStoredConfig(json: Record<string, any>): StoredConfigFields {
   // Support both flat (user config) and pipeline-nested (project config) shapes.
   const result: StoredConfigFields = {};
@@ -186,6 +210,11 @@ function parseStoredConfig(json: Record<string, any>): StoredConfigFields {
       if (!result.visionBaseUrl && typeof vision.baseUrl === 'string' && vision.baseUrl) result.visionBaseUrl = vision.baseUrl;
     }
   }
+
+  // Heal AFTER both shapes are merged so flat and pipeline-nested ids get the
+  // same treatment (in-memory only — the file is left alone; every load heals).
+  result.model = healRetiredModel(result.model);
+  result.visionModel = healRetiredModel(result.visionModel);
 
   return result;
 }
