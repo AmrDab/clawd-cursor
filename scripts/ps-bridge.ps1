@@ -111,24 +111,40 @@ function ConvertTo-UINode {
     param(
         [System.Windows.Automation.AutomationElement]$Element,
         [int]$Depth = 0,
-        [int]$MaxDepth = 8
+        [int]$MaxDepth = 8,
+        [int]$RawDepth = 0
     )
     if ($null -eq $Element) { return $null }
+    # Hard cap on RAW recursion so a pathological/cyclic provider can't hang the
+    # bridge now that pass-through containers no longer consume semantic depth.
+    if ($RawDepth -gt 60) { return $null }
     try { $cur = $Element.Current } catch { return $null }
 
     $typeName = $cur.ControlType.ProgrammaticName
     $hasName = $cur.Name -and $cur.Name.Trim().Length -gt 0
-    $isInteractive = $interactiveTypes -contains $typeName
+    # Structural containers (Pane/Group/Custom) only carry meaning when NAMED
+    # ("Reading Pane", "Chrome Legacy Window"); an unnamed one is pure layout.
+    # They live in $interactiveTypes, which force-emitted every anonymous
+    # WebView2 wrapper as a name:"" node — bloating the tree AND consuming
+    # depth budget, so real controls 10+ Panes deep never made it into the
+    # snapshot. Unnamed structural nodes route to the pass-through branch.
+    $isUnnamedStructural = (-not $hasName) -and ($typeName -eq 'ControlType.Pane' -or $typeName -eq 'ControlType.Group' -or $typeName -eq 'ControlType.Custom')
+    $isInteractive = ($interactiveTypes -contains $typeName) -and -not $isUnnamedStructural
 
     if (-not $isInteractive -and -not $hasName -and $Depth -gt 0) {
-        # Unnamed non-interactive element — only skip if it's a LEAF (no children)
-        # or we've hit max depth. Electron/WebView2 apps nest: Window > Pane > Pane > Pane > Button
+        # Unnamed non-interactive pass-through — flattened out of the output
+        # (children are emitted in its place), so it must NOT consume semantic
+        # depth either. WebView2/Electron apps (new Outlook, Teams, VS Code)
+        # nest 10-15 anonymous Panes before the first real control: charging
+        # each one against MaxDepth=8 truncated the tree to containers-only,
+        # which read as "sparse a11y, escalate to OCR/vision" and cost every
+        # form task its cheap a11y path (#173). Depth = what the LLM sees.
         if ($Depth -ge $MaxDepth) { return $null }
         $childNodes = @()
         try {
             $kids = $Element.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
             foreach ($kid in $kids) {
-                $cn = ConvertTo-UINode -Element $kid -Depth ($Depth + 1) -MaxDepth $MaxDepth
+                $cn = ConvertTo-UINode -Element $kid -Depth $Depth -MaxDepth $MaxDepth -RawDepth ($RawDepth + 1)
                 if ($null -ne $cn) { $childNodes += $cn }
             }
         } catch {}
@@ -185,7 +201,7 @@ function ConvertTo-UINode {
         try {
             $kids = $Element.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
             foreach ($kid in $kids) {
-                $cn = ConvertTo-UINode -Element $kid -Depth ($Depth + 1) -MaxDepth $MaxDepth
+                $cn = ConvertTo-UINode -Element $kid -Depth ($Depth + 1) -MaxDepth $MaxDepth -RawDepth ($RawDepth + 1)
                 if ($null -ne $cn) {
                     if ($cn -is [array]) { $node.children += $cn } else { $node.children += $cn }
                 }
