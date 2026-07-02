@@ -1999,10 +1999,22 @@ function truncateTitle(s: string): string {
  * typing; empty string when the click looks clean.
  */
 function focusTheftWarning(
-  activation: { activated: boolean; title?: string; processName?: string } | void,
+  activation: { activated: boolean; title?: string; processName?: string; reason?: string; action?: string } | void,
   before: { title?: string } | null,
   after: { title?: string } | null,
 ): string {
+  // The bridge deliberately refused to raise a self/host window (agent hub,
+  // clawdcursor's own console) sitting over the click point — focus was NOT
+  // disturbed (unlike the generic case below), but that same overlap means
+  // the click itself may still have landed on the covering window. Distinct,
+  // more actionable message: point straight at a11y instead of a re-focus
+  // dance that would accomplish nothing (the intended window is already up).
+  if (activation && activation.action === 'skipped-self-window') {
+    const cover = activation.title ? `"${truncateTitle(activation.title)}"` : activation.processName || 'another window';
+    return ` ⚠ TARGET OCCLUDED — ${cover} covers this pixel; your window is still focused (not stolen)`
+      + ` but the click may have hit ${cover} instead. Prefer an a11y/el_NN target (invoke_element/smart_click)`
+      + ` over this coordinate, or resize/move the covering window out of the way.`;
+  }
   const activationFailed = activation && activation.activated === false;
   const foregroundChanged = !!before?.title && !!after?.title && before.title !== after.title;
   if (!activationFailed && !foregroundChanged) return '';

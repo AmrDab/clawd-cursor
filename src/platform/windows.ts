@@ -694,12 +694,12 @@ export class WindowsAdapter implements PlatformAdapter {
   private async ensureForegroundAtPoint(x: number, y: number): Promise<FocusActivation | undefined> {
     try {
       const r = await psRunner.run({ cmd: 'activate-at-point', x, y }) as {
-        activated?: boolean; reason?: string; title?: string; processName?: string;
+        activated?: boolean; reason?: string; title?: string; processName?: string; action?: string;
       };
       // 'noop' reasons mean nothing to promote (no window, or already foreground)
       // — both are fine, treat as activated.
       const activated = r?.activated !== false;
-      return { activated, title: r?.title, processName: r?.processName, reason: r?.reason };
+      return { activated, title: r?.title, processName: r?.processName, reason: r?.reason, action: r?.action };
     } catch {
       // Non-fatal — click proceeds regardless. We do not want to block
       // mouse input if the foreground check fails. Undefined = unknown.

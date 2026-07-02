@@ -244,6 +244,26 @@ function Cmd-GetScreenContext {
     return [ordered]@{ windows = $windowList; uiTree = $uiTree }
 }
 
+# Never raise a window belonging to the AI-agent host or clawdcursor's own
+# spawned consoles at a click point — an overlapping self/host window can
+# legitimately be the topmost thing at a given pixel (see #173: a fullscreen
+# host app sitting over the real target), and blindly foregrounding it just
+# hijacks the user's whole desktop focus away from the app the agent is
+# driving — worse than a missed click, since a stray keystroke can then land
+# in the host/chat window instead. Extend via CLAWD_FOREGROUND_DENYLIST (comma-
+# separated process names, e.g. "Claude,Cursor,Code,Windsurf,MyIDE").
+$script:ForegroundDenylistProcs = @('Claude', 'Cursor', 'Code', 'Windsurf')
+if ($env:CLAWD_FOREGROUND_DENYLIST) {
+    $script:ForegroundDenylistProcs += ($env:CLAWD_FOREGROUND_DENYLIST -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+$script:ForegroundDenylistTitlePrefix = 'Clawd Cursor'
+
+function Test-ForegroundDenylisted($procName, $title) {
+    if ($procName -and ($script:ForegroundDenylistProcs -contains $procName)) { return $true }
+    if ($title -and $title.StartsWith($script:ForegroundDenylistTitlePrefix)) { return $true }
+    return $false
+}
+
 # ── Command: activate-at-point ────────────────────────────────────────────────
 # Before a coordinate click, ensure the window at (x, y) is the foreground.
 # This prevents clicks from landing on a background window when a dialog sits
@@ -263,6 +283,24 @@ function Cmd-ActivateAtPoint {
     if ($root -eq [IntPtr]::Zero) { $root = $hwnd }
     $fg = [Win32UIA]::GetForegroundWindow()
     if ($root -eq $fg) { return @{ success=$true; action="noop"; reason="already-foreground" } }
+
+    # Resolve identity BEFORE deciding whether to raise, so a denylisted
+    # self/host window can be skipped without ever touching foreground.
+    $rootPidEarly = 0
+    [void][Win32UIA]::GetWindowThreadProcessId($root, [ref]$rootPidEarly)
+    $rootNameEarly = "unknown"; $rootTitleEarly = ""
+    try { $rootNameEarly = [System.Diagnostics.Process]::GetProcessById($rootPidEarly).ProcessName } catch {}
+    try {
+        $elEarly = [System.Windows.Automation.AutomationElement]::FromHandle($root)
+        if ($elEarly) { $rootTitleEarly = $elEarly.Current.Name }
+    } catch {}
+    if (Test-ForegroundDenylisted $rootNameEarly $rootTitleEarly) {
+        return @{
+            success = $true; action = "skipped-self-window"; activated = $false
+            processId = $rootPidEarly; processName = $rootNameEarly; title = $rootTitleEarly
+            reason = "target point is covered by a denylisted self/host window - not raised"
+        }
+    }
 
     # AttachThreadInput dance — needed to overcome Windows focus lock.
     $currentThread = [Win32UIA]::GetCurrentThreadId()
@@ -286,25 +324,18 @@ function Cmd-ActivateAtPoint {
 
     Start-Sleep -Milliseconds 40
     $newFg = [Win32UIA]::GetForegroundWindow()
-    # Report the identity of the window we promoted, so the click tool can warn
-    # when activation FAILED (Windows foreground-lock) or when the window at the
-    # coords is NOT what the agent intended — a blind keystroke after a missed
-    # click leaked an OTP into the wrong window (session 2026-06-11).
-    $rootPid = 0
-    [void][Win32UIA]::GetWindowThreadProcessId($root, [ref]$rootPid)
-    $rootName = "unknown"; $rootTitle = ""
-    try { $rootName = [System.Diagnostics.Process]::GetProcessById($rootPid).ProcessName } catch {}
-    try {
-        $el = [System.Windows.Automation.AutomationElement]::FromHandle($root)
-        if ($el) { $rootTitle = $el.Current.Name }
-    } catch {}
+    # Report the identity of the window we promoted (resolved above, before the
+    # raise), so the click tool can warn when activation FAILED (Windows
+    # foreground-lock) or when the window at the coords is NOT what the agent
+    # intended — a blind keystroke after a missed click leaked an OTP into the
+    # wrong window (session 2026-06-11).
     return @{
         success   = $true
         action    = "activated"
         activated = ($newFg -eq $root)
-        processId = $rootPid
-        processName = $rootName
-        title     = $rootTitle
+        processId = $rootPidEarly
+        processName = $rootNameEarly
+        title     = $rootTitleEarly
     }
 }
 
