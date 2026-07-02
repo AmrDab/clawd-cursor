@@ -2,6 +2,62 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.8] - 2026-07-02 — the agent path clicks straight
+
+The autonomous agent path (`clawdcursor agent` + granular `click`/`smart_click`)
+now behaves on HiDPI displays, WebView2 apps expose their real accessibility
+tree, and a set of first-run failures that read like credential problems are
+fixed at the root.
+
+### Fixed
+
+- **HiDPI clicks on the agent path land on target.** `WindowsAdapter` mouse
+  functions now convert physical→logical (`÷dpiRatio`) exactly like
+  `NativeDesktop` has since v1.5.6 — the autonomous agent was still clicking
+  ~2.25× off on scaled displays and force-foregrounding the wrong window. The
+  conversion feeds both the cursor move and the `activate-at-point` foreground
+  check so they can never disagree. (#173)
+- **The controller can no longer steal the stage.** The foreground bridge
+  refuses to raise AI-host windows (Claude, Cursor, Code, Windsurf — extend via
+  `CLAWD_FOREGROUND_DENYLIST`) or clawdcursor's own consoles at a click point,
+  and reports `TARGET OCCLUDED` guidance instead. The pre-click focus guard
+  gained an `activeApp` fallback for anchor-less delegated tasks, with the same
+  denylist on the fallback so it can't raise the host on macOS/Linux either. (#173)
+- **WebView2/Electron apps (new Outlook, Teams, VS Code…) expose their real
+  a11y tree.** Unnamed wrapper Panes/Groups no longer consume tree-walk depth
+  or bloat the snapshot — measured on new Outlook: 7 named elements before →
+  113 after at the same depth budget, including To/Subject/Message body/Send.
+  Form tasks that escalated to OCR + vision now run on the cheap a11y path. (#173)
+- **Retired Anthropic vision model id healed everywhere.** The dead
+  `claude-sonnet-4-20250514` default 404'd mid-task the moment vision was
+  needed (it read like a billing failure). Fixed in the provider defaults AND
+  auto-healed when read from persisted configs, which override code defaults
+  and would otherwise keep every existing install broken after upgrade. (#173)
+- **No more orphaned processes.** `doctor` auto-exits after 5 idle minutes on
+  both of its prompt surfaces instead of hanging forever with its PowerShell
+  bridge child; stale MCP locks from quit/reopen editor hosts are reaped
+  deterministically via a parent-PID watchdog. (#173, #175)
+- **Banner/bridge spawns can't flash-steal foreground** (`windowsHide` on the
+  pill/glow/ps-bridge PowerShell spawns). (#173)
+
+### Added
+
+- **`cursor_position` tool** (granular + compact `computer` group) — Anthropic
+  computer-use parity pointer read; round-trips exactly with `mouse_hover` on
+  every OS. (#176)
+
+### Changed
+
+- **Onboarding fixes for first-time agents**: README's HTTP example sends the
+  required MCP `Accept` header (it 406'd before), the consent error offers the
+  `npx` variant for plugin users with no global install, `llms.txt` no longer
+  documents a nonexistent `--granular` flag, tool counts are normalized to the
+  real 98 granular / 7 compound everywhere, and Zed gets a correct
+  `context_servers` config block. (#176)
+- **clawdcursor.com**: mobile layout fixed (clipped tools table, overlapping
+  copy button, stats grid, cursor animation on touch) and visible copy cut
+  ~40%; Quick Start now sits directly under the hero. (#176)
+
 ## [1.5.7] - 2026-06-26 — accuracy + repo polish
 
 Documentation-and-hygiene release; no runtime behavior change.
