@@ -382,7 +382,10 @@ export async function runDoctor(opts: {
     // Offer to add a provider interactively
     if (process.stdin.isTTY && process.stdout.isTTY) {
       const rlSetup = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const ask = (q: string) => new Promise<string>(resolve => rlSetup.question(q, resolve));
+      // Route through askQuestion so this prompt gets the same idle-timeout —
+      // this no-keys-found setup flow is the FIRST prompt a fresh install hits,
+      // so it's the most likely place for an unattended doctor to orphan.
+      const ask = (q: string) => askQuestion(rlSetup, q);
 
       // Step 1: Pick a provider
       const providerList = [
