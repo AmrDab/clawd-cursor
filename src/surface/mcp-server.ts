@@ -196,7 +196,8 @@ export async function createMcpServer(options: CreateMcpServerOptions): Promise<
           return {
             content: [{ type: 'text', text:
               'clawdcursor needs one-time consent before it can control the desktop. ' +
-              'Run `clawdcursor consent --accept` in a terminal once, then retry — no restart needed. ' +
+              'Run `clawdcursor consent --accept` in a terminal once (or, if not installed globally — e.g. the npx-based plugin — ' +
+              '`npx -y clawdcursor consent --accept`), then retry — no restart needed. ' +
               '(This grants the agent full mouse/keyboard/screen control of this machine.)'
             }],
             isError: true,

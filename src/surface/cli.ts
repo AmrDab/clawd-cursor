@@ -547,7 +547,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
   // Mount /mcp behind the same Bearer-auth gate the legacy REST routes used.
   // Compact-over-HTTP: default granular for backward compatibility (the
   // dashboard at / calls 9 granular tool names — see dashboard.ts). External
-  // agent hosts can opt into the 6-compound public surface via
+  // agent hosts can opt into the 7-compound public surface via
   // `clawdcursor agent --compact` or `CLAWD_MCP_COMPACT=1`.
   const compactSurface = opts.compact === true || process.env.CLAWD_MCP_COMPACT === '1';
   let mcpToolCount = 0;
@@ -579,7 +579,7 @@ async function runAgentMode(opts: AgentModeOpts): Promise<void> {
     console.log(`  POST /mcp      — JSON-RPC tools/call & tools/list (auth) — ${compactSurface ? 'compact' : 'granular'} surface, ${mcpToolCount} tools`);
     console.log(`  GET  /mcp      — SSE notifications (auth)`);
     if (!compactSurface) {
-      console.log(pc.gray(`   (tip: pass --compact or set CLAWD_MCP_COMPACT=1 to expose the 6-compound public surface)`));
+      console.log(pc.gray(`   (tip: pass --compact or set CLAWD_MCP_COMPACT=1 to expose the 7-compound public surface)`));
     }
     console.log(`\nAll mutating endpoints require: ${pc.cyan('Authorization: Bearer <token>')}`);
 
@@ -697,7 +697,7 @@ program
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
   .option('--skip-consent', 'Skip consent prompt (requires NODE_ENV=development)')
-  .option('--compact', 'Expose the 6-compound MCP surface (computer/accessibility/window/system/browser/task) over HTTP /mcp instead of the 97 granular tools (also CLAWD_MCP_COMPACT=1)')
+  .option('--compact', 'Expose the 7-compound MCP surface (computer/accessibility/window/system/browser/task/batch) over HTTP /mcp instead of the 98 granular tools (also CLAWD_MCP_COMPACT=1)')
   .option('--allow-remote', 'Permit binding to a non-loopback server.host. DANGER: exposes full desktop control to the network; the Bearer token is the only protection')
   .option('--no-banner', 'Disable the on-screen "desktop control in progress" banner (also CLAWD_NO_BANNER=1)')
   .action(async (opts) => {
@@ -718,7 +718,7 @@ program
   .option('--accept', 'Accept desktop control consent non-interactively and start')
   .option('--no-vision', 'Refuse vision fallback — blind-first only (high-security mode)')
   .option('--no-llm', 'Force tools-only HTTP MCP mode; skip AI setup, scheduler, and credential validation')
-  .option('--compact', 'Expose the 6-compound MCP surface over HTTP /mcp (also CLAWD_MCP_COMPACT=1)')
+  .option('--compact', 'Expose the 7-compound MCP surface over HTTP /mcp (also CLAWD_MCP_COMPACT=1)')
   .option('--allow-remote', 'Permit binding to a non-loopback server.host. DANGER: exposes full desktop control to the network; the Bearer token is the only protection')
   .option('--no-banner', 'Disable the on-screen "desktop control in progress" banner (also CLAWD_NO_BANNER=1)')
   .action(async (opts) => {
@@ -1349,7 +1349,7 @@ async function createToolContext() {
 program
   .command('mcp')
   .description('Run as MCP tool server over stdio (for Claude Code, Cursor, Windsurf, Zed)')
-  .option('--compact', 'Expose 6 compound tools instead of 97 granular ones (Anthropic Computer-Use style — recommended for most agents)')
+  .option('--compact', 'Expose 7 compound tools instead of 98 granular ones (Anthropic Computer-Use style — recommended for most agents)')
   .option('--no-banner', 'Disable the on-screen "desktop control in progress" banner (also CLAWD_NO_BANNER=1)')
   .action(async (opts: { compact?: boolean; banner?: boolean }) => {
     // Single-instance guard (MCP servers can accumulate when editors restart them)

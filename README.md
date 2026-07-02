@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="#60-second-quickstart">Quickstart</a> &middot;
+  <a href="#install">Quickstart</a> &middot;
   <a href="#why-its-different">Why it's different</a> &middot;
   <a href="#the-engine">The engine</a> &middot;
   <a href="#how-it-works">How it works</a> &middot;
@@ -115,11 +115,20 @@ command = "clawdcursor"
 args = ["mcp", "--compact"]
 ```
 
-**Cursor / Windsurf / Zed / Claude Desktop** — add to the host's MCP config:
+**Cursor / Windsurf / Claude Desktop** — add to the host's MCP config:
 ```json
 {
   "mcpServers": {
     "clawdcursor": { "command": "clawdcursor", "args": ["mcp", "--compact"] }
+  }
+}
+```
+
+**Zed** — Zed uses `context_servers` (not `mcpServers`) in `settings.json`:
+```json
+{
+  "context_servers": {
+    "clawdcursor": { "command": { "path": "clawdcursor", "args": ["mcp", "--compact"] } }
   }
 }
 ```
@@ -281,9 +290,12 @@ One protocol &mdash; **MCP** &mdash; two transports, same catalog and JSON-RPC e
 
 ```bash
 # HTTP MCP — list tools
+# (the Accept header is required — the MCP spec's Streamable HTTP transport
+#  rejects requests that don't accept both JSON and SSE with a 406)
 curl -s -X POST http://127.0.0.1:3847/mcp \
   -H "Authorization: Bearer $(cat ~/.clawdcursor/token)" \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
