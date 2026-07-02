@@ -1452,6 +1452,23 @@ program
     process.stdin.on('end', releaseMcp);
     process.stdin.on('close', releaseMcp);
     process.stdin.on('error', releaseMcp);
+
+    // Parent-death watchdog — the DETERMINISTIC orphan reaper.
+    //
+    // The stdin EOF handlers above are only a fast path. The comment's claim
+    // that "the child's stdin pipe closes immediately" is FALSE when the host
+    // is a GUI app: quitting the Claude *desktop* app on Windows does not
+    // deliver stdin EOF to this child, so the server orphans, keeps its
+    // lockfile, and blocks every reconnect with "already running, kill it
+    // first" (observed in the wild). Polling the parent PID closes that gap on
+    // every platform: once the host process is gone, release the lock and exit.
+    // .unref() so the watchdog never keeps the process alive on its own.
+    const parentPid = process.ppid;
+    if (parentPid && parentPid > 1) {
+      setInterval(() => {
+        if (!isProcessAlive(parentPid)) releaseMcp();
+      }, 2000).unref();
+    }
   });
 
 // ── `serve` deprecation alias (v0.9 PR7.4) ──
