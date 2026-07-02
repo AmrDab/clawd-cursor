@@ -11,6 +11,8 @@
   <meta property="og:url" content="https://clawdcursor.com/">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta name="theme-color" content="#09090b">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!--
@@ -253,27 +255,17 @@
     .sect h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
     .sect .sub { color: var(--text2); font-size: 0.9rem; margin-bottom: 24px; max-width: 560px; line-height: 1.6; }
 
-    /* Who cards */
-    .who-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .who-card {
-      background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
-      padding: 24px; position: relative; overflow: hidden;
-    }
-    .who-card.human { border-top: 2px solid var(--accent); }
-    .who-card.agent { border-top: 2px solid var(--blue); }
-    .who-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 8px; }
-    .who-card p { font-size: 0.82rem; color: var(--text2); line-height: 1.6; margin-bottom: 14px; }
+    /* Editor tags */
     .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
     .tag {
       font-size: 0.68rem; font-family: 'JetBrains Mono', monospace; font-weight: 600;
       padding: 2px 8px; border-radius: 4px; background: var(--surface);
       border: 1px solid var(--border2); color: var(--text2);
     }
-    .tag.g { color: var(--accent); border-color: rgba(34,197,94,0.2); background: rgba(34,197,94,0.05); }
     .tag.b { color: var(--blue); border-color: rgba(59,130,246,0.2); background: rgba(59,130,246,0.05); }
 
     /* Mode cards */
-    .modes-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .mode-card {
       background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
       padding: 24px; position: relative; overflow: hidden;
@@ -281,14 +273,12 @@
     .mode-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
     .mode-card.a::before { background: linear-gradient(90deg, var(--accent), #06b6d4); }
     .mode-card.b::before { background: linear-gradient(90deg, var(--blue), var(--purple)); }
-    .mode-card.c::before { background: linear-gradient(90deg, var(--purple), var(--orange)); }
     .mode-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
     .mode-card ol { padding-left: 18px; color: var(--text2); font-size: 0.825rem; line-height: 1.65; }
     .mode-card li { margin-bottom: 2px; }
     .mode-stats { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; gap: 24px; }
     .mode-stat-val { font-size: 1.3rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--accent); }
     .mode-card.b .mode-stat-val { color: var(--blue); }
-    .mode-card.c .mode-stat-val { color: var(--purple); }
     .mode-stat-lbl { font-size: 0.7rem; color: var(--text3); }
 
     /* Features grid */
@@ -326,8 +316,8 @@
     .os-tab:hover:not(.active) { border-color: var(--border2); color: var(--text); }
 
     /* Install card (Quick Start) — method tabs left, OS toggle right */
-    .install-card { position: relative; }
     .install-hd { flex-wrap: wrap; }
+    .code-body { position: relative; }
     .inst-methods { display: flex; gap: 4px; margin-left: 10px; }
     .inst-os { display: flex; gap: 4px; margin-left: auto; }
     .inst-tab, .inst-os-tab {
@@ -341,7 +331,7 @@
     .inst-os-tab.active { background: var(--red); border-color: var(--red); color: #fff; }
     .c-prompt { color: var(--red); font-weight: 700; -webkit-user-select: none; user-select: none; }
     .copy-btn {
-      position: absolute; top: 48px; right: 14px; z-index: 2;
+      position: absolute; top: 10px; right: 10px; z-index: 2;
       width: 30px; height: 28px; background: var(--surface); color: var(--text3);
       border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
       font-size: 0.95rem; line-height: 1; transition: all 0.15s;
@@ -413,10 +403,17 @@
 
     /* Responsive */
     @media (max-width: 768px) {
-      .stats { grid-template-columns: repeat(2, 1fr); }
+      .stat { padding: 16px 8px; }
+      .stat-val { font-size: 1.15rem; }
+      .stat-lbl { font-size: 0.62rem; }
       .hero h1 { font-size: 2rem; }
-      .who-grid, .modes-grid, .feat-grid { grid-template-columns: 1fr !important; }
+      .modes-grid, .feat-grid { grid-template-columns: 1fr !important; }
       .sect { padding: 36px 0; }
+    }
+
+    /* No wandering cursor on touch devices or for reduced-motion users */
+    @media (hover: none), (prefers-reduced-motion: reduce) {
+      .ai-cursor-container { display: none; }
     }
   </style>
 </head>
@@ -445,7 +442,7 @@
   <div class="hero">
     <div class="hero-badge"><div class="pulse"></div> v1.5.7 — latest stable</div>
     <h1>It sees. It acts. It verifies.<br><span class="gr">Desktop control for any AI agent</span></h1>
-    <p>Compiles the screen into one fused UI map (accessibility tree + OCR) and acts on stable element ids that survive layout shifts &mdash; dropping to screenshot/vision only for canvas-only apps. Verifies every action actually took, and routes everything through one safety gate. Any model, any app, local, no telemetry.</p>
+    <p>Your agent reads the screen as a map of stable element ids &mdash; no pixels &mdash; verifies every action, and passes everything through one safety gate. Local, any model.</p>
     <div class="hero-btns">
       <a href="https://github.com/AmrDab/clawdcursor" class="btn-p" id="star-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -466,42 +463,43 @@
     <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Operating Systems</div></div>
   </div>
 
-  <!-- Who -->
-  <section class="sect">
-    <div class="sect-label">Two ways to use it</div>
-    <h2>Run it yourself, or hand it to your agent.</h2>
-    <div class="who-grid">
-      <div class="who-card human">
-        <h3>Test from the CLI</h3>
-        <p>Plain English in, actions out.</p>
-        <div class="tag-row">
-          <span class="tag g">clawdcursor doctor</span>
-          <span class="tag g">clawdcursor agent</span>
+  <!-- Install -->
+  <section id="install" class="sect">
+    <div class="sect-label">Quick Start</div>
+    <h2>Install in seconds. Any OS.</h2>
+
+    <div class="code-box install-card">
+      <div class="code-hd install-hd">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <div class="inst-methods">
+          <button class="inst-tab" data-m="oneliner" onclick="pickMethod('oneliner')">One-liner</button>
+          <button class="inst-tab active" data-m="npm" onclick="pickMethod('npm')">npm</button>
+          <button class="inst-tab" data-m="source" onclick="pickMethod('source')">Source</button>
+        </div>
+        <div class="inst-os">
+          <button class="inst-os-tab" data-o="unix" onclick="pickOS('unix')">macOS &amp; Linux</button>
+          <button class="inst-os-tab active" data-o="win" onclick="pickOS('win')">Windows</button>
         </div>
       </div>
-      <div class="who-card agent">
-        <h3>Wire it into your agent</h3>
-        <p>One MCP entry, desktop control appears as native tools.</p>
-        <div class="tag-row">
-          <span class="tag b">Claude Code</span>
-          <span class="tag b">Cursor</span>
-          <span class="tag b">Windsurf</span>
-          <span class="tag b">OpenClaw</span>
-          <span class="tag">Zed</span>
-        </div>
+      <div class="code-body">
+        <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy command" title="Copy command"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+        <pre><code><span class="c-comment" id="inst-comment"></span>
+<span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
       </div>
     </div>
+
+    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Then run <code style="font-size:0.95em">clawdcursor consent --accept</code> &mdash; on macOS also <code style="font-size:0.95em">clawdcursor grant</code> &mdash; and you're set up.</p>
   </section>
 
   <!-- Three modes -->
   <section class="sect" id="modes">
     <div class="sect-label">Pick a mode</div>
     <h2>How will your AI talk to it?</h2>
-    <p class="sub">Same tools, three entry shapes. Pick once during install.</p>
+    <p class="sub">Same tools, two entry shapes. Pick once during install.</p>
     <div class="modes-grid">
       <div class="mode-card b">
         <h3>clawdcursor mcp <span style="font-size:0.7rem;font-weight:500;color:var(--accent2);letter-spacing:0.04em;">— recommended</span></h3>
-        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">AI lives in your editor (Claude Code, Cursor, Windsurf, Zed). Editor spawns clawdcursor on demand over stdio. No daemon, no port.</p>
+        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">AI lives in your editor. Editor spawns clawdcursor on demand over stdio. No daemon, no port.</p>
         <pre style="background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:0.72rem;color:var(--accent2);overflow-x:auto;margin-bottom:12px;"><code>{
   "mcpServers": {
     "clawdcursor": {
@@ -510,35 +508,24 @@
     }
   }
 }</code></pre>
+        <div class="tag-row">
+          <span class="tag b">Claude Code</span>
+          <span class="tag b">Cursor</span>
+          <span class="tag b">Windsurf</span>
+          <span class="tag b">OpenClaw</span>
+          <span class="tag">Zed</span>
+        </div>
         <div class="mode-stats">
           <div><div class="mode-stat-val">7 / 98</div><div class="mode-stat-lbl">Compact / Granular tools</div></div>
           <div><div class="mode-stat-val">stdio</div><div class="mode-stat-lbl">Transport</div></div>
         </div>
       </div>
       <div class="mode-card a">
-        <h3>clawdcursor agent <span style="font-size:0.7rem;font-weight:500;color:var(--text3);letter-spacing:0.04em;">— autonomous daemon</span></h3>
-        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">clawdcursor brings its own LLM brain (configured via <code style="font-size:0.85em">doctor</code>). For unattended runs, scheduled tasks, multi-process orchestration.</p>
-        <ol>
-          <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor doctor</code> &middot; pick a provider</li>
-          <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor agent</code></li>
-          <li>POST tasks to <code style="font-size:0.82em">127.0.0.1:3847/mcp</code></li>
-        </ol>
+        <h3>clawdcursor agent <span style="font-size:0.7rem;font-weight:500;color:var(--text3);letter-spacing:0.04em;">— HTTP daemon</span></h3>
+        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">HTTP MCP on <code style="font-size:0.85em">127.0.0.1:3847/mcp</code>. Run <code style="font-size:0.85em;color:var(--accent2)">doctor</code> then <code style="font-size:0.85em;color:var(--accent2)">agent</code> for the built-in autonomous loop (unattended / scheduled runs), or <code style="font-size:0.85em;color:var(--accent2)">agent --no-llm</code> for the tool surface only when your agent brings its own brain.</p>
         <div class="mode-stats">
           <div><div class="mode-stat-val">:3847</div><div class="mode-stat-lbl">HTTP MCP</div></div>
           <div><div class="mode-stat-val">13+</div><div class="mode-stat-lbl">Providers</div></div>
-        </div>
-      </div>
-      <div class="mode-card c">
-        <h3>clawdcursor agent --no-llm <span style="font-size:0.7rem;font-weight:500;color:var(--text3);letter-spacing:0.04em;">— BYO brain</span></h3>
-        <p style="margin:8px 0 12px;color:var(--text2);font-size:0.85rem;line-height:1.5;">Your agent already has a brain — you just want HTTP tools. Same daemon, no built-in agent loop.</p>
-        <ol>
-          <li>Run <code style="font-size:0.75rem;color:var(--accent2)">clawdcursor agent --no-llm</code></li>
-          <li>98 tools on <code style="font-size:0.82em">:3847/mcp</code></li>
-          <li>Stateless — no session init needed</li>
-        </ol>
-        <div class="mode-stats">
-          <div><div class="mode-stat-val">98</div><div class="mode-stat-lbl">Granular tools (compat)</div></div>
-          <div><div class="mode-stat-val">any</div><div class="mode-stat-lbl">HTTP client</div></div>
         </div>
       </div>
     </div>
@@ -570,18 +557,6 @@
       </div>
     </div>
 
-    <div class="feat-grid" style="grid-template-columns: repeat(2, 1fr);">
-      <div class="feat-card">
-        <div class="feat-icon">🎯</div>
-        <h4>Toolbox &mdash; 7 compound tools</h4>
-        <p>The recommended surface — <code style="font-size:0.82em">computer</code>, <code style="font-size:0.82em">accessibility</code>, <code style="font-size:0.82em">window</code>, <code style="font-size:0.82em">system</code>, <code style="font-size:0.82em">browser</code>, <code style="font-size:0.82em">task</code>, <code style="font-size:0.82em">batch</code>. ~12× smaller catalog than the granular Tools surface.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">🗺️</div>
-        <h4>UI State Compiler</h4>
-        <p>One fused, confidence-scored map of the screen with stable <code style="font-size:0.82em">el_NN</code> ids. Act symbolically — it survives DPI, resize, and layout shifts.</p>
-      </div>
-    </div>
   </section>
 
   <!-- Features -->
@@ -590,24 +565,9 @@
     <h2>Any OS. Any model.</h2>
     <div class="feat-grid">
       <div class="feat-card">
-        <div class="feat-icon">🍎</div>
-        <h4>macOS</h4>
-        <p>TCC-safe. <code style="font-size:0.82em">clawdcursor grant</code> handles Accessibility + Screen Recording.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">🪟</div>
-        <h4>Windows</h4>
-        <p>Native UIA + Windows.Media.Ocr. x64 and ARM64.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">🐧</div>
-        <h4>Linux</h4>
-        <p>X11 and Wayland. AT-SPI for a11y, Tesseract for OCR.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">✅</div>
-        <h4>Verified actions</h4>
-        <p>Pass <code style="font-size:0.82em">expect</code> on send/save/submit &mdash; clawdcursor confirms the outcome on screen and reports a <strong>DEVIATION</strong> instead of a hollow success.</p>
+        <div class="feat-icon">💻</div>
+        <h4>Cross-platform</h4>
+        <p>Windows x64/ARM64 &middot; macOS 12+ &middot; Linux X11/Wayland</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon">⌨️</div>
@@ -628,10 +588,10 @@
       <summary class="cli-summary">
         <span class="sect-label" style="margin-bottom:0;">Tools</span>
         <span class="cli-summary-title">7 compact tools + 98 granular <span class="cli-summary-chev" aria-hidden="true">›</span></span>
-        <span class="cli-summary-sub">The 7 compact compounds are the recommended public surface. Each row lists the actions you pass via <code style="font-size:0.85em">{ "action": "…" }</code>. The 98 granular tools (one schema per verb) are listed below for compatibility and debugging — use them when your runtime requires every primitive as a top-level MCP tool. (98 total.)</span>
+        <span class="cli-summary-sub">The 7 compounds are the recommended surface; the 98 granular tools (one schema per verb) exist for compatibility and debugging.</span>
       </summary>
 
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-top:18px;overflow:hidden;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-top:18px;overflow-x:auto;-webkit-overflow-scrolling:touch;">
         <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
           <thead>
             <tr style="background:rgba(255,255,255,0.03);">
@@ -677,7 +637,7 @@
 
       <p style="color:var(--text3);font-size:0.78rem;margin-top:14px;line-height:1.6;">
         <strong style="color:var(--text2);">Compact form (recommended):</strong> <code style="font-size:0.9em;color:var(--accent2);">computer({ "action": "key", "combo": "mod+s" })</code> &mdash; ~1,500 tokens of catalog.
-        <strong style="color:var(--text2);">Granular form (compat / debug):</strong> <code style="font-size:0.9em;color:var(--accent2);">key_press({ "key": "mod+s" })</code> &mdash; 94 individual tools, one schema per verb.
+        <strong style="color:var(--text2);">Granular form (compat / debug):</strong> <code style="font-size:0.9em;color:var(--accent2);">key_press({ "key": "mod+s" })</code> &mdash; 98 individual tools, one schema per verb.
         Both produce identical effects through the same <code>safety.evaluate()</code> chokepoint.
         Pass <code style="color:var(--accent2);">--granular</code> (instead of <code style="color:var(--accent2);">--compact</code>) to expose the granular surface over MCP.
         See <a href="https://github.com/AmrDab/clawdcursor/blob/main/schema.snapshot.json" target="_blank" rel="noopener" style="color:var(--accent2);">schema.snapshot.json</a> for every parameter.
@@ -710,32 +670,6 @@ clawdcursor stop             <span style="color:var(--text3)"># stop every runni
 clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawdcursor config and data</span></code></pre>
       </div>
     </details>
-  </section>
-
-  <!-- Install -->
-  <section id="install" class="sect">
-    <div class="sect-label">Quick Start</div>
-    <h2>Install in seconds. Any OS.</h2>
-
-    <div class="code-box install-card">
-      <div class="code-hd install-hd">
-        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
-        <div class="inst-methods">
-          <button class="inst-tab" data-m="oneliner" onclick="pickMethod('oneliner')">One-liner</button>
-          <button class="inst-tab active" data-m="npm" onclick="pickMethod('npm')">npm</button>
-          <button class="inst-tab" data-m="source" onclick="pickMethod('source')">Source</button>
-        </div>
-        <div class="inst-os">
-          <button class="inst-os-tab" data-o="unix" onclick="pickOS('unix')">macOS &amp; Linux</button>
-          <button class="inst-os-tab active" data-o="win" onclick="pickOS('win')">Windows</button>
-        </div>
-      </div>
-      <button class="copy-btn" onclick="copyInstall(this)" aria-label="Copy command" title="Copy command"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
-      <pre><code><span class="c-comment" id="inst-comment"></span>
-<span class="c-prompt">$ </span><span id="inst-cmd"></span></code></pre>
-    </div>
-
-    <p class="sub" style="text-align:center;max-width:640px;margin:14px auto 0;">Any OS, Node 20+. Run <code style="font-size:0.95em">clawdcursor consent --accept</code> &mdash; and on macOS <code style="font-size:0.95em">clawdcursor grant</code>. That's the whole setup for driving over MCP; <code style="font-size:0.95em">doctor</code> is only for the autonomous <code style="font-size:0.95em">agent</code> mode.</p>
   </section>
 
 </div>
@@ -801,6 +735,11 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
   // exponential-smoothing pattern as before. Pure cosmetic; pointer-events
   // are disabled in CSS so it never intercepts a real click. Pauses while
   // the tab is hidden so it doesn't churn the GPU in background tabs.
+  // Skipped entirely on touch devices and for reduced-motion users (the CSS
+  // hides the element too).
+  (function () {
+  if (window.matchMedia('(hover: none)').matches ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const cursor = document.querySelector('.ai-cursor');
   const trails = document.querySelectorAll('.ai-trail');
   const ripple = document.querySelector('.ai-ripple');
@@ -876,6 +815,7 @@ clawdcursor uninstall        <span style="color:var(--text3)"># remove all clawd
       rafHandle = requestAnimationFrame(tick);
     }
   });
+  })();
 
   // Install card: method (oneliner/npm/source) × OS (win/unix)
   const INSTALL_CMDS = {
