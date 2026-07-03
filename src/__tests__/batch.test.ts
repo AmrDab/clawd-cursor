@@ -4,7 +4,7 @@
  * isolation: ordered execution, precondition guards (re-perceive), safety
  * halting, error halting, the trace, dry-run, and the step cap.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Mock the two collaborators the executor reuses ──────────────────────────
 const tools: Record<string, any> = {};
@@ -113,20 +113,50 @@ describe('executeBatch — guards (re-perceive precondition)', () => {
 });
 
 describe('executeBatch — safety', () => {
-  it('halts at a confirm-tier step unless allowConfirm is set', async () => {
+  const ENV_KEY = 'CLAWD_BATCH_ALLOW_CONFIRM';
+  let prevEnv: string | undefined;
+  beforeEach(() => { prevEnv = process.env[ENV_KEY]; delete process.env[ENV_KEY]; });
+  afterEach(() => { if (prevEnv === undefined) delete process.env[ENV_KEY]; else process.env[ENV_KEY] = prevEnv; });
+
+  it('halts at a confirm-tier step by default (no allowConfirm)', async () => {
     tools.close_window = okTool('close_window');
     safetyFor = (name) => name === 'close_window' ? { text: 'close_window: safety confirm - destructive', isError: true } : null;
 
     const blocked = await executeBatch([{ name: 'close_window' }], ctx);
     expect(blocked.steps[0].status).toBe('needs_confirm');
     expect(tools.close_window.handler).not.toHaveBeenCalled();
+  });
 
+  // GHSA-3v3f-5rwv-whc9: a caller-supplied allowConfirm must NOT bypass the
+  // confirm tier on its own — only the operator env flag unlocks it.
+  it('SECURITY: caller allowConfirm alone does NOT bypass confirm tier', async () => {
+    tools.close_window = okTool('close_window');
+    safetyFor = (name) => name === 'close_window' ? { text: 'close_window: safety confirm - destructive', isError: true } : null;
+    // env NOT set (cleared in beforeEach) → the exploit path
+    const attempt = await executeBatch([{ name: 'close_window' }], ctx, { allowConfirm: true });
+    expect(attempt.allDone).toBe(false);
+    expect(attempt.steps[0].status).toBe('needs_confirm');
+    expect(tools.close_window.handler).not.toHaveBeenCalled();
+  });
+
+  it('proceeds only when operator env flag AND caller allowConfirm are both set', async () => {
+    tools.close_window = okTool('close_window');
+    safetyFor = (name) => name === 'close_window' ? { text: 'close_window: safety confirm - destructive', isError: true } : null;
+
+    process.env[ENV_KEY] = '1';
+    // operator enabled, but caller did NOT ask → still halts
+    const noAsk = await executeBatch([{ name: 'close_window' }], ctx);
+    expect(noAsk.steps[0].status).toBe('needs_confirm');
+    expect(tools.close_window.handler).not.toHaveBeenCalled();
+
+    // both present → proceeds
     const allowed = await executeBatch([{ name: 'close_window' }], ctx, { allowConfirm: true });
     expect(allowed.allDone).toBe(true);
     expect(tools.close_window.handler).toHaveBeenCalled();
   });
 
-  it('always halts at a hard block, even with allowConfirm', async () => {
+  it('always halts at a hard block, even with the operator flag + allowConfirm', async () => {
+    process.env[ENV_KEY] = '1';
     tools.dangerous = okTool('dangerous');
     safetyFor = () => ({ text: 'dangerous: safety block - not allowed', isError: true });
     const r = await executeBatch([{ name: 'dangerous' }], ctx, { allowConfirm: true });
