@@ -27,6 +27,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const PKG = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf-8'));
@@ -208,3 +209,17 @@ if (changed === 0) {
 
 console.log(`\nUpdated ${changed} site(s) in ${touchedFiles.size} file(s) to v${VERSION}.`);
 console.log('Files: ' + Array.from(touchedFiles).join(', '));
+
+// Stage exactly what we touched, HERE, so the file list can never drift from a
+// hardcoded `git add` in the package.json "version" hook again. That drift is
+// not hypothetical: the hook's list predated server.json + plugin.json being
+// added as targets, so v1.5.8's release commit shipped without them and the
+// version-drift CI guard failed on every OS. Files staged during the "version"
+// lifecycle are included in npm's version commit.
+try {
+  execFileSync('git', ['add', ...touchedFiles], { cwd: REPO_ROOT, stdio: 'inherit' });
+  console.log('Staged all touched files for the version commit.');
+} catch {
+  console.error('✗ git add of touched files failed — stage them manually before the version commit.');
+  process.exit(1);
+}

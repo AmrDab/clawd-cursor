@@ -69,7 +69,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
     "sync-version": "tsx scripts/sync-version.ts",
-    "version": "tsx scripts/sync-version.ts && git add SKILL.md skills/clawdcursor/SKILL.md .claude-plugin/marketplace.json docs/index.html docs/install.sh docs/install.ps1",
+    "version": "tsx scripts/sync-version.ts",
     "test:coverage": "vitest run --coverage",
     "perf:smoke": "tsx scripts/perf-smoke.ts"
   },
