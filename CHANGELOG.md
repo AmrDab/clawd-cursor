@@ -18,6 +18,11 @@ All notable changes to Clawd Cursor will be documented in this file.
   and earlier are affected; there is no npm release of 1.5.8 (it went straight
   to 1.5.9).
 
+### Changed
+
+- **clawdcursor.com**: removed every em/en dash from the copy and tightened the
+  page a further ~16% on top of the v1.5.8 cut.
+
 ## [1.5.8] - 2026-07-02 — the agent path clicks straight
 
 The autonomous agent path (`clawdcursor agent` + granular `click`/`smart_click`)
