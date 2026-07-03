@@ -31,6 +31,25 @@ function resolveAnyTool(name: string): ToolDefinition | undefined {
   return getTool(name) ?? getCompactTools().find(t => t.name === name);
 }
 
+/**
+ * Whether the OPERATOR has opted into letting a batch auto-satisfy confirm-tier
+ * steps. Security boundary (GHSA-3v3f-5rwv-whc9): the per-call `allowConfirm`
+ * JSON field is caller-controlled — any bearer-token holder or a compromised/
+ * malicious agent could set it and execute confirm-gated actions (e.g. `open_uri
+ * file:` launching an arbitrary handler) that a direct tools/call would halt on.
+ * The confirm tier exists precisely to require a human, and the caller IS the
+ * (untrusted) agent, so caller-supplied consent is not consent. We therefore
+ * only honor `allowConfirm` when the human running the daemon has enabled it
+ * out-of-band via CLAWD_BATCH_ALLOW_CONFIRM=1 (or =true). Default: OFF — a batch
+ * halts at a confirm step exactly like a direct call, and reports how to enable
+ * it deliberately. This does not weaken the block tier (never bypassable) and
+ * does not touch benign/allow-tier steps.
+ */
+export function batchAutoConfirmEnabled(): boolean {
+  const v = (process.env.CLAWD_BATCH_ALLOW_CONFIRM || '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
 /** A lightweight, declarative precondition checked (by re-perceiving) before a step runs. */
 export interface BatchGuard {
   /** An a11y element with this name must be present in the current UI. */
@@ -153,9 +172,17 @@ export async function executeBatch(
     const safetyErr = evaluateToolCall(tool, args, { uiMaps: ctx.uiMaps });
     if (safetyErr) {
       const isConfirm = (safetyErr.text || '').includes('safety confirm');
-      if (!(isConfirm && opts.allowConfirm)) {
+      // `allowConfirm` is only effective when the OPERATOR enabled it out-of-band
+      // (CLAWD_BATCH_ALLOW_CONFIRM=1). A caller-supplied allowConfirm alone can
+      // NOT satisfy a confirm-tier step — see GHSA-3v3f-5rwv-whc9. Block tier is
+      // never bypassable.
+      const mayAutoConfirm = isConfirm && opts.allowConfirm && batchAutoConfirmEnabled();
+      if (!mayAutoConfirm) {
         outcomes.push({ i, label, status: isConfirm ? 'needs_confirm' : 'blocked', text: safetyErr.text });
-        return halt(i, isConfirm ? `step ${i} needs confirmation (re-submit with allowConfirm:true if intended)` : `step ${i} blocked by safety`);
+        const confirmHint = opts.allowConfirm
+          ? `step ${i} needs confirmation — allowConfirm is ignored unless the operator sets CLAWD_BATCH_ALLOW_CONFIRM=1 on the daemon`
+          : `step ${i} needs confirmation (a confirm-tier step cannot run in a batch unless the operator enables CLAWD_BATCH_ALLOW_CONFIRM=1 AND you pass allowConfirm:true)`;
+        return halt(i, isConfirm ? confirmHint : `step ${i} blocked by safety`);
       }
     }
 
@@ -211,7 +238,9 @@ export function getBatchTools(): ToolDefinition[] {
         'failed precondition, safety stop, or step error and returns a per-step trace so you re-plan from real ' +
         'state. Every step goes through the same safety gate as a direct call. Use `expect` to guarantee you ' +
         'act on the right window/element instead of guessing. Set dryRun:true to pre-scan safety tiers without ' +
-        'executing; allowConfirm:true to let confirm-tier steps proceed.',
+        'executing. A confirm-tier step still HALTS the batch by default; ' +
+        'allowConfirm:true only proceeds if the operator started the daemon with ' +
+        'CLAWD_BATCH_ALLOW_CONFIRM=1 (otherwise it is ignored — confirm-tier stays gated).',
       parameters: {
         steps: {
           type: 'array',
@@ -227,7 +256,7 @@ export function getBatchTools(): ToolDefinition[] {
             required: ['name'],
           },
         },
-        allowConfirm: { type: 'boolean', description: 'Allow confirm-tier steps to run (default false → halt at them).', required: false },
+        allowConfirm: { type: 'boolean', description: 'Request that confirm-tier steps proceed. Only effective if the operator enabled CLAWD_BATCH_ALLOW_CONFIRM=1 on the daemon; otherwise ignored and the batch halts at the confirm step. Never bypasses block-tier.', required: false },
         dryRun: { type: 'boolean', description: 'Only report each step\'s safety tier; do not execute.', required: false },
         maxSteps: { type: 'number', description: `Hard cap on executed steps (default ${DEFAULT_MAX_STEPS}).`, required: false },
       },
@@ -262,7 +291,14 @@ export function getBatchTools(): ToolDefinition[] {
             text:
               `batch (dry run): ${steps.length} steps.\n` +
               scan.map(s => `  ${s.i}. [${s.gate}] ${s.label}`).join('\n') +
-              (willStop ? `\nNote: without allowConfirm, the batch would halt at step ${willStop.i} ([${willStop.gate}]).` : '\nAll steps would be allowed.'),
+              (willStop
+                ? `\nNote: the batch would halt at step ${willStop.i} ([${willStop.gate}]).` +
+                  (willStop.gate === 'confirm'
+                    ? (batchAutoConfirmEnabled()
+                        ? ' Pass allowConfirm:true to proceed (operator has enabled it).'
+                        : ' Confirm-tier steps cannot run in a batch on this daemon (operator has not set CLAWD_BATCH_ALLOW_CONFIRM=1).')
+                    : '')
+                : '\nAll steps would be allowed.'),
           };
         }
 

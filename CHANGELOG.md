@@ -2,6 +2,22 @@
 
 All notable changes to Clawd Cursor will be documented in this file.
 
+## [1.5.9] - 2026-07-03 — batch confirm-tier hardening (security)
+
+### Security
+
+- **Close the `batch` `allowConfirm` bypass (GHSA-3v3f-5rwv-whc9, high).** The
+  `batch` MCP tool accepted a caller-controlled `allowConfirm:true` that skipped
+  the confirm-tier `SafetyLayer` halt, letting any bearer-token holder or a
+  compromised agent run confirm-gated actions (e.g. `open_uri file:` launching an
+  arbitrary OS handler) that a direct `tools/call` would stop. `allowConfirm` is
+  now honored only when the operator started the daemon with
+  `CLAWD_BATCH_ALLOW_CONFIRM=1`; a caller-supplied flag alone can no longer
+  satisfy a confirm step. Block-tier remains unbypassable, and the agent-loop
+  batch was never affected (it already halts on any non-allow verdict). v1.5.8
+  and earlier are affected; there is no npm release of 1.5.8 (it went straight
+  to 1.5.9).
+
 ## [1.5.8] - 2026-07-02 — the agent path clicks straight
 
 The autonomous agent path (`clawdcursor agent` + granular `click`/`smart_click`)
