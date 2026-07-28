@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2FAmrDab%2Fclawdcursor.svg)](https://mcptoplist.com/server/glama%2FAmrDab%2Fclawdcursor)
+
 <h1 align="center">Clawd Cursor</h1>
 
 <p align="center">
